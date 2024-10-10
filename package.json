@@ -1,0 +1,11 @@
+{
+  "name": "github-actions",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "shellCheck": ".github/scripts/shellCheck.sh"
+  },
+  "author": "",
+  "license": "MIT"
+}
