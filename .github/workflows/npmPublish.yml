@@ -47,7 +47,7 @@ jobs:
         run: echo "NEW_VERSION=$(jq '.version' package.json)" >> $GITHUB_ENV
 
       - name: Push branch and publish tags
-        run: git push main && git push --tags
+        run: git push origin main && git push --tags
 
       - name: Publish to npm
         run: npm publish
