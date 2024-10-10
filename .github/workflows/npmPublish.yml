@@ -11,22 +11,22 @@ on:
         required: true
         type: number
         description: 'Pull request number that was merged to trigger this workflow'
-    secrets:
-      NPM_TOKEN:
-        required: true
-        description: 'NPM token to publish the package'
-      OS_BOTIFY_COMMIT_TOKEN:
-        required: true
-        description: 'OSBotify personal access token, used to workaround committing to a protected branch'
 
 jobs:
   version:
     runs-on: ubuntu-latest
     steps:
+      - name: Generate a GitHub App token
+        id: generateAppToken
+        uses: actions/create-github-app-token@9d97a4282b2c51a2f4f0465b9326399f53c890d4
+        with:
+          app-id: ${{ secrets.OS_BOTIFY_APP_ID }}
+          private-key: ${{ secrets.OS_BOTIFY_PRIVATE_KEY }}
+
       - uses: actions/checkout@v3
         with:
           repository: ${{ inputs.repository }}
-          token: ${{ secrets.OS_BOTIFY_COMMIT_TOKEN }}
+          token: ${{ steps.generateAppToken.outputs.token }}
 
       - uses: actions/setup-node@v3
         with:
@@ -51,4 +51,4 @@ jobs:
         run: |
           gh pr comment ${{ inputs.pull_request_number }} --repo ${{ inputs.repository }} --body ":rocket: Published in ${{ env.NEW_VERSION }}"
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ steps.generateAppToken.outputs.token }}
