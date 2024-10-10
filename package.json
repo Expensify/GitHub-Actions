@@ -1,0 +1,13 @@
+{
+  "name": "github-actions",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "shellcheck": "./github/scripts/shellCheck.sh",
+    "gh-actions-build": "./.github/scripts/buildActions.sh",
+    "gh-actions-validate": "./.github/scripts/validateActionsAndWorkflows.sh"
+  },
+  "author": "",
+  "license": "MIT"
+}
