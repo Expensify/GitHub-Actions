@@ -23,6 +23,13 @@ jobs:
           app-id: ${{ secrets.OS_BOTIFY_APP_ID }}
           private-key: ${{ secrets.OS_BOTIFY_PRIVATE_KEY }}
 
+      # Set up GPG signing by following this: https://stackoverflow.com/a/74071223
+      # os-botify GitHub App ID can be found here: https://api.github.com/users/os-botify[bot]
+      - name: Set up git user
+        run: |
+          git config --global user.name "os-botify[bot]"
+          git config --global user.email "140437396+os-botify[bot]@users.noreply.github.com"
+
       - uses: actions/checkout@v3
         with:
           repository: ${{ inputs.repository }}
