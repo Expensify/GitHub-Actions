@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "shellcheck": "./github/scripts/shellCheck.sh"
+    "shellCheck": ".github/scripts/shellCheck.sh"
   },
   "author": "",
   "license": "MIT"
