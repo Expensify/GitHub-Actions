@@ -1,0 +1,46 @@
+name: Publish package to npmjs
+
+on:
+  workflow_call:
+    inputs:
+      repository:
+        required: true
+        type: string
+        description: 'Repository name with owner. For example: "Expensify/eslint-config-expensify"'
+      pull_request_number:
+        required: true
+        type: number
+        description: 'Pull request number that was merged to trigger this workflow'
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          repository: ${{ inputs.repository }}
+
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '16.x'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Update npm version
+        run: npm version patch
+
+      - name: Set new version in GitHub ENV
+        run: echo "NEW_VERSION=$(jq '.version' package.json)" >> $GITHUB_ENV
+
+      - name: Push branch and publish tags
+        run: git push main && git push --tags
+
+      - name: Publish to npm
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Comment on PR
+        run: |
+          gh pr comment ${{ inputs.pull_request_number }} --repo ${{ inputs.repository }} --body ":rocket: Published in ${{ env.NEW_VERSION }}"
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
