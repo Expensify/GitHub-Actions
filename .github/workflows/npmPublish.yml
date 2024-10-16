@@ -95,7 +95,7 @@ jobs:
           # Create a new commit pointing to the new tree
           commit=$(curl -sf -H "Authorization: token $token" -X POST \
             -d '{
-              "message": "Update version to: '"$version"'",
+              "message": "Update version to: $version",
               "tree": "'"$new_tree_sha"'",
               "parents": ["'"$latest_commit"'"]
             }' https://api.github.com/repos/$repository/git/commits)
