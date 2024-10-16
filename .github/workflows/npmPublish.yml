@@ -48,7 +48,7 @@ jobs:
 
           # Variables
           repository="${{ inputs.repository }}" 
-          token="${{ steps.app-token.outputs.token }}"
+          token="${{ steps.generateAppToken.outputs.token }}"
           file1_path="package.json"
           file2_path="package-lock.json"
 
