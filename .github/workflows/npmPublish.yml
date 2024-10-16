@@ -118,7 +118,7 @@ jobs:
           git fetch origin main   
 
           # Tag new_commit_sha with our new version
-          git tag -a $version $new_commit_sha
+          git tag -a $version $new_commit_sha -m "$version"
           
           # Push the new tag
           git push origin tag $version
