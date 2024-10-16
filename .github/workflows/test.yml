@@ -1,0 +1,23 @@
+name: Test GH API
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  lint:
+    if: ${{ github.actor != 'OSBotify' || github.event_name == 'workflow_call' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set new version in GitHub ENV
+        run: echo "NEW_VERSION=$(jq '.version' package.json)" >> $GITHUB_ENV
+
+      - name: Set name version in GitHub ENV
+        run: echo "NAME=$(jq '.name' package.json)" >> $GITHUB_ENV
+
+      - name: Comment on PR
+        run: |
+          gh pr comment 15 --repo Expensify/GitHub-Actions --body ":rocket: Published in ["${{ env.NEW_VERSION }}"](https://www.npmjs.com/package/"${{ env.NAME }}"/v/"${{ env.NEW_VERSION }}") :tada:"
