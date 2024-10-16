@@ -49,6 +49,7 @@ jobs:
           # Variables
           repository="${{ inputs.repository }}" 
           token="${{ steps.generateAppToken.outputs.token }}"
+          version="${{ env.NEW_VERSION }}"
           file1_path="package.json"
           file2_path="package-lock.json"
 
@@ -94,7 +95,7 @@ jobs:
           # Create a new commit pointing to the new tree
           commit=$(curl -sf -H "Authorization: token $token" -X POST \
             -d '{
-              "message": "Add multiple files",
+              "message": "Update version to: '"$version"'",
               "tree": "'"$new_tree_sha"'",
               "parents": ["'"$latest_commit"'"]
             }' https://api.github.com/repos/$repository/git/commits)
@@ -107,9 +108,12 @@ jobs:
             -d '{
               "sha": "'"$new_commit_sha"'"
             }' https://api.github.com/repos/$repository/git/refs/heads/main
-
-      - name: Push branch and publish tags
-        run: git push origin main && git push --tags
+          
+          # Tag new_commit_sha with our new version
+          git tag -a $version $new_commit_sha
+          
+          # Push the new tag
+          git push origin tag $version
 
       - name: Publish to npm
         run: npm publish
