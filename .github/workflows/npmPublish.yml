@@ -128,8 +128,12 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+      - name: Set name version in GitHub ENV
+        run: echo "NAME=$(jq '.name' package.json)" >> $GITHUB_ENV
+
       - name: Comment on PR
         run: |
-          gh pr comment ${{ inputs.pull_request_number }} --repo ${{ inputs.repository }} --body ":rocket: Published in ${{ env.NEW_VERSION }}"
+          gh pr comment ${{ inputs.pull_request_number }} --repo ${{ inputs.repository }} \ 
+            --body ":rocket: Published in [${{ env.NEW_VERSION }}](https://www.npmjs.com/package/${{ env.NAME }}/v/${{ env.NEW_VERSION }}) :tada:"
         env:
           GITHUB_TOKEN: ${{ steps.generateAppToken.outputs.token }}
