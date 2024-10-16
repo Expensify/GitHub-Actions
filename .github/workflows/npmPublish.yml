@@ -134,6 +134,6 @@ jobs:
       - name: Comment on PR
         run: |
           gh pr comment ${{ inputs.pull_request_number }} --repo ${{ inputs.repository }} \ 
-            --body ":rocket: Published in [${{ env.NEW_VERSION }}](https://www.npmjs.com/package/${{ env.NAME }}/v/${{ env.NEW_VERSION }}) :tada:"
+            --body ":rocket: Published in [$NEW_VERSION](https://www.npmjs.com/package/$NAME/v/$NEW_VERSION) :tada:"
         env:
           GITHUB_TOKEN: ${{ steps.generateAppToken.outputs.token }}
