@@ -16,11 +16,7 @@ jobs:
     with:
       # Repository name with owner. For example, Expensify/eslint-config-expensify
       # Required, String, default: ${{ github.repository }}
-      repository: 'Expensify/eslint-config-expensify'
-
-      # Pull request number to comment on when the npm package is published
-      # Required, Number
-      pull_request_number: 123
+      repository: ''
 
       # True if we should run npm run build for the package
       # Optional, Boolean, default: false

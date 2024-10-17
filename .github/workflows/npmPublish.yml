@@ -8,10 +8,6 @@ on:
         default: ${{ github.repository }}
         required: true
         type: string
-      pull_request_number:
-        description: 'Pull request number that was merged to trigger this workflow'
-        required: true
-        type: number
       should_run_build:
         description: 'True if we should run npm run build for the package'
         default: false
@@ -144,8 +140,27 @@ jobs:
       - name: Set name version in GitHub ENV
         run: echo "NAME=$(jq '.name' package.json)" >> $GITHUB_ENV
 
+      - uses: actions/github-script@v7
+        id: pull_request_number
+        with:
+          script: |
+            if (context.issue.number) {
+              // Return issue number if present
+              return context.issue.number;
+            } else {
+              // Otherwise return issue number from commit
+              return (
+                await github.rest.repos.listPullRequestsAssociatedWithCommit({
+                  commit_sha: context.sha,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                })
+              ).data[0].number;
+            }
+          result-encoding: string
+
       - name: Comment on PR
         run: |
-          gh pr comment ${{ inputs.pull_request_number }} --repo ${{ inputs.repository }} --body ":rocket: Published in ["${{ env.NEW_VERSION }}"](https://www.npmjs.com/package/"${{ env.NAME }}"/v/"${{ env.NEW_VERSION }}") :tada:"
+          gh pr comment ${{steps.get_issue_number.outputs.result}} --repo ${{ inputs.repository }} --body ":rocket: Published to [npm](https://www.npmjs.com/) in ["${{ env.NEW_VERSION }}"](https://www.npmjs.com/package/"${{ env.NAME }}"/v/"${{ env.NEW_VERSION }}") :tada:"
         env:
           GITHUB_TOKEN: ${{ steps.generateAppToken.outputs.token }}
