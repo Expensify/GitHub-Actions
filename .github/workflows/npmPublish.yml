@@ -6,7 +6,7 @@ on:
       repository:
         description: 'Repository name with owner. For example: "Expensify/eslint-config-expensify"'
         default: ${{ github.repository }}
-        required: true
+        required: false
         type: string
       should_run_build:
         description: 'True if we should run npm run build for the package'
