@@ -161,6 +161,6 @@ jobs:
 
       - name: Comment on PR
         run: |
-          gh pr comment ${{steps.get_issue_number.outputs.result}} --repo ${{ inputs.repository }} --body ":rocket: Published to [npm](https://www.npmjs.com/) in ["${{ env.NEW_VERSION }}"](https://www.npmjs.com/package/"${{ env.NAME }}"/v/"${{ env.NEW_VERSION }}") :tada:"
+          gh pr comment ${{steps.pull_request_number.outputs.result}} --repo ${{ inputs.repository }} --body ":rocket: Published to [npm](https://www.npmjs.com/) in ["${{ env.NEW_VERSION }}"](https://www.npmjs.com/package/"${{ env.NAME }}"/v/"${{ env.NEW_VERSION }}") :tada:"
         env:
           GITHUB_TOKEN: ${{ steps.generateAppToken.outputs.token }}
