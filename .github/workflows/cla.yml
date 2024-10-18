@@ -10,8 +10,9 @@ on:
 jobs:
   CLA:
     runs-on: ubuntu-latest
-    # This job should only run for pull request comments or pull request target events (not issue comments)
-    if: github.event.issue.pull_request || github.event_name == 'pull_request_target'
+    # This job only runs for pull request comments or pull request target events (not issue comments)
+    # It does not run for pull requests created by OSBotify or imgbot
+    if: ${{ github.event.issue.pull_request || (github.event_name == 'pull_request_target' && github.event.pull_request.user.login != 'OSBotify' && github.event.pull_request.user.login != 'imgbot[bot]') }}
     steps:
       - name: CLA Assistant
         if: (github.event.comment.body == 'recheck' || github.event.comment.body == 'I have read the CLA Document and I hereby sign the CLA') || github.event_name == 'pull_request_target'
