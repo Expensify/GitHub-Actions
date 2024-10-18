@@ -33,4 +33,6 @@ Used to check if a user has signed the [Contributor License Agreement](./CLA.md)
 jobs:
   CLA:
     uses: Expensify/GitHub-Actions/.github/workflows/cla.yml@main
+    # Required to pass along secrets for `CLA_BOTIFY_TOKEN`
+    secrets: inherit
 ```
