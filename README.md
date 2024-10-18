@@ -31,6 +31,6 @@ Used to check if a user has signed the [Contributor License Agreement](./CLA.md)
 
 ```yml
 jobs:
-  cla:
+  CLA:
     uses: Expensify/GitHub-Actions/.github/workflows/cla.yml@main
 ```
