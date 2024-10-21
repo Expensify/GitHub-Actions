@@ -59,12 +59,13 @@ jobs:
             sha=$(git rev-parse "main:$file")
             # Create a file with the base64 encoded content
             base64 -i "$file" > "base64.txt"
-            gh api --method PUT /repos/:owner/:repo/contents/"$file" \
-            --field message="$message" \
-            --field content="@base64.txt" \
-            --field encoding="base64" \
-            --field branch="main" \
-            --field sha="$sha"
+            new_commit_sha=$(gh api --method PUT /repos/:owner/:repo/contents/"$file" \
+              --field message="$message" \
+              --field content="@base64.txt" \
+              --field encoding="base64" \
+              --field branch="main" \
+              --field sha="$sha"
+              --jq '.content.sha')
           done
           
           # Set up git user info so we can push a tag
