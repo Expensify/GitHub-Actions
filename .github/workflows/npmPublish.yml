@@ -62,7 +62,7 @@ jobs:
             --field message="$message" \
             --field content="$content" \
             --field encoding="base64" \
-            --field branch="$BRANCH_NAME" \
+            --field branch="main" \
             --field sha="$sha"
           done
           
