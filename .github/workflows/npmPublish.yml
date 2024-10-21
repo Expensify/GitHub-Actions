@@ -57,10 +57,11 @@ jobs:
           for file in $FILES; do
             message="Update version to $version"
             sha=$(git rev-parse "main:$file")
-            content=$(base64 -i "$file")
+            # Create a file with the base64 encoded content
+            base64 -i "$file" > "base64.txt"
             gh api --method PUT /repos/:owner/:repo/contents/"$file" \
             --field message="$message" \
-            --field content="$content" \
+            --field content="@base64.txt" \
             --field encoding="base64" \
             --field branch="main" \
             --field sha="$sha"
