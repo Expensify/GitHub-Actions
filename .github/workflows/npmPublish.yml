@@ -45,74 +45,26 @@ jobs:
       - name: Set new version in GitHub ENV
         run: echo "NEW_VERSION=$(jq '.version' package.json)" >> $GITHUB_ENV
 
-      # Copied and edited from: https://github.com/joshjohanning-org/commit-sign-app/blob/main/.github/workflows/commit-sign.yml
-      - name: Created signed commit
+      - name: Created signed commit and push tags
         run: |
           #!/bin/bash
           set -euxo pipefail
-
-          # Variables
-          repository="${{ inputs.repository }}" 
-          token="${{ steps.generateAppToken.outputs.token }}"
           version="${{ env.NEW_VERSION }}"
-          file1_path="package.json"
-          file2_path="package-lock.json"
 
-          # Get the contents of the files; jq -Rs escapes new lines and quotes
-          file1_content=$(jq -Rs '.' $file1_path)
-          file2_content=$(jq -Rs '.' $file2_path)
-
-          # Get the latest commit
-          latest_commit=$(curl -s -H "Authorization: token $token" \
-            https://api.github.com/repos/$repository/git/refs/heads/main \
-            | jq -r '.object.sha')
-
-          # Get the tree of the latest commit
-          base_tree=$(curl -s -H "Authorization: token $token" \
-            https://api.github.com/repos/$repository/git/commits/$latest_commit \
-            | jq -r '.tree.sha')
-
-          # Create a file of our JSON to send as we can't send it as a string as it's too big
-          echo '{
-            "base_tree": "'"$base_tree"'",
-            "tree": [
-              {
-                "path": "'"$file1_path"'",
-                "mode": "100644",
-                "type": "blob",
-                "content": '"$file1_content"'
-              },
-              {
-                "path": "'"$file2_path"'",
-                "mode": "100644",
-                "type": "blob",
-                "content": '"$file2_content"'
-              }
-            ]
-          }' > tree_request.json
-
-          # Create a new tree with the new files
-          tree=$(curl -s -H "Authorization: token $token" -X POST -d @tree_request.json https://api.github.com/repos/$repository/git/trees)
-
-          # Get the SHA of the new tree
-          new_tree_sha=$(echo $tree | jq -r '.sha')
-
-          # Create a new commit pointing to the new tree
-          commit=$(curl -sf -H "Authorization: token $token" -X POST \
-            -d '{
-              "message": "Update version to: '"$version"'",
-              "tree": "'"$new_tree_sha"'",
-              "parents": ["'"$latest_commit"'"]
-            }' https://api.github.com/repos/$repository/git/commits)
-
-          # Get the SHA of the new commit
-          new_commit_sha=$(echo $commit | jq -r '.sha')
-
-          # Update the reference of the branch to point to the new commit
-          curl -s -H "Authorization: token $token" -X PATCH \
-            -d '{
-              "sha": "'"$new_commit_sha"'"
-            }' https://api.github.com/repos/$repository/git/refs/heads/main
+          # Find all files changes with package*.json
+          FILES=$(git status --porcelain -- package*.json | awk '{ print $2 }')
+  
+          for file in $FILES; do
+            message="Update version to $version"
+            sha=$(git rev-parse "main:$file")
+            content=$(base64 -i "$file")
+            gh api --method PUT /repos/:owner/:repo/contents/"$file" \
+            --field message="$message" \
+            --field content="$content" \
+            --field encoding="base64" \
+            --field branch="$BRANCH_NAME" \
+            --field sha="$sha"
+          done
           
           # Set up git user info so we can push a tag
           # os-botify[bot] GitHub App ID can be found here: https://api.github.com/users/os-botify[bot]
