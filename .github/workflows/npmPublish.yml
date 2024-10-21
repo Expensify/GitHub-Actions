@@ -80,6 +80,8 @@ jobs:
           
           # Push the new tag
           git push origin tag $version
+        env:
+          GITHUB_TOKEN: ${{ steps.generateAppToken.outputs.token }}
 
       - name: Optionally run `npm run build`
         if: ${{ inputs.should_run_build }}
