@@ -29,8 +29,6 @@ jobs:
         with:
           repository: ${{ inputs.repository }}
           token: ${{ steps.generateAppToken.outputs.token }}
-          # TODO: REMOVE
-          fetch-depth: 0
 
       - uses: actions/setup-node@v3
         with:
