@@ -55,7 +55,7 @@ jobs:
           FILES=$(git status --porcelain -- package*.json | awk '{ print $2 }')
   
           for file in $FILES; do
-            message="Update version to $version"
+            message="Update $file version to $version"
             sha=$(git rev-parse "main:$file")
             # Create a file with the base64 encoded content
             base64 -i "$file" > "base64.txt"
