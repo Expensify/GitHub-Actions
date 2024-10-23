@@ -74,7 +74,7 @@ jobs:
           git config --global user.email "140437396+os-botify[bot]@users.noreply.github.com"
           
           # Fetch the commit that was made via the API
-          git fetch origin main    
+          git fetch origin main
 
           # Tag new_commit_sha with our new version
           git tag -a $version $new_commit_sha -m "$version"
