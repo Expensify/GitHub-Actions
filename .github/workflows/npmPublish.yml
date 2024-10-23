@@ -65,7 +65,7 @@ jobs:
               --field encoding="base64" \
               --field branch="main" \
               --field sha="$sha" \
-              --jq '.content.sha')
+              --jq '.commit.sha')
           done
           
           # Set up git user info so we can push a tag
