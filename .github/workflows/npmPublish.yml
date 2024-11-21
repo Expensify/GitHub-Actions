@@ -9,7 +9,12 @@ on:
         required: false
         type: string
       should_run_build:
-        description: 'True if we should run npm run build for the package'
+        description: 'True if we should run "npm run build" for the package'
+        default: false
+        required: false
+        type: boolean
+      should_run_pack:
+        description: 'True if we should run "npm pack" for the package'
         default: false
         required: false
         type: boolean
@@ -87,6 +92,10 @@ jobs:
       - name: Optionally run `npm run build`
         if: ${{ inputs.should_run_build }}
         run: npm run build
+
+      - name: Optionally run `npm pack` to create a tarball
+        if: ${{ inputs.should_run_pack }}
+        run: npm pack
 
       - name: Publish to npm
         run: npm publish
