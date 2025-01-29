@@ -1,0 +1,25 @@
+name: Validate Github Actions and Workflows
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+    branches-ignore: [staging, production]
+    paths: ['.github/**']
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Checkout E/App shell utils
+        uses: actions/checkout@v4
+        with:
+          repository: Expensify/App
+          sparse-checkout: |
+            scripts/shellUtils.sh
+            .github/scripts/validateActionsAndWorkflows.sh
+
+      - name: Validate actions and workflows
+        run: App/.github/scripts/validateActionsAndWorkflows.sh
