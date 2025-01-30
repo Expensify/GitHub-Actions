@@ -13,6 +13,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - run: ls -ra
+
       - name: Checkout E/App shell utils
         uses: actions/checkout@v4
         with:
@@ -20,6 +22,8 @@ jobs:
           sparse-checkout: |
             scripts/shellUtils.sh
             .github/scripts/validateActionsAndWorkflows.sh
+
+      - run: ls -ra
 
       - name: Validate actions and workflows
         run: App/.github/scripts/validateActionsAndWorkflows.sh
