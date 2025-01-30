@@ -13,20 +13,5 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Checkout E/App shell utils
-        uses: actions/checkout@v4
-        with:
-          repository: Expensify/App
-          path: App
-          sparse-checkout: |
-            scripts/shellUtils.sh
-            .github/scripts/validateActionsAndWorkflows.sh
-
-      - name: Recreate E/App app structure for validate script
-        run: |
-          mv App/.github/scripts/validateActionsAndWorkflows.sh .github/scripts/validateActionsAndWorkflows.sh
-          mkdir scripts
-          mv App/scripts/shellUtils.sh scripts/shellUtils.sh
-
       - name: Validate actions and workflows
         run: .github/scripts/validateActionsAndWorkflows.sh
