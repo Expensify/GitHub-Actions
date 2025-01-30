@@ -13,8 +13,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - run: ls -ra
-
       - name: Checkout E/App shell utils
         uses: actions/checkout@v4
         with:
@@ -24,7 +22,10 @@ jobs:
             scripts/shellUtils.sh
             .github/scripts/validateActionsAndWorkflows.sh
 
-      - run: ls -ra App
+      - name: Recreate E/App app structure for validate script
+        run: |
+          mv App/.github/scripts/validateActionsAndWorkflows.sh .github/scripts/validateActionsAndWorkflows.sh
+          mv App/scripts/shellUtils.sh scripts/shellUtils.sh
 
       - name: Validate actions and workflows
         run: App/.github/scripts/validateActionsAndWorkflows.sh
