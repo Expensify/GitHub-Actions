@@ -13,5 +13,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install node modules
+        uses: actions/setup-node@v4
+
       - name: Validate actions and workflows
         run: .github/scripts/validateActionsAndWorkflows.sh

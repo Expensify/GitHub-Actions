@@ -35,7 +35,7 @@ info 'Validating actions and workflows against their JSON schemas...'
 # Validate the actions and workflows using the JSON schemas and ajv https://github.com/ajv-validator/ajv-cli
 for ((i=0; i < ${#ACTIONS[@]}; i++)); do
   ACTION=${ACTIONS[$i]}
-  ajv -s ./tempSchemas/github-action.json -d "$ACTION" --strict=false &
+  npx ajv -s ./tempSchemas/github-action.json -d "$ACTION" --strict=false &
   ASYNC_PROCESSES[i]=$!
 done
 
@@ -49,7 +49,7 @@ for ((i=0; i < ${#WORKFLOWS[@]}; i++)); do
       continue
     fi
 
-  ajv -s ./tempSchemas/github-workflow.json -d "$WORKFLOW" --strict=false &
+  npx ajv -s ./tempSchemas/github-workflow.json -d "$WORKFLOW" --strict=false &
   ASYNC_PROCESSES[${#ACTIONS[@]} + i]=$!
 done
 
