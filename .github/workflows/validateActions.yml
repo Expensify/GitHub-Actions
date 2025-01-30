@@ -24,7 +24,7 @@ jobs:
             scripts/shellUtils.sh
             .github/scripts/validateActionsAndWorkflows.sh
 
-      - run: ls -ra
+      - run: ls -ra App
 
       - name: Validate actions and workflows
         run: App/.github/scripts/validateActionsAndWorkflows.sh
