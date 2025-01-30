@@ -33,4 +33,4 @@ jobs:
           mv App/scripts/shellUtils.sh scripts/shellUtils.sh
 
       - name: Validate actions and workflows
-        run: App/.github/scripts/validateActionsAndWorkflows.sh
+        run: .github/scripts/validateActionsAndWorkflows.sh
