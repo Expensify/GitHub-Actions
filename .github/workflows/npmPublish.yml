@@ -30,15 +30,12 @@ jobs:
           app-id: ${{ secrets.OS_BOTIFY_APP_ID }}
           private-key: ${{ secrets.OS_BOTIFY_PRIVATE_KEY }}
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           repository: ${{ inputs.repository }}
           token: ${{ steps.generateAppToken.outputs.token }}
 
-      - uses: actions/setup-node@v3
-        with:
-          node-version: '16.x'
-          registry-url: 'https://registry.npmjs.org'
+      - uses: actions/setup-node@v4
 
       - name: Install npm packages
         run: npm ci
@@ -52,7 +49,6 @@ jobs:
 
       - name: Created signed commit and push tags
         run: |
-          #!/bin/bash
           set -euxo pipefail
           version="${{ env.NEW_VERSION }}"
 
