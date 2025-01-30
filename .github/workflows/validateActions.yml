@@ -29,7 +29,8 @@ jobs:
       - name: Recreate E/App app structure for validate script
         run: |
           mv App/.github/scripts/validateActionsAndWorkflows.sh .github/scripts/validateActionsAndWorkflows.sh
-          mv -p App/scripts/shellUtils.sh scripts/shellUtils.sh
+          mkdir scripts
+          mv App/scripts/shellUtils.sh scripts/shellUtils.sh
 
       - name: Validate actions and workflows
         run: App/.github/scripts/validateActionsAndWorkflows.sh
