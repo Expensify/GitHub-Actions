@@ -13,6 +13,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - run: ls -aR
+
       - name: Checkout E/App shell utils
         uses: actions/checkout@v4
         with:
@@ -21,6 +23,8 @@ jobs:
           sparse-checkout: |
             scripts/shellUtils.sh
             .github/scripts/validateActionsAndWorkflows.sh
+
+      - run: ls -aR
 
       - name: Recreate E/App app structure for validate script
         run: |
