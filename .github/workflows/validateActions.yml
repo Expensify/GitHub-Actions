@@ -1,0 +1,22 @@
+name: Validate Github Actions and Workflows
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+    branches-ignore: [staging, production]
+    paths: ['.github/**']
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+
+      - name: Install node modules
+        run: npm ci
+
+      - name: Validate actions and workflows
+        run: .github/scripts/validateActionsAndWorkflows.sh
