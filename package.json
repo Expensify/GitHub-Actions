@@ -7,5 +7,8 @@
     "shellCheck": ".github/scripts/shellCheck.sh"
   },
   "author": "",
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "ajv-cli": "^5.0.0"
+  }
 }
