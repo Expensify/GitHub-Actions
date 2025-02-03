@@ -36,6 +36,8 @@ jobs:
           token: ${{ steps.generateAppToken.outputs.token }}
 
       - uses: actions/setup-node@v4
+        with:
+          registry-url: 'https://registry.npmjs.org'
 
       - name: Install npm packages
         run: npm ci
