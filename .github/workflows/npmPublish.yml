@@ -22,6 +22,9 @@ on:
 jobs:
   version:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - name: Generate a GitHub App token
         id: generateAppToken
@@ -96,7 +99,7 @@ jobs:
         run: npm pack
 
       - name: Publish to npm
-        run: npm publish
+        run: npm publish --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
