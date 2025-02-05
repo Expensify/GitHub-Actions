@@ -35,6 +35,8 @@ runs:
     - name: Download OSBotify GPG key
       run: op read op://Mobile-Deploy-CI/OSBotify-private-key.asc/OSBotify-private-key.asc --force --out-file ./OSBotify-private-key.asc
       shell: bash
+      env:
+        OP_SERVICE_ACCOUNT_TOKEN: ${{ inputs.OP_SERVICE_ACCOUNT_TOKEN }}
 
     - name: Import OSBotify GPG Key
       shell: bash
