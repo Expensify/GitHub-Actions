@@ -15,6 +15,9 @@ inputs:
   OS_BOTIFY_APP_ID:
     description: Application ID for OS Botify
     required: false
+  OS_BOTIFY_PRIVATE_KEY:
+    description: Private key for OSBotify app
+    required: false
   SETUP_AS_APP:
     description: Should we get an app token for OSBotify?
     required: false
