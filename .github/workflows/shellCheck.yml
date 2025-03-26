@@ -11,8 +11,9 @@ jobs:
     if: ${{ github.actor != 'OSBotify' || github.event_name == 'workflow_call' }}
     runs-on: ubuntu-latest
     steps:
+      # actions/checkout@v4.2.2
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
 
       - name: Lint shell scripts with ShellCheck
         run: npm run shellCheck
