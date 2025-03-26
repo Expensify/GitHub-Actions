@@ -95,8 +95,8 @@ fi
 rm -rf ./actionlint
 
 # Check for unsafe action references
-info 'Checking for mutable action references...'
-find "$GITHUB_DIR" -type f \( -name "*.yml" -o -name "*.yaml" \) -print0 \
+title 'Checking for mutable action references...'
+find . -type f \( -name "*.yml" -o -name "*.yaml" \) -print0 \
   | xargs -0 grep --no-filename "uses:" \
   | sed 's/\- uses:/uses:/g' \
   | tr '"' ' ' \
@@ -114,14 +114,16 @@ TRUSTED_ORGS=(
   '^Expensify/'
 )
 grep -vE "$(IFS='|'; echo "${TRUSTED_ORGS[*]}")" /tmp/actionUsages.txt > /tmp/untrustedActionUsages.txt
+echo ''
 info 'Untrusted action usages...'
 cat /tmp/untrustedActionUsages.txt
 
 GIT_HASH_REGEX='\b[0-9a-f]{40}\b'
 grep -vE "$GIT_HASH_REGEX" /tmp/untrustedActionUsages.txt > /tmp/unsafeActionUsages.txt
 if [ -s /tmp/unsafeActionUsages.txt ]; then
+  echo ''
   error 'Found unsafe mutable action reference to an untrusted action. Use an immutable commit hash reference instead'
-  cat /tmp/unsageActionUsages.txt
+  cat /tmp/unsafeActionUsages.txt
   EXIT_CODE=1
 fi
 
