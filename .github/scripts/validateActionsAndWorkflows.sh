@@ -2,6 +2,9 @@
 
 source "$(dirname "${BASH_SOURCE[0]}")/shellUtils.sh"
 
+###############################################################################
+#                        Validate json scehmas with ajv                       #
+###############################################################################
 title 'Validating the Github Actions and workflows using the json schemas provided by (https://www.schemastore.org/json/)'
 
 function downloadSchema {
@@ -42,12 +45,12 @@ done
 for ((i=0; i < ${#WORKFLOWS[@]}; i++)); do
   WORKFLOW=${WORKFLOWS[$i]}
 
-    # Skip linting e2e workflow due to bug here: https://github.com/SchemaStore/schemastore/issues/2579
-    if [[ "$WORKFLOW" == './workflows/e2ePerformanceTests.yml'
-          || "$WORKFLOW" == './workflows/testBuild.yml'
-          || "$WORKFLOW" == './workflows/deploy.yml' ]]; then
-      continue
-    fi
+  # Skip linting e2e workflow due to bug here: https://github.com/SchemaStore/schemastore/issues/2579
+  if [[ "$WORKFLOW" == './workflows/e2ePerformanceTests.yml'
+        || "$WORKFLOW" == './workflows/testBuild.yml'
+        || "$WORKFLOW" == './workflows/deploy.yml' ]]; then
+    continue
+  fi
 
   npx ajv -s ./tempSchemas/github-workflow.json -d "$WORKFLOW" --strict=false &
   ASYNC_PROCESSES[${#ACTIONS[@]} + i]=$!
@@ -65,6 +68,9 @@ done
 # Cleanup after ourselves and delete the schemas
 rm -rf ./tempSchemas
 
+###############################################################################
+#                            Lint with actionlint                             #
+###############################################################################
 title 'Lint Github Actions via actionlint (https://github.com/rhysd/actionlint)'
 
 # If we are running this on a non-CI machine (e.g. locally), install shellcheck
@@ -94,7 +100,9 @@ fi
 # Cleanup after ourselves and delete actionlint
 rm -rf ./actionlint
 
-# Check for unsafe action references
+###############################################################################
+#                      Check for unsafe action references                     #
+###############################################################################
 title 'Checking for mutable action references...'
 find . -type f \( -name "*.yml" -o -name "*.yaml" \) -print0 \
   | xargs -0 grep --no-filename "uses:" \
