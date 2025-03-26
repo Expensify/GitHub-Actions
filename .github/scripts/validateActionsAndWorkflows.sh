@@ -127,4 +127,8 @@ if [ -s /tmp/unsafeActionUsages.txt ]; then
   EXIT_CODE=1
 fi
 
+if [[ "$EXIT_CODE" == 0 ]]; then
+  success '✅ All untrusted actions are using immutable references'
+fi
+
 exit $EXIT_CODE
