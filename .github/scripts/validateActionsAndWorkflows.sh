@@ -12,6 +12,7 @@ function downloadSchema {
   info "Downloading $SCHEMA_NAME schema..."
   if curl "https://json.schemastore.org/$1" --output "./tempSchemas/$1" --silent; then
     success "Successfully downloaded $SCHEMA_NAME schema!"
+    echo
   else
     error "Failed downloading $SCHEMA_NAME schema"
     exit 1
@@ -20,50 +21,30 @@ function downloadSchema {
 
 # Download the up-to-date json schemas for github actions and workflows
 cd ./.github && mkdir ./tempSchemas || exit 1
-downloadSchema 'github-action.json' || exit 1
-downloadSchema 'github-workflow.json' || exit 1
+run_async downloadSchema 'github-action.json' || exit 1
+run_async downloadSchema 'github-workflow.json' || exit 1
+await_async_commands
 
 # Track exit codes separately so we can run a full validation, report errors, and exit with the correct code
 declare EXIT_CODE=0
 
-# This stores all the process IDs of the ajv commands so they can run in parallel
-declare ASYNC_PROCESSES
-
-# Arrays of actions and workflows
-declare -r ACTIONS=(./actions/*/*/action.yml)
-declare -r WORKFLOWS=(./workflows/*.yml)
-
 info 'Validating actions and workflows against their JSON schemas...'
 
 # Validate the actions and workflows using the JSON schemas and ajv https://github.com/ajv-validator/ajv-cli
-for ((i=0; i < ${#ACTIONS[@]}; i++)); do
-  ACTION=${ACTIONS[$i]}
-  npx ajv -s ./tempSchemas/github-action.json -d "$ACTION" --strict=false &
-  ASYNC_PROCESSES[i]=$!
+for ACTION in ./actions/*/*/action.yml; do
+  run_async npx ajv -s ./tempSchemas/github-action.json -d "$ACTION" --strict=false
 done
 
-for ((i=0; i < ${#WORKFLOWS[@]}; i++)); do
-  WORKFLOW=${WORKFLOWS[$i]}
-
+for WORKFLOW in ./workflows/*.yml; do
   # Skip linting e2e workflow due to bug here: https://github.com/SchemaStore/schemastore/issues/2579
-  if [[ "$WORKFLOW" == './workflows/e2ePerformanceTests.yml'
-        || "$WORKFLOW" == './workflows/testBuild.yml'
-        || "$WORKFLOW" == './workflows/deploy.yml' ]]; then
+  if [[ "$WORKFLOW" =~ ^./workflows/(e2ePerformanceTests|testBuild.yml|deploy.yml).yml$ ]]; then
     continue
   fi
-
-  npx ajv -s ./tempSchemas/github-workflow.json -d "$WORKFLOW" --strict=false &
-  ASYNC_PROCESSES[${#ACTIONS[@]} + i]=$!
+  run_async npx ajv -s ./tempSchemas/github-workflow.json -d "$WORKFLOW" --strict=false
 done
 
 # Wait for the background builds to finish
-for PID in "${ASYNC_PROCESSES[@]}"; do
-  wait "$PID"
-  RESULT=$?
-  if [[ $RESULT != 0 ]]; then
-    EXIT_CODE=$RESULT
-  fi
-done
+await_async_commands
 
 # Cleanup after ourselves and delete the schemas
 rm -rf ./tempSchemas
@@ -86,6 +67,7 @@ fi
 info 'Downloading actionlint...'
 if bash <(curl --silent https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash); then
   success 'Successfully downloaded actionlint!'
+  echo
 else
   error 'Error downloading actionlint'
   exit 1

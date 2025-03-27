@@ -122,3 +122,50 @@ read_lines_into_array() {
     eval "$array_name+=(\"$line\")"
   done
 }
+
+ASYNC_PIDS=()
+ASYNC_OUTPUTS=()
+
+# Utility function to run a command in the background, while keeping track of its process ID and output.
+# Usage:
+#   run_async sleep 1
+run_async() {
+  local output_file
+  output_file=$(mktemp "/tmp/tmp_async_$$.$(date +%s).$RANDOM.log")
+
+  # Run the command in the background and capture output
+  "$@" &> "$output_file" &
+  local pid=$!
+
+  # Save PID and output file
+  ASYNC_PIDS+=("$pid")
+  ASYNC_OUTPUTS+=("$output_file")
+}
+
+# Utility function to await all commands run via run_async, and await their completion in sequence.
+# Usage:
+#   await_async_commands
+await_async_commands() {
+  local exit_code=0
+
+  # loop through stashed async commands
+  for i in "${!ASYNC_PIDS[@]}"; do
+    local pid=${ASYNC_PIDS[$i]}
+    local outputFile=${ASYNC_OUTPUTS[$i]}
+
+    # Wait for this process
+    if ! wait "$pid"; then
+      exit_code=1
+    fi
+
+    # Print the captured output
+    cat "$outputFile"
+    rm -f "$outputFile"
+  done
+
+  # Clear arrays
+  ASYNC_PIDS=()
+  ASYNC_OUTPUTS=()
+
+  return "$exit_code"
+}
