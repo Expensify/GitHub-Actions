@@ -104,27 +104,50 @@ rm -rf ./actionlint
 #                      Check for unsafe action references                     #
 ###############################################################################
 title 'Checking for mutable action references...'
-find . -type f \( -name "*.yml" -o -name "*.yaml" \) -print0 \
-  | xargs -0 grep --no-filename "uses:" \
-  | sed 's/\- uses:/uses:/g' \
-  | tr '"' ' ' \
-  | awk '{print $2}' \
-  | sed 's/\r//g' \
-  | grep -vE '\.github\/' \
-  | sort \
-  | uniq \
-  > /tmp/actionUsages.txt
+
+# Find yaml files in the `.github` directory
+yamlFiles="$(find . -type f \( -name "*.yml" -o -name "*.yaml" \))"
+
+# Loop through them, looking for action usages
+actionUsages=''
+while IFS= read -r yamlFile; do
+    # Search for uses: in the yaml file
+    usesLines="$(grep --no-filename 'uses:' "$yamlFile")"
+
+    # Ignore files without external action usages
+    if [[ -z "$usesLines" ]]; then
+        continue
+    fi
+
+    # Normalize: remove leading -
+    usesLines="${usesLines//- uses:/uses:}"
+
+    # Normalize: remove quotes
+    usesLines="${usesLines//\"/ }"
+    usesLines="${usesLines//\'/ }"
+
+    # Normalize: remove carriage returns
+    usesLines="${usesLines//\\r/ }"
+
+    # Normalize: trim whitespace
+    usesLines="$(echo "$usesLines" | awk '{print $2}')"
+
+    actionUsages+="$usesLines"$'\n'
+done <<< "$yamlFiles"
+
+# De-dupe and sort action usages
+actionUsages="$(echo "$actionUsages" | sort | uniq)"
 
 info 'All action usages...'
-cat /tmp/actionUsages.txt
+echo "$actionUsages"
+echo
 
-TRUSTED_ORGS=(
-  '^Expensify/'
-)
-grep -vE "$(IFS='|'; echo "${TRUSTED_ORGS[*]}")" /tmp/actionUsages.txt > /tmp/untrustedActionUsages.txt
-echo ''
+# Ignore any local action usages, callable workflows, or Expensify-owned actions
+actionUsages="$(echo "$actionUsages" | grep -vE "^(.github|Expensify/)")"
+
 info 'Untrusted action usages...'
-cat /tmp/untrustedActionUsages.txt
+echo "$actionUsages"
+echo
 
 GIT_HASH_REGEX='\b[0-9a-f]{40}\b'
 grep -vE "$GIT_HASH_REGEX" /tmp/untrustedActionUsages.txt > /tmp/unsafeActionUsages.txt
