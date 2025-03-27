@@ -93,28 +93,28 @@ yamlFiles="$(find . -type f \( -name "*.yml" -o -name "*.yaml" \))"
 # Loop through them, looking for action usages
 actionUsages=''
 while IFS= read -r yamlFile; do
-    # Search for uses: in the yaml file
-    usesLines="$(grep --no-filename 'uses:' "$yamlFile")"
+  # Search for uses: in the yaml file
+  usesLines="$(grep --no-filename 'uses:' "$yamlFile")"
 
-    # Ignore files without external action usages
-    if [[ -z "$usesLines" ]]; then
-        continue
-    fi
+  # Ignore files without external action usages
+  if [[ -z "$usesLines" ]]; then
+    continue
+  fi
 
-    # Normalize: remove leading -
-    usesLines="${usesLines//- uses:/uses:}"
+  # Normalize: remove leading -
+  usesLines="${usesLines//- uses:/uses:}"
 
-    # Normalize: remove quotes
-    usesLines="${usesLines//\"/ }"
-    usesLines="${usesLines//\'/ }"
+  # Normalize: remove quotes
+  usesLines="${usesLines//\"/ }"
+  usesLines="${usesLines//\'/ }"
 
-    # Normalize: remove carriage returns
-    usesLines="${usesLines//\\r/ }"
+  # Normalize: remove carriage returns
+  usesLines="${usesLines//\\r/ }"
 
-    # Normalize: trim whitespace
-    usesLines="$(echo "$usesLines" | awk '{print $2}')"
+  # Normalize: trim whitespace
+  usesLines="$(echo "$usesLines" | awk '{print $2}')"
 
-    actionUsages+="$usesLines"$'\n'
+  actionUsages+="$usesLines"$'\n'
 done <<< "$yamlFiles"
 
 # De-dupe and sort action usages
