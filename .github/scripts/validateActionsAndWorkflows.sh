@@ -90,15 +90,15 @@ title 'Checking for mutable action references...'
 # Find yaml files in the `.github` directory
 yamlFiles="$(find . -type f \( -name "*.yml" -o -name "*.yaml" \))"
 
-# Loop through them, looking for action usages
-actionUsages=''
-while IFS= read -r yamlFile; do
+# Parse them, looking for action usages
+extractActionsFromYaml() {
   # Search for uses: in the yaml file
-  usesLines="$(grep --no-filename 'uses:' "$yamlFile")"
+  local usesLines
+  usesLines="$(grep --no-filename 'uses:' "$1")"
 
   # Ignore files without external action usages
   if [[ -z "$usesLines" ]]; then
-    continue
+    return 0
   fi
 
   # Normalize: remove leading -
@@ -113,9 +113,14 @@ while IFS= read -r yamlFile; do
 
   # Normalize: trim whitespace
   usesLines="$(echo "$usesLines" | awk '{print $2}')"
+  echo "$usesLines"
+  echo $'\n'
+}
 
-  actionUsages+="$usesLines"$'\n'
+while IFS= read -r yamlFile; do
+  run_async extractActionsFromYaml "$yamlFile"
 done <<< "$yamlFiles"
+actionUsages="$(await_async_commands)"
 
 # De-dupe and sort action usages
 actionUsages="$(echo "$actionUsages" | sort | uniq)"
