@@ -137,12 +137,52 @@ info 'Untrusted action usages...'
 echo "$actionUsages"
 echo
 
-GIT_HASH_REGEX='\b[0-9a-f]{40}\b'
-grep -vE "$GIT_HASH_REGEX" /tmp/untrustedActionUsages.txt > /tmp/unsafeActionUsages.txt
-if [ -s /tmp/unsafeActionUsages.txt ]; then
-  echo ''
+# Given an action name with a ref, check the actual repo to make sure it's an immutable commit hash
+# and not secretly a tag that looks like a commit hash.
+# Returns 0 if a ref is immutable, 1 if mutable
+isActionRefImmutable() {
+  local actionWithRef="$1"
+
+  # Everything before the @
+  local action
+  action="${1%@*}"
+
+  # Everything after the @
+  local ref
+  ref="${1##*@}"
+
+  # Check if the ref looks like a commit hash (40-character hexadecimal string)
+  if [[ ! "$ref" =~ ^[0-9a-f]{40}$ ]]; then
+    # Ref does not look like a commit hash, and therefore is probably mutable
+    echo "Ref is mutable: $actionWithRef"
+    return 1
+  fi
+
+  # Ref looks like a commit hash, but we need to check the remote to make sure it's not a tag or a branch
+  local repoURL
+  repoURL="git@github.com:${action}.git"
+
+  # Check if the ref exists in the remote as a branch or tag
+  if git ls-remote --quiet --tags --exit-code "$repoURL" "refs/*/$ref*"; then
+    error "Found remote branch or tag that looks like a commit hash! $actionWithRef"
+    return 1
+  fi
+
+  echo "Ref is immutable: $actionWithRef"
+  return 0
+}
+
+mutableActionUsages=''
+while IFS= read -r actionWithRef; do
+  if ! isActionRefImmutable "$actionWithRef"; then
+    mutableActionUsages+=$actionWithRef$'\n'
+  fi
+done <<< "$actionUsages"
+
+if [[ -n "$mutableActionUsages" ]]; then
+  echo
   error 'Found unsafe mutable action reference to an untrusted action. Use an immutable commit hash reference instead'
-  cat /tmp/unsafeActionUsages.txt
+  echo "$mutableActionUsages"
   EXIT_CODE=1
 fi
 
