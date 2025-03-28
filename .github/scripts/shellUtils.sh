@@ -130,19 +130,20 @@ ASYNC_OUTPUTS=()
 # Usage:
 #   run_async sleep 1
 run_async() {
-  local output_file
-  output_file=$(mktemp "/tmp/tmp_async_$$.$(date +%s).$RANDOM.log")
+  local outputFile
+  outputFile=$(mktemp "/tmp/tmp_async_$$.$(date +%s).$RANDOM.log")
 
   # Run the command in the background and capture output
-  "$@" &> "$output_file" &
+  "$@" &> "$outputFile" &
   local pid=$!
 
   # Save PID and output file
   ASYNC_PIDS+=("$pid")
-  ASYNC_OUTPUTS+=("$output_file")
+  ASYNC_OUTPUTS+=("$outputFile")
 }
 
 # Utility function to await all commands run via run_async, and await their completion in sequence.
+# Note that this must be run from the same shell as the associated run_async calls.
 # Usage:
 #   await_async_commands
 await_async_commands() {
