@@ -7,6 +7,8 @@ source "$(dirname "${BASH_SOURCE[0]}")/shellUtils.sh"
 ###############################################################################
 title 'Validating the Github Actions and workflows using the json schemas provided by (https://www.schemastore.org/json/)'
 
+# Disabling shellcheck because this function is invoked by name
+# shellcheck disable=SC2317
 function downloadSchema {
   [[ $1 = 'github-action.json' ]] && SCHEMA_NAME='GitHub Action' || SCHEMA_NAME='GitHub Workflow'
   info "Downloading $SCHEMA_NAME schema..."
@@ -91,6 +93,8 @@ title 'Checking for mutable action references...'
 yamlFiles="$(find . -type f \( -name "*.yml" -o -name "*.yaml" \))"
 
 # Parse them, looking for action usages
+# Disabling shellcheck because this function is invoked by name and is reachable
+# shellcheck disable=SC2317
 extractActionsFromYaml() {
   # Search for uses: in the yaml file
   local usesLines
@@ -190,4 +194,4 @@ if [[ "$EXIT_CODE" == 0 ]]; then
   success '✅ All untrusted actions are using immutable references'
 fi
 
-exit $EXIT_CODE
+exit "$EXIT_CODE"
