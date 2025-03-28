@@ -111,9 +111,10 @@ extractActionsFromYaml() {
   # Normalize: remove carriage returns
   usesLines="${usesLines//\\r/ }"
 
-  # Normalize: trim whitespace
-  usesLines="$(echo "$usesLines" | awk '{print $2}')"
-  echo "$usesLines"
+  # Grab action names and refs from uses lines
+  local actionsWithRefs
+  actionsWithRefs="$(echo "$usesLines" | awk '{print $2}')"
+  echo "$actionsWithRefs"
   echo $'\n'
 }
 
