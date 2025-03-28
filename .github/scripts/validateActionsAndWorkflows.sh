@@ -124,7 +124,7 @@ done <<< "$yamlFiles"
 actionUsages="$(await_async_commands)"
 
 # De-dupe and sort action usages
-actionUsages="$(echo "$actionUsages" | sort | uniq)"
+actionUsages="$(echo "$actionUsages" | grep -vE '^$' | sort | uniq)"
 
 info 'All action usages...'
 echo "$actionUsages"
