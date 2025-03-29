@@ -1,5 +1,6 @@
 #!/bin/bash
 
+source "$(dirname "${BASH_SOURCE[0]}")/async.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/shellUtils.sh"
 
 ###############################################################################
@@ -144,6 +145,7 @@ echo
 # Given an action name with a ref, check the actual repo to make sure it's an immutable commit hash
 # and not secretly a tag that looks like a commit hash.
 # Returns 0 if a ref is immutable, 1 if mutable
+# shellcheck disable=SC2317
 isActionRefImmutable() {
   local actionWithRef="$1"
 
@@ -176,12 +178,17 @@ isActionRefImmutable() {
   return 0
 }
 
-mutableActionUsages=''
-while IFS= read -r actionWithRef; do
-  if ! isActionRefImmutable "$actionWithRef"; then
-    mutableActionUsages+=$actionWithRef$'\n'
+mutableActionUsages="$(mktemp)"
+# shellcheck disable=SC2317
+verifyActionRefIsImmutable() {
+  if ! isActionRefImmutable "$1"; then
+    echo "$1" >> "$mutableActionUsages"
   fi
+}
+while IFS= read -r actionWithRef; do
+  run_async verifyActionRefIsImmutable "$actionWithRef"
 done <<< "$actionUsages"
+await_async_commands
 
 if [[ -n "$mutableActionUsages" ]]; then
   echo

@@ -41,8 +41,11 @@ await_async_commands() {
   flock "$LOCK"
 
   # Wait for all async commands
+  local exit_code=0
   while read -r pid; do
-    wait "$pid"
+    if ! wait "$pid"; then
+      exit_code=1
+    fi
   done < "$PIDS"
 
   # Aggregate their outputs (in the order they were called in) to the shared pipe
@@ -56,4 +59,5 @@ await_async_commands() {
   : > "$OUTPUTS"
 
   flock -u "$LOCK"
+  return $exit_code
 }
