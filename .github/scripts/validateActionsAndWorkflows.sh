@@ -160,7 +160,6 @@ isActionRefImmutable() {
   # Check if the ref looks like a commit hash (40-character hexadecimal string)
   if [[ ! "$ref" =~ ^[0-9a-f]{40}$ ]]; then
     # Ref does not look like a commit hash, and therefore is probably mutable
-    echo "Ref is mutable: $actionWithRef"
     return 1
   fi
 
@@ -171,10 +170,10 @@ isActionRefImmutable() {
   # Check if the ref exists in the remote as a branch or tag
   if git ls-remote --quiet --tags --exit-code "$repoURL" "refs/*/$ref*"; then
     error "Found remote branch or tag that looks like a commit hash! $actionWithRef"
+    echo
     return 1
   fi
 
-  echo "Ref is immutable: $actionWithRef"
   return 0
 }
 
@@ -190,15 +189,16 @@ while IFS= read -r actionWithRef; do
 done <<< "$actionUsages"
 await_async_commands
 
-if [[ -n "$mutableActionUsages" ]]; then
-  echo
-  error 'Found unsafe mutable action reference to an untrusted action. Use an immutable commit hash reference instead'
-  echo "$mutableActionUsages"
+if [[ -s "$mutableActionUsages" ]]; then
+  error 'The following actions use unsafe mutable references; use an immutable commit hash reference instead!'
+  cat "$mutableActionUsages"
   EXIT_CODE=1
 fi
 
 if [[ "$EXIT_CODE" == 0 ]]; then
   success '✅ All untrusted actions are using immutable references'
 fi
+
+rm -f "$mutableActionUsages"
 
 exit "$EXIT_CODE"
