@@ -11,14 +11,16 @@ if [[ -z "${CI}" && -z "$(command -v flock)" ]]; then
   brew install flock
 fi
 
-LOCK="$(mktemp -t async_lock)"
-PIDS="$(mktemp -t async_pid)"
-OUTPUTS="$(mktemp -t async_outputs)"
+LOCK="$(mktemp -t async_lock.XXXXXXXXX)"
+
+# Temp files to keep track of processes and outputs
+PIDS="$(mktemp -t async_pid.XXXXXXXXX)"
+OUTPUTS="$(mktemp -t async_outputs.XXXXXXXXX)"
 
 # Run a command in the background, while keeping track of its process ID and output.
 run_async() {
   local output_file
-  output_file=$(mktemp -t async_output_log)
+  output_file=$(mktemp -t async_output_log.XXXXXXXXX)
 
   # Run the command in the background and capture output to a file
   "$@" &> "$output_file" &
@@ -64,8 +66,11 @@ await_async_commands() {
 
 # Cleanup function to remove temp files
 cleanup_async() {
+  # Acquire lock
   flock "$LOCK"
-  rm "$LOCK"
-  rm "$PIDS"
-  rm "$OUTPUTS"
+
+  # Remove temp files
+  rm -f "$LOCK"
+  rm -f "$PIDS"
+  rm -f "$OUTPUTS"
 }
