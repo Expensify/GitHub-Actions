@@ -11,7 +11,9 @@ if [[ -z "${CI}" && -z "$(command -v flock)" ]]; then
   brew install flock
 fi
 
+# Create a lock file and assign it fd 200
 LOCK="$(mktemp -t async_lock.XXXXXXXXX)"
+exec 200>"$LOCK"
 
 # Temp files to keep track of processes and outputs
 PIDS="$(mktemp -t async_pid.XXXXXXXXX)"
@@ -27,10 +29,10 @@ run_async() {
   local pid=$!
 
   # keep track of the process IDs and output files
-  flock "$LOCK"
+  flock 200
   echo "$pid" >> "$PIDS"
   echo "$output_file" >> "$OUTPUTS"
-  flock -u "$LOCK"
+  flock -u 200
 }
 
 # Await all commands run via run_async.
@@ -40,7 +42,7 @@ run_async() {
 # - Because of that, it intentionally doesn't output anything inline.
 #   This is to prevent a pitfall: `myVar="$(await_async_commands)"` runs in a subshell and won't halt execution!
 await_async_commands() {
-  flock "$LOCK"
+  flock 200
 
   # Wait for all async commands
   local exit_code=0
@@ -60,17 +62,18 @@ await_async_commands() {
   : > "$PIDS"
   : > "$OUTPUTS"
 
-  flock -u "$LOCK"
+  flock -u 200
   return $exit_code
 }
 
 # Cleanup function to remove temp files
 cleanup_async() {
   # Acquire lock
-  flock "$LOCK"
+  flock 200
 
   # Remove temp files
   rm -f "$LOCK"
   rm -f "$PIDS"
   rm -f "$OUTPUTS"
+  exec 200>&-
 }
