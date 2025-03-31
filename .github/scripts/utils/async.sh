@@ -36,11 +36,8 @@ run_async() {
 }
 
 # Await all commands run via run_async.
-# Aggregate their outputs into the shared $PIPE in the order they were called in.
-# Notes:
-# - This must be called from the same shell that run_async was called from
-# - Because of that, it intentionally doesn't output anything inline.
-#   This is to prevent a pitfall: `myVar="$(await_async_commands)"` runs in a subshell and won't halt execution!
+# Print their outputs in the order they were called in.
+# Note: This must be called from the same shell that run_async was called from
 await_async_commands() {
   flock 200
 

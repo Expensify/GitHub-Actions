@@ -145,10 +145,10 @@ echo "$actionUsages"
 echo
 
 # Next, we'll check all the actions we found to make sure they're immutable.
-# We're using a temp file instead of a variable so that we aggregate mutable action usages across several async subprocesses.
+# We're using a temp file instead of a variable so we can write to it from a subprocess (i.e: a command run in the background)
 mutableActionUsages="$(mktemp)"
 
-# Given an action name with a ref, check the actual repo to make sure it's an immutable commit hash
+# Given an action name with a ref (actions/checkout@v2), check the actual repo to make sure it's an immutable commit hash
 # and not secretly a tag or branch that looks like a commit hash.
 # If it's mutable, collect it into the mutableActionUsages file.
 # shellcheck disable=SC2317
