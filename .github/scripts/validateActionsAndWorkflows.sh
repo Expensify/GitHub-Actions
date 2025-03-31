@@ -175,7 +175,7 @@ verifyActionRefIsImmutable() {
   repoURL="git@github.com:${action}.git"
 
   # Check if the ref exists in the remote as a branch or tag
-  if git ls-remote --quiet --tags --exit-code "$repoURL" "refs/*/$ref*"; then
+  if git ls-remote --quiet --tags --branches --exit-code "$repoURL" "refs/*/$ref*"; then
     error "Found remote branch or tag that looks like a commit hash! $actionWithRef"
     echo
     echo "$actionWithRef" >> "$mutableActionUsages"
