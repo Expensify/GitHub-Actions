@@ -167,6 +167,7 @@ verifyActionRefIsImmutable() {
   if [[ ! "$ref" =~ ^[0-9a-f]{40}$ ]]; then
     # Ref does not look like a commit hash, and therefore is probably mutable
     echo "$actionWithRef" >> "$mutableActionUsages"
+    return 1
   fi
 
   # Ref looks like a commit hash, but we need to check the remote to make sure it's not a tag or a branch
@@ -178,9 +179,11 @@ verifyActionRefIsImmutable() {
     error "Found remote branch or tag that looks like a commit hash! $actionWithRef"
     echo
     echo "$actionWithRef" >> "$mutableActionUsages"
+    return 1
   fi
 
   # If we get here, the action is immutable
+  return 0
 }
 
 while IFS= read -r actionWithRef; do
@@ -201,4 +204,4 @@ fi
 rm -f "$mutableActionUsages"
 cleanup_async
 
-exit "$EXIT_CODE"
+exit $EXIT_CODE
