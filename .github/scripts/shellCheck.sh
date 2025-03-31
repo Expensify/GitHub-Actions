@@ -5,7 +5,7 @@ ROOT_DIR="$(dirname "$(dirname "$(dirname "$(realpath "${BASH_SOURCE[0]}")")")")
 
 cd "$ROOT_DIR" || exit 1
 
-source ./.github/scripts/shellUtils.sh
+source ./.github/scripts/utils/shellUtils.sh
 
 declare -r DIRECTORIES_TO_IGNORE=(
   './node_modules'

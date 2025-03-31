@@ -1,7 +1,7 @@
 #!/bin/bash
 
-source "$(dirname "${BASH_SOURCE[0]}")/async.sh"
-source "$(dirname "${BASH_SOURCE[0]}")/shellUtils.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/utils/async.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/utils/shellUtils.sh"
 
 ###############################################################################
 #                        Validate json scehmas with ajv                       #
