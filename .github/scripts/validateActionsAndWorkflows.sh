@@ -93,11 +93,11 @@ title 'Checking for mutable action references...'
 # Find yaml files in the `.github` directory
 yamlFiles="$(find . -type f \( -name "*.yml" -o -name "*.yaml" \))"
 
-# Parse them, looking for action usages
+# Parse a yaml file, looking for action usages
 # Disabling shellcheck because this function is invoked by name and is reachable
 # shellcheck disable=SC2317
 extractActionsFromYaml() {
-  # Search for uses: in the yaml file
+  # Search for "uses:" in the yaml file
   local usesLines
   usesLines="$(grep --no-filename 'uses:' "$1")"
 
@@ -116,13 +116,15 @@ extractActionsFromYaml() {
   # Normalize: remove carriage returns
   usesLines="${usesLines//\\r/ }"
 
-  # Grab action names and refs from uses lines
+  # Grab action names and refs from uses lines.
+  # At this point, these lines look like "uses: myAction@ref", so `awk '{print $2}'` just grabs the second word from each line.
   local actionsWithRefs
   actionsWithRefs="$(echo "$usesLines" | awk '{print $2}')"
   echo "$actionsWithRefs"
   echo $'\n'
 }
 
+# Parse all yaml files in parallel to find all action usages
 while IFS= read -r yamlFile; do
   run_async extractActionsFromYaml "$yamlFile"
 done <<< "$yamlFiles"
@@ -142,11 +144,15 @@ info 'Untrusted action usages...'
 echo "$actionUsages"
 echo
 
+# Next, we'll check all the actions we found to make sure they're immutable.
+# We're using a temp file instead of a variable so that we aggregate mutable action usages across several async subprocesses.
+mutableActionUsages="$(mktemp)"
+
 # Given an action name with a ref, check the actual repo to make sure it's an immutable commit hash
-# and not secretly a tag that looks like a commit hash.
-# Returns 0 if a ref is immutable, 1 if mutable
+# and not secretly a tag or branch that looks like a commit hash.
+# If it's mutable, collect it into the mutableActionUsages file.
 # shellcheck disable=SC2317
-isActionRefImmutable() {
+verifyActionRefIsImmutable() {
   local actionWithRef="$1"
 
   # Everything before the @
@@ -160,7 +166,7 @@ isActionRefImmutable() {
   # Check if the ref looks like a commit hash (40-character hexadecimal string)
   if [[ ! "$ref" =~ ^[0-9a-f]{40}$ ]]; then
     # Ref does not look like a commit hash, and therefore is probably mutable
-    return 1
+    echo "$actionWithRef" >> "$mutableActionUsages"
   fi
 
   # Ref looks like a commit hash, but we need to check the remote to make sure it's not a tag or a branch
@@ -171,19 +177,12 @@ isActionRefImmutable() {
   if git ls-remote --quiet --tags --exit-code "$repoURL" "refs/*/$ref*"; then
     error "Found remote branch or tag that looks like a commit hash! $actionWithRef"
     echo
-    return 1
+    echo "$actionWithRef" >> "$mutableActionUsages"
   fi
 
-  return 0
+  # If we get here, the action is immutable
 }
 
-mutableActionUsages="$(mktemp)"
-# shellcheck disable=SC2317
-verifyActionRefIsImmutable() {
-  if ! isActionRefImmutable "$1"; then
-    echo "$1" >> "$mutableActionUsages"
-  fi
-}
 while IFS= read -r actionWithRef; do
   run_async verifyActionRefIsImmutable "$actionWithRef"
 done <<< "$actionUsages"
