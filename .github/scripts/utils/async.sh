@@ -61,3 +61,11 @@ await_async_commands() {
   flock -u "$LOCK"
   return $exit_code
 }
+
+# Cleanup function to remove temp files
+cleanup_async() {
+  flock "$LOCK"
+  rm "$LOCK"
+  rm "$PIDS"
+  rm "$OUTPUTS"
+}

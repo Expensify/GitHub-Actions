@@ -199,5 +199,6 @@ if [[ "$EXIT_CODE" == 0 ]]; then
 fi
 
 rm -f "$mutableActionUsages"
+cleanup_async
 
 exit "$EXIT_CODE"
