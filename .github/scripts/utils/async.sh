@@ -4,11 +4,8 @@
 # and waiting for them to finish, while keeping output sequential
 
 if [[ -z "${CI}" && -z "$(command -v flock)" ]]; then
-    if [[ "$OSTYPE" != 'darwin'* || -z "$(command -v brew)" ]]; then
-        echo 'This script requires flock to be installed. Please install it and try again'
-        exit 1
-    fi
-    brew install flock
+    echo 'This script requires flock to be installed. Please install it and try again'
+    exit 1
 fi
 
 # Create a lock file and assign it fd 200
