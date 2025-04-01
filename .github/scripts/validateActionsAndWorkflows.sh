@@ -87,94 +87,91 @@ rm -rf ./actionlint
 title 'Checking for mutable action references...'
 
 # Find yaml files in the `.github` directory
-yamlFiles="$(find . -type f \( -name "*.yml" -o -name "*.yaml" \))"
+YAML_FILES="$(find . -type f \( -name "*.yml" -o -name "*.yaml" \))"
 
 # Parse a yaml file, looking for action usages
 # Disabling shellcheck because this function is invoked by name and is reachable
 # shellcheck disable=SC2317
 extractActionsFromYaml() {
     # Search for "uses:" in the yaml file
-    local usesLines
-    usesLines="$(grep --no-filename 'uses:' "$1")"
+    local USES_LINES
+    USES_LINES="$(grep --no-filename 'uses:' "$1")"
 
     # Ignore files without external action usages
-    if [[ -z "$usesLines" ]]; then
+    if [[ -z "$USES_LINES" ]]; then
         return 0
     fi
 
     # Normalize: remove leading -
-    usesLines="${usesLines//- uses:/uses:}"
+    USES_LINES="${USES_LINES//- uses:/uses:}"
 
     # Normalize: remove quotes
-    usesLines="${usesLines//\"/ }"
-    usesLines="${usesLines//\'/ }"
+    USES_LINES="${USES_LINES//\"/ }"
+    USES_LINES="${USES_LINES//\'/ }"
 
     # Normalize: remove carriage returns
-    usesLines="${usesLines//\\r/ }"
+    USES_LINES="${USES_LINES//\\r/ }"
 
     # Grab action names and refs from uses lines.
     # At this point, these lines look like "uses: myAction@ref", so `awk '{print $2}'` just grabs the second word from each line.
-    local actionsWithRefs
-    actionsWithRefs="$(echo "$usesLines" | awk '{print $2}')"
-    echo "$actionsWithRefs"
+    local ACTIONS_WITH_REFS
+    ACTIONS_WITH_REFS="$(echo "$USES_LINES" | awk '{print $2}')"
+    echo "$ACTIONS_WITH_REFS"
     echo $'\n'
 }
 
 # Parse all yaml files in parallel to find all action usages
-while IFS= read -r yamlFile; do
-    run_async extractActionsFromYaml "$yamlFile"
-done <<< "$yamlFiles"
-actionUsages="$(await_async_commands)"
+while IFS= read -r YAML_FILE; do
+    run_async extractActionsFromYaml "$YAML_FILE"
+done <<< "$YAML_FILES"
+ACTION_USAGES="$(await_async_commands)"
 
 # De-dupe and sort action usages
-actionUsages="$(echo "$actionUsages" | grep -vE '^$' | sort | uniq)"
+ACTION_USAGES="$(echo "$ACTION_USAGES" | grep -vE '^$' | sort | uniq)"
 
 info 'All action usages...'
-echo "$actionUsages"
+echo "$ACTION_USAGES"
 echo
 
 # Ignore any local action usages, callable workflows, or Expensify-owned actions
-actionUsages="$(echo "$actionUsages" | grep -vE "^(.github|Expensify/)")"
+ACTION_USAGES="$(echo "$ACTION_USAGES" | grep -vE "^(.github|Expensify/)")"
 
 info 'Untrusted action usages...'
-echo "$actionUsages"
+echo "$ACTION_USAGES"
 echo
 
 # Next, we'll check all the actions we found to make sure they're immutable.
 # We're using a temp file instead of a variable so we can write to it from a subprocess (i.e: a command run in the background)
-mutableActionUsages="$(mktemp)"
+MUTABLE_ACTION_USAGES="$(mktemp)"
 
 # Given an action name with a ref (actions/checkout@v2), check the actual repo to make sure it's an immutable commit hash
 # and not secretly a tag or branch that looks like a commit hash.
-# If it's mutable, collect it into the mutableActionUsages file.
+# If it's mutable, collect it into the MUTABLE_ACTION_USAGES file.
 # shellcheck disable=SC2317
 verifyActionRefIsImmutable() {
-    local actionWithRef="$1"
+    local ACTIONS_WITH_REFS="$1"
 
     # Everything before the @
-    local action
-    action="${1%@*}"
+    local ACTION="${1%@*}"
 
     # Everything after the @
-    local ref
-    ref="${1##*@}"
+    local REF="${1##*@}"
 
     # Check if the ref looks like a commit hash (40-character hexadecimal string)
-    if [[ ! "$ref" =~ ^[0-9a-f]{40}$ ]]; then
+    if [[ ! "$REF" =~ ^[0-9a-f]{40}$ ]]; then
         # Ref does not look like a commit hash, and therefore is probably mutable
-        echo "$actionWithRef" >> "$mutableActionUsages"
+        echo "$ACTIONS_WITH_REFS" >> "$MUTABLE_ACTION_USAGES"
         return 1
     fi
 
     # Ref looks like a commit hash, but we need to check the remote to make sure it's not a tag or a branch
-    local repoURL
-    repoURL="git@github.com:${action}.git"
+    local REPO_URL="git@github.com:${ACTION}.git"
 
     # Check if the ref exists in the remote as a branch or tag
-    if git ls-remote --quiet --tags --branches --exit-code "$repoURL" "refs/*/$ref*"; then
-        error "Found remote branch or tag that looks like a commit hash! $actionWithRef"
+    if git ls-remote --quiet --tags --branches --exit-code "$REPO_URL" "refs/*/$REF*"; then
+        error "Found remote branch or tag that looks like a commit hash! $ACTIONS_WITH_REFS"
         echo
-        echo "$actionWithRef" >> "$mutableActionUsages"
+        echo "$ACTIONS_WITH_REFS" >> "$MUTABLE_ACTION_USAGES"
         return 1
     fi
 
@@ -182,14 +179,14 @@ verifyActionRefIsImmutable() {
     return 0
 }
 
-while IFS= read -r actionWithRef; do
-    run_async verifyActionRefIsImmutable "$actionWithRef"
-done <<< "$actionUsages"
+while IFS= read -r ACTIONS_WITH_REFS; do
+    run_async verifyActionRefIsImmutable "$ACTIONS_WITH_REFS"
+done <<< "$ACTION_USAGES"
 await_async_commands
 
-if [[ -s "$mutableActionUsages" ]]; then
+if [[ -s "$MUTABLE_ACTION_USAGES" ]]; then
     error 'The following actions use unsafe mutable references; use an immutable commit hash reference instead!'
-    cat "$mutableActionUsages"
+    cat "$MUTABLE_ACTION_USAGES"
     EXIT_CODE=1
 fi
 
@@ -197,7 +194,7 @@ if [[ "$EXIT_CODE" == 0 ]]; then
     success '✅ All untrusted actions are using immutable references'
 fi
 
-rm -f "$mutableActionUsages"
+rm -f "$MUTABLE_ACTION_USAGES"
 cleanup_async
 
 exit $EXIT_CODE

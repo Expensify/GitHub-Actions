@@ -18,17 +18,17 @@ OUTPUTS="$(mktemp -t async_outputs.XXXXXXXXX)"
 
 # Run a command in the background, while keeping track of its process ID and output.
 run_async() {
-    local output_file
-    output_file=$(mktemp -t async_output_log.XXXXXXXXX)
+    local OUTPUT_FILE
+    OUTPUT_FILE=$(mktemp -t async_output_log.XXXXXXXXX)
 
     # Run the command in the background and capture output to a file
-    "$@" &> "$output_file" &
-    local pid=$!
+    "$@" &> "$OUTPUT_FILE" &
+    local PID=$!
 
     # keep track of the process IDs and output files
     flock 200
-    echo "$pid" >> "$PIDS"
-    echo "$output_file" >> "$OUTPUTS"
+    echo "$PID" >> "$PIDS"
+    echo "$OUTPUT_FILE" >> "$OUTPUTS"
     flock -u 200
 }
 
@@ -39,17 +39,17 @@ await_async_commands() {
     flock 200
 
     # Wait for all async commands
-    local exit_code=0
-    while read -r pid; do
-    if ! wait "$pid"; then
-        exit_code=1
+    local EXIT_CODE=0
+    while read -r PID; do
+    if ! wait "$PID"; then
+        EXIT_CODE=1
     fi
     done < "$PIDS"
 
     # Aggregate their outputs (in the order they were called in) to the shared pipe
-    while read -r output_file; do
-    cat "$output_file"
-    rm -f "$output_file"
+    while read -r OUTPUT_FILE; do
+        cat "$OUTPUT_FILE"
+        rm -f "$OUTPUT_FILE"
     done < "$OUTPUTS"
 
     # Clear the processes and outputs
@@ -57,7 +57,7 @@ await_async_commands() {
     : > "$OUTPUTS"
 
     flock -u 200
-    return $exit_code
+    return $EXIT_CODE
 }
 
 # Cleanup function to remove temp files
