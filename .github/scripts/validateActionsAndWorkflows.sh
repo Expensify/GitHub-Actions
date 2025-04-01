@@ -134,7 +134,7 @@ echo "$ACTION_USAGES"
 echo
 
 # Ignore any local action usages, callable workflows, or Expensify-owned actions
-ACTION_USAGES="$(echo "$ACTION_USAGES" | grep -vE "^(.github|Expensify/)")"
+ACTION_USAGES="$(echo "$ACTION_USAGES" | grep -vE "^((./)?.github|Expensify/)")"
 
 info 'Untrusted action usages...'
 echo "$ACTION_USAGES"
