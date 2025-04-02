@@ -33,8 +33,8 @@ for SHELL_SCRIPT in $SHELL_SCRIPTS; do
     PIDS+=($!)
 done
 
-EXIT_CODE=0	await_async_commands
-for PID in "${PIDS[@]}"; do	EXIT_CODE=$?
+EXIT_CODE=0
+for PID in "${PIDS[@]}"; do
   if ! wait "$PID"; then
     EXIT_CODE=1
   fi
