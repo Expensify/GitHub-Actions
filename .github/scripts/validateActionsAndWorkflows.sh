@@ -1,34 +1,4 @@
 #!/bin/bash
-
-###############################################################################
-#                            Lint with actionlint                             #
-###############################################################################
-title 'Lint Github Actions via actionlint (https://github.com/rhysd/actionlint)'
-
-# If we are running this on a non-CI machine (e.g. locally), install shellcheck
-if [[ -z "${CI}" && -z "$(command -v shellcheck)" ]]; then
-    echo 'This script requires shellcheck to be installed. Please install it and try again'
-    exit 1
-fi
-
-info 'Downloading actionlint...'
-if bash <(curl --silent https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash); then
-    success 'Successfully downloaded actionlint!'
-    echo
-else
-    error 'Error downloading actionlint'
-    exit 1
-fi
-
-info 'Linting workflows...'
-./actionlint -color || EXIT_CODE=1
-if [[ "$EXIT_CODE" == 0 ]]; then
-    success 'Workflows passed actionlint!'
-fi
-
-# Cleanup after ourselves and delete actionlint
-rm -rf ./actionlint
-
 ###############################################################################
 #                      Check for unsafe action references                     #
 ###############################################################################

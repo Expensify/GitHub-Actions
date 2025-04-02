@@ -25,6 +25,16 @@ jobs:
       - name: Validate action and workflow schemas
         run: .github/scripts/validateWorkflowSchemas.sh
 
+  actionlint:
+    runs-on: ubuntu-latest
+    steps:
+      # v4.2.2
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Lint workflows with actionlint
+        run: .github/scripts/actionlint.sh
+
   verify:
     runs-on: ubuntu-latest
     steps:
