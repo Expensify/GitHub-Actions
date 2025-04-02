@@ -46,4 +46,4 @@ if [[ $EXIT_CODE == 0 ]]; then
     success "ShellCheck passed for all files!"
 fi
 
-exit "$EXIT_CODE"
+exit $EXIT_CODE
