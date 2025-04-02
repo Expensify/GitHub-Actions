@@ -33,7 +33,8 @@ for FILE in $(find "$GITHUB_DIR" -type f \( -name "*.yml" -o -name "*.yaml" \)) 
 
     # Grab action names and refs from uses lines.
     # At this point, these lines look like "uses: myAction@ref", so `awk '{print $2}'` just grabs the second word from each line.
-    ACTION_USAGES+=$'\n'"$(echo "$USES_LINES" | awk '{print $2}')"
+    ACTION_USAGES+=$'\n'
+    ACTION_USAGES+="$(echo "$USES_LINES" | awk '{print $2}')"
 done
 
 # De-dupe and sort action usages
