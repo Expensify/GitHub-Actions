@@ -5,8 +5,7 @@ ROOT_DIR="$(dirname "$(dirname "$(dirname "$(realpath "${BASH_SOURCE[0]}")")")")
 
 cd "$ROOT_DIR" || exit 1
 
-source ./.github/scripts/utils/async.sh
-source ./.github/scripts/utils/shellUtils.sh
+source ./.github/scripts/shellUtils.sh
 
 declare -r DIRECTORIES_TO_IGNORE=(
     './node_modules'
@@ -22,23 +21,29 @@ info "👀 Linting the following shell scripts using ShellCheck:"
 echo "$SHELL_SCRIPTS"
 echo
 
+PIDS=()
 for SHELL_SCRIPT in $SHELL_SCRIPTS; do
     if [[ "$CI" == 'true' ]]; then
         # ShellCheck is installed by default on GitHub Actions ubuntu runners
-        run_async shellcheck -e SC1091 "$SHELL_SCRIPT"
+        shellcheck -e SC1091 "$SHELL_SCRIPT" &
     else
         # Otherwise shellcheck is used via npx
-        run_async npx shellcheck -e SC1091 "$SHELL_SCRIPT"
+        npx shellcheck -e SC1091 "$SHELL_SCRIPT" &
     fi
+    PIDS+=($!)
 done
 
-await_async_commands
-EXIT_CODE=$?
+EXIT_CODE=0	await_async_commands
+for PID in "${PIDS[@]}"; do	EXIT_CODE=$?
+  if ! wait "$PID"; then
+    EXIT_CODE=1
+  fi
+done
 
 cd "$CURRENT_DIR" || exit 1
 
-if [ $EXIT_CODE == 0 ]; then
+if [[ $EXIT_CODE == 0 ]]; then
     success "ShellCheck passed for all files!"
 fi
 
-exit $EXIT_CODE
+exit "$EXIT_CODE"

@@ -1,16 +1,13 @@
 #!/bin/bash
 
-source "$(dirname "${BASH_SOURCE[0]}")/utils/async.sh"
-source "$(dirname "${BASH_SOURCE[0]}")/utils/shellUtils.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/shellUtils.sh"
 
 ###############################################################################
 #                        Validate json scehmas with ajv                       #
 ###############################################################################
 title 'Validating the Github Actions and workflows using the json schemas provided by (https://www.schemastore.org/json/)'
 
-# Disabling shellcheck because this function is invoked by name
-# shellcheck disable=SC2317
-function downloadSchema {
+function download_schema() {
     [[ $1 = 'github-action.json' ]] && SCHEMA_NAME='GitHub Action' || SCHEMA_NAME='GitHub Workflow'
     info "Downloading $SCHEMA_NAME schema..."
     if curl "https://json.schemastore.org/$1" --output "./tempSchemas/$1" --silent; then
@@ -24,18 +21,21 @@ function downloadSchema {
 
 # Download the up-to-date json schemas for github actions and workflows
 cd ./.github && mkdir ./tempSchemas || exit 1
-run_async downloadSchema 'github-action.json' || exit 1
-run_async downloadSchema 'github-workflow.json' || exit 1
-await_async_commands
+download_schema 'github-action.json' || exit 1
+download_schema 'github-workflow.json' || exit 1
 
 # Track exit codes separately so we can run a full validation, report errors, and exit with the correct code
-declare EXIT_CODE=0
+EXIT_CODE=0
 
 info 'Validating actions and workflows against their JSON schemas...'
 
+# This stores the process IDs of the ajv commands so they can run in parallel
+PIDS=()
+
 # Validate the actions and workflows using the JSON schemas and ajv https://github.com/ajv-validator/ajv-cli
 for ACTION in ./actions/*/*/action.yml; do
-    run_async npx ajv -s ./tempSchemas/github-action.json -d "$ACTION" --strict=false
+    npx ajv -s ./tempSchemas/github-action.json -d "$ACTION" --strict=false &
+    PIDS+=($!)
 done
 
 for WORKFLOW in ./workflows/*.yml; do
@@ -43,11 +43,16 @@ for WORKFLOW in ./workflows/*.yml; do
     if [[ "$WORKFLOW" =~ ^./workflows/(e2ePerformanceTests|testBuild.yml|deploy.yml).yml$ ]]; then
         continue
     fi
-    run_async npx ajv -s ./tempSchemas/github-workflow.json -d "$WORKFLOW" --strict=false
+    npx ajv -s ./tempSchemas/github-workflow.json -d "$WORKFLOW" --strict=false &
+    PIDS+=($!)
 done
 
 # Wait for the background builds to finish
-await_async_commands
+for PID in "${PIDS[@]}"; do
+    if ! wait "$PID"; then
+        EXIT_CODE=1
+    fi
+done
 
 # Cleanup after ourselves and delete the schemas
 rm -rf ./tempSchemas
@@ -86,20 +91,15 @@ rm -rf ./actionlint
 ###############################################################################
 title 'Checking for mutable action references...'
 
-# Find yaml files in the `.github` directory
-YAML_FILES="$(find . -type f \( -name "*.yml" -o -name "*.yaml" \))"
+ACTION_USAGES=''
 
-# Parse a yaml file, looking for action usages
-# Disabling shellcheck because this function is invoked by name and is reachable
-# shellcheck disable=SC2317
-extractActionsFromYaml() {
-    # Search for "uses:" in the yaml file
-    local USES_LINES
-    USES_LINES="$(grep --no-filename 'uses:' "$1")"
+# Find yaml files in the `.github` directory
+for FILE in $(find . -type f \( -name "*.yml" -o -name "*.yaml" \)) ; do
+    USES_LINES="$(grep --no-filename 'uses:' "$FILE")"
 
     # Ignore files without external action usages
     if [[ -z "$USES_LINES" ]]; then
-        return 0
+        continue
     fi
 
     # Normalize: remove leading -
@@ -114,17 +114,8 @@ extractActionsFromYaml() {
 
     # Grab action names and refs from uses lines.
     # At this point, these lines look like "uses: myAction@ref", so `awk '{print $2}'` just grabs the second word from each line.
-    local ACTIONS_WITH_REFS
-    ACTIONS_WITH_REFS="$(echo "$USES_LINES" | awk '{print $2}')"
-    echo "$ACTIONS_WITH_REFS"
-    echo $'\n'
-}
-
-# Parse all yaml files in parallel to find all action usages
-while IFS= read -r YAML_FILE; do
-    run_async extractActionsFromYaml "$YAML_FILE"
-done <<< "$YAML_FILES"
-ACTION_USAGES="$(await_async_commands)"
+    ACTION_USAGES+="\n$(echo "$USES_LINES" | awk '{print $2}')"
+done
 
 # De-dupe and sort action usages
 ACTION_USAGES="$(echo "$ACTION_USAGES" | grep -vE '^$' | sort | uniq)"
@@ -136,65 +127,63 @@ echo
 # Ignore any local action usages, callable workflows, or Expensify-owned actions
 ACTION_USAGES="$(echo "$ACTION_USAGES" | grep -vE "^((./)?.github|Expensify/)")"
 
+# Next, we'll check all the untrusted actions we found to make sure they're immutable
 info 'Untrusted action usages...'
 echo "$ACTION_USAGES"
 echo
 
-# Next, we'll check all the actions we found to make sure they're immutable.
-# We're using a temp file instead of a variable so we can write to it from a subprocess (i.e: a command run in the background)
-MUTABLE_ACTION_USAGES="$(mktemp)"
+# Given an action and ref, check the remote repo to make sure the ref is not a tag or branch
+function check_remote_ref() {
+    local ACTION="$1"
+    local REF="$2"
 
-# Given an action name with a ref (actions/checkout@v2), check the actual repo to make sure it's an immutable commit hash
-# and not secretly a tag or branch that looks like a commit hash.
-# If it's mutable, collect it into the MUTABLE_ACTION_USAGES file.
-# shellcheck disable=SC2317
-verifyActionRefIsImmutable() {
-    local ACTIONS_WITH_REFS="$1"
+    # The repo is everything in the action until the second slash (if one exists)
+    # Typically actions look like actions/checkout, but they can contain nested directories like gradle/actions/setup-gradle
+    # In that case, the repo is just gradle/actions
+    local REPO
+    REPO="$(echo $ACTION | awk -F/ '{print $1 "/" $2}')"
 
-    # Everything before the @
-    local ACTION="${1%@*}"
+    local REPO_URL="git@github.com:${REPO}.git"
+    if git ls-remote --quiet --tags --heads --exit-code "$REPO_URL" "refs/*/$REF*" ; then
+        error "Found remote branch or tag that looks like a commit hash! ${ACTION}@${REF}"
+        return 1
+    fi
+}
 
-    # Everything after the @
-    local REF="${1##*@}"
+MUTABLE_ACTION_USAGES=""
+PIDS=()
+for ACTION_USAGE in $(echo -e "$ACTION_USAGES") ; do
+    ACTION="${ACTION_USAGE%@*}"
+    REF="${ACTION_USAGE##*@}"
 
     # Check if the ref looks like a commit hash (40-character hexadecimal string)
     if [[ ! "$REF" =~ ^[0-9a-f]{40}$ ]]; then
         # Ref does not look like a commit hash, and therefore is probably mutable
-        echo "$ACTIONS_WITH_REFS" >> "$MUTABLE_ACTION_USAGES"
-        return 1
+        MUTABLE_ACTION_USAGES+="$ACTIONS_WITH_REFS\n"
+        continue
     fi
 
-    # Ref looks like a commit hash, but we need to check the remote to make sure it's not a tag or a branch
-    local REPO_URL="git@github.com:${ACTION}.git"
+    # Check the remote to make sure the 40-character hex ref is not secretly a branch or tag
+    # Do this in the background because it's slow
+    check_remote_ref "$ACTION" "$REF" &
+    PIDS+=($!)
+done
 
-    # Check if the ref exists in the remote as a branch or tag
-    if git ls-remote --quiet --tags --branches --exit-code "$REPO_URL" "refs/*/$REF*"; then
-        error "Found remote branch or tag that looks like a commit hash! $ACTIONS_WITH_REFS"
-        echo
-        echo "$ACTIONS_WITH_REFS" >> "$MUTABLE_ACTION_USAGES"
-        return 1
+EXIT_CODE=0
+for PID in "${PIDS[@]}" ; do
+    if ! wait "$PID" ; then
+        EXIT_CODE=1
     fi
+done
 
-    # If we get here, the action is immutable
-    return 0
-}
+if [[ $EXIT_CODE == 1 ]] ; then
+    exit 1
+fi
 
-while IFS= read -r ACTIONS_WITH_REFS; do
-    run_async verifyActionRefIsImmutable "$ACTIONS_WITH_REFS"
-done <<< "$ACTION_USAGES"
-await_async_commands
-
-if [[ -s "$MUTABLE_ACTION_USAGES" ]]; then
+if [[ -n "$MUTABLE_ACTION_USAGES" ]]; then
     error 'The following actions use unsafe mutable references; use an immutable commit hash reference instead!'
     cat "$MUTABLE_ACTION_USAGES"
-    EXIT_CODE=1
+    exit 1
 fi
 
-if [[ "$EXIT_CODE" == 0 ]]; then
-    success '✅ All untrusted actions are using immutable references'
-fi
-
-rm -f "$MUTABLE_ACTION_USAGES"
-cleanup_async
-
-exit $EXIT_CODE
+success '✅ All untrusted actions are using immutable references'
