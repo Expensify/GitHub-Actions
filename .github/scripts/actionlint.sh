@@ -20,22 +20,22 @@ source "$SCRIPT_DIR/shellUtils.sh"
 title 'Lint Github Actions via actionlint (https://github.com/rhysd/actionlint)'
 
 info 'Downloading actionlint...'
-if bash <(curl --silent https://raw.githubusercontent.com/rhysd/actionlint/"$ACTIONLINT_VERSION"/scripts/download-actionlint.bash); then
-    success 'Successfully downloaded actionlint!'
-    echo
-
-    # Cleanup actionlint when we're done
-    trap 'rm -rf ./actionlint' EXIT
-else
+if ! bash <(curl --silent https://raw.githubusercontent.com/rhysd/actionlint/"$ACTIONLINT_VERSION"/scripts/download-actionlint.bash); then
     error 'Error downloading actionlint'
     exit 1
 fi
 
+success 'Successfully downloaded actionlint!'
+echo
+
+# Cleanup actionlint when we're done
+trap 'rm -rf ./actionlint' EXIT
+
 info 'Linting workflows...'
 echo
-if ./actionlint -color; then
-    success 'Workflows passed actionlint!'
-else
+if ! ./actionlint -color; then
     error 'Workflows did not pass actionlint :('
     exit 1
 fi
+
+success 'Workflows passed actionlint!'
