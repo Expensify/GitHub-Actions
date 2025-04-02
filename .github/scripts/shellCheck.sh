@@ -1,11 +1,13 @@
 #!/bin/bash
 
-SCRIPT_DIR=$(cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd)
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
+readonly SCRIPT_DIR
 ROOT_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
+readonly ROOT_DIR
 
 source "$SCRIPT_DIR"/shellUtils.sh
 
-declare -r DIRECTORIES_TO_IGNORE=(
+readonly DIRECTORIES_TO_IGNORE=(
     "$ROOT_DIR/node_modules"
     "$ROOT_DIR/vendor"
     "$ROOT_DIR/ios/Pods"

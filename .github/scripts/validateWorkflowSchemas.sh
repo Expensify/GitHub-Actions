@@ -4,7 +4,10 @@
 ##########################################################
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
+readonly SCRIPT_DIR
 GITHUB_DIR="$(dirname "$SCRIPT_DIR")"
+readonly GITHUB_DIR
+
 source "$SCRIPT_DIR/shellUtils.sh"
 
 title 'Validating the Github Actions and workflows using the json schemas provided by (https://www.schemastore.org/json/)'

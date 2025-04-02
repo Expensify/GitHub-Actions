@@ -4,7 +4,7 @@
 #################################################################
 
 # v1.7.7
-ACTIONLINT_VERSION=03d0035246f3e81f36aed592ffb4bebf33a03106
+readonly ACTIONLINT_VERSION=03d0035246f3e81f36aed592ffb4bebf33a03106
 
 # Verify that shellcheck is installed (preinstalled on GitHub Actions runners)
 if [[ -z "$(command -v shellcheck)" ]]; then
@@ -13,8 +13,11 @@ if [[ -z "$(command -v shellcheck)" ]]; then
 fi
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
-source "$SCRIPT_DIR/shellUtils.sh"
+readonly SCRIPT_DIR
 GITHUB_DIR="$(dirname "$SCRIPT_DIR")"
+readonly GITHUB_DIR
+
+source "$SCRIPT_DIR/shellUtils.sh"
 
 cd "$GITHUB_DIR" || exit 1
 
