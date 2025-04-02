@@ -38,5 +38,9 @@ jobs:
   validateImmutableActionRefs:
     runs-on: ubuntu-latest
     steps:
+      # v4.2.2
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
       - name: Validate actions refs are immutable
         run: .github/scripts/validateImmutableActionRefs.sh
