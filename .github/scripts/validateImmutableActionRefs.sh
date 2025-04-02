@@ -12,6 +12,7 @@ title 'Checking for mutable action references...'
 ACTION_USAGES=''
 
 # Find yaml files in the `.github` directory
+# shellcheck disable=SC2044
 for FILE in $(find "$GITHUB_DIR" -type f \( -name "*.yml" -o -name "*.yaml" \)) ; do
     USES_LINES="$(grep --no-filename 'uses:' "$FILE")"
 
