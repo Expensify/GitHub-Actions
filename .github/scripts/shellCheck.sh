@@ -1,11 +1,9 @@
 #!/bin/bash
 
-SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
-readonly SCRIPT_DIR
-ROOT_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
+ROOT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." &>/dev/null && pwd)
 readonly ROOT_DIR
 
-source "$SCRIPT_DIR"/shellUtils.sh
+source "$ROOT_DIR"/.github/scripts/shellUtils.sh
 
 readonly DIRECTORIES_TO_IGNORE=(
     "$ROOT_DIR/node_modules"
