@@ -64,7 +64,7 @@ function check_remote_ref() {
     # Typically actions look like actions/checkout, but they can contain nested directories like gradle/actions/setup-gradle
     # In that case, the repo is just gradle/actions
     local REPO
-    REPO="$(echo $ACTION | awk -F/ '{print $1 "/" $2}')"
+    REPO="$(echo "$ACTION" | awk -F/ '{print $1 "/" $2}')"
 
     local REPO_URL="git@github.com:${REPO}.git"
     if git ls-remote --quiet --tags --heads --exit-code "$REPO_URL" "refs/*/$REF*" ; then
