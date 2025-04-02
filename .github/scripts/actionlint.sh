@@ -14,12 +14,8 @@ fi
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
 readonly SCRIPT_DIR
-GITHUB_DIR="$(dirname "$SCRIPT_DIR")"
-readonly GITHUB_DIR
 
 source "$SCRIPT_DIR/shellUtils.sh"
-
-cd "$GITHUB_DIR" || exit 1
 
 title 'Lint Github Actions via actionlint (https://github.com/rhysd/actionlint)'
 
