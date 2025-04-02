@@ -7,7 +7,7 @@ on:
     paths: ['.github/**']
 
 jobs:
-  verify:
+  validateSchemas:
     runs-on: ubuntu-latest
     steps:
       # v4.2.2
@@ -15,10 +15,18 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
 
       # v4.3.0
-      - uses: actions/setup-node@cdca7365b2dadb8aad0a33bc7601856ffabcc48e
+      - name: Setup Node
+        uses: actions/setup-node@cdca7365b2dadb8aad0a33bc7601856ffabcc48e
 
+      # Install node to get the ajv-cli
       - name: Install node modules
         run: npm ci
 
+      - name: Validate action and workflow schemas
+        run: .github/scripts/validateWorkflowSchemas.sh
+
+  verify:
+    runs-on: ubuntu-latest
+    steps:
       - name: Validate actions and workflows
         run: .github/scripts/validateActionsAndWorkflows.sh
