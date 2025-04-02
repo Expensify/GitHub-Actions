@@ -3,20 +3,18 @@
 SCRIPT_DIR=$(cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd)
 ROOT_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
 
-cd "$ROOT_DIR" || exit 1
-
-source ./.github/scripts/shellUtils.sh
+source "$SCRIPT_DIR"/shellUtils.sh
 
 declare -r DIRECTORIES_TO_IGNORE=(
-    './node_modules'
-    './vendor'
-    './ios/Pods'
-    './.husky'
+    "$ROOT_DIR/node_modules"
+    "$ROOT_DIR/vendor"
+    "$ROOT_DIR/ios/Pods"
+    "$ROOT_DIR/.husky"
 )
 
 # This lists all shell scripts in this repo except those in directories we want to ignore
 read -ra IGNORE_DIRS < <(join_by_string ' -o -path ' "${DIRECTORIES_TO_IGNORE[@]}")
-SHELL_SCRIPTS=$(find . -type d \( -path "${IGNORE_DIRS[@]}" \) -prune -o -name '*.sh' -print)
+SHELL_SCRIPTS=$(find "$ROOT_DIR" -type d \( -path "${IGNORE_DIRS[@]}" \) -prune -o -name '*.sh' -print)
 info "👀 Linting the following shell scripts using ShellCheck:"
 echo "$SHELL_SCRIPTS"
 echo
@@ -40,10 +38,10 @@ for PID in "${PIDS[@]}"; do
   fi
 done
 
-cd "$CURRENT_DIR" || exit 1
-
 if [[ $EXIT_CODE == 0 ]]; then
-    success "ShellCheck passed for all files!"
+    success 'ShellCheck passed for all files!'
+else
+    error 'ShellCheck failed for one or more files'
 fi
 
 exit $EXIT_CODE
