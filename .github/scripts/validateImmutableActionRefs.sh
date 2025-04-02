@@ -1,13 +1,18 @@
 #!/bin/bash
-###############################################################################
-#                      Check for unsafe action references                     #
-###############################################################################
+############################################
+#    Check for unsafe action references    #
+############################################
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
+source "$SCRIPT_DIR/shellUtils.sh"
+GITHUB_DIR="$(dirname "$SCRIPT_DIR")"
+
 title 'Checking for mutable action references...'
 
 ACTION_USAGES=''
 
 # Find yaml files in the `.github` directory
-for FILE in $(find . -type f \( -name "*.yml" -o -name "*.yaml" \)) ; do
+for FILE in $(find "$GITHUB_DIR" -type f \( -name "*.yml" -o -name "*.yaml" \)) ; do
     USES_LINES="$(grep --no-filename 'uses:' "$FILE")"
 
     # Ignore files without external action usages
@@ -27,7 +32,7 @@ for FILE in $(find . -type f \( -name "*.yml" -o -name "*.yaml" \)) ; do
 
     # Grab action names and refs from uses lines.
     # At this point, these lines look like "uses: myAction@ref", so `awk '{print $2}'` just grabs the second word from each line.
-    ACTION_USAGES+="\n$(echo "$USES_LINES" | awk '{print $2}')"
+    ACTION_USAGES+=$'\n'"$(echo "$USES_LINES" | awk '{print $2}')"
 done
 
 # De-dupe and sort action usages

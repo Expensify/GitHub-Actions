@@ -35,8 +35,8 @@ jobs:
       - name: Lint workflows with actionlint
         run: .github/scripts/actionlint.sh
 
-  verify:
+  validateImmutableActionRefs:
     runs-on: ubuntu-latest
     steps:
-      - name: Validate actions and workflows
-        run: .github/scripts/validateActionsAndWorkflows.sh
+      - name: Validate actions refs are immutable
+        run: .github/scripts/validateImmutableActionRefs.sh
