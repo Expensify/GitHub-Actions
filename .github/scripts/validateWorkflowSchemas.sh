@@ -9,7 +9,9 @@ source "$SCRIPT_DIR/shellUtils.sh"
 
 title 'Validating the Github Actions and workflows using the json schemas provided by (https://www.schemastore.org/json/)'
 
+# Create a temporary directory for schemas
 TEMP_SCHEMA_DIR="$(mktemp -d)"
+trap 'rm -rf "$TEMP_SCHEMA_DIR"' EXIT
 
 function download_schema() {
     [[ $1 = 'github-action.json' ]] && SCHEMA_NAME='GitHub Action' || SCHEMA_NAME='GitHub Workflow'
@@ -61,8 +63,5 @@ else
     echo
     error "Some actions and/or workflows are invalid"
 fi
-
-# Cleanup after ourselves and delete the schemas
-rm -rf "$TEMP_SCHEMA_DIR"
 
 exit $EXIT_CODE
