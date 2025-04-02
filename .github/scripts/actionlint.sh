@@ -7,7 +7,7 @@
 readonly ACTIONLINT_VERSION=03d0035246f3e81f36aed592ffb4bebf33a03106
 
 # Verify that shellcheck is installed (preinstalled on GitHub Actions runners)
-if [[ -z "$(command -v shellcheck)" ]]; then
+if ! command -v shellcheck &>/dev/null; then
     error 'This script requires shellcheck to be installed. Please install it and try again'
     exit 1
 fi
