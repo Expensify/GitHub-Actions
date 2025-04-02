@@ -1,6 +1,6 @@
 #!/bin/bash
 
-source "$(dirname "${BASH_SOURCE[0]}")/shellUtils.sh"
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)/shellUtils.sh"
 
 ###############################################################################
 #                        Validate json scehmas with ajv                       #

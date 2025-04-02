@@ -1,7 +1,7 @@
 #!/bin/bash
 
-CURRENT_DIR=$(pwd)
-ROOT_DIR="$(dirname "$(dirname "$(dirname "$(realpath "${BASH_SOURCE[0]}")")")")"
+SCRIPT_DIR=$(cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd)
+ROOT_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
 
 cd "$ROOT_DIR" || exit 1
 
