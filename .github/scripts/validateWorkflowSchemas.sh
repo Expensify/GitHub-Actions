@@ -35,7 +35,7 @@ PIDS=()
 
 # Validate the actions and workflows using the JSON schemas and ajv https://github.com/ajv-validator/ajv-cli
 # shellcheck disable=SC2044
-for ACTION in $(find "$GITHUB_DIR/actions" -type f \( -name "*.yml" -o -name "*.yaml" \)); do
+for ACTION in $(find "$GITHUB_DIR/.." -type f \( -name "action.yml" -o -name "action.yaml" \)); do
     npx ajv -s "$TEMP_SCHEMA_DIR"/github-action.json -d "$ACTION" --strict=false &
     PIDS+=($!)
 done
