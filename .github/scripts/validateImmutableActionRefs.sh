@@ -46,6 +46,11 @@ echo "$ACTION_USAGES"
 echo
 
 # Ignore any local action usages, callable workflows, or Expensify-owned actions
+# Examples:
+#    - uses: ./.github/workflows/myCallableWorkflow.yml
+#    - uses: .github/workflows/myCallableWorkflow.yml
+#    - uses: .github/actions/composite/myCompositeAction.yml
+#    - uses: Expensify/GitHub-Actions/setupGitForOSBotify@main
 ACTION_USAGES="$(echo "$ACTION_USAGES" | grep -vE "^((./)?.github|Expensify/)")"
 
 # Next, we'll check all the untrusted actions we found to make sure they're immutable
