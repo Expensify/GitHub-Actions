@@ -3,12 +3,10 @@
 #    Validate GitHub action and workflow yaml schemas    #
 ##########################################################
 
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
-readonly SCRIPT_DIR
-GITHUB_DIR="$(dirname "$SCRIPT_DIR")"
+GITHUB_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." &>/dev/null && pwd)"
 readonly GITHUB_DIR
 
-source "$SCRIPT_DIR/shellUtils.sh"
+source "$GITHUB_DIR/scripts/shellUtils.sh"
 
 title 'Validating the Github Actions and workflows using the json schemas provided by (https://www.schemastore.org/json/)'
 
