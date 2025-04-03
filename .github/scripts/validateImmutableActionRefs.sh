@@ -14,7 +14,7 @@ ACTION_USAGES=''
 
 # Find yaml files in the `.github` directory
 # shellcheck disable=SC2044
-for FILE in $(find "$GITHUB_DIR" -type f \( -name "*.yml" -o -name "*.yaml" \)) ; do
+for FILE in $(find "$GITHUB_DIR" -type f \( -name "*.yml" -o -name "*.yaml" \)); do
     USES_LINES="$(grep 'uses:' "$FILE")"
 
     # Ignore files without external action usages

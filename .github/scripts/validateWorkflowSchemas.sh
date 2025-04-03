@@ -34,11 +34,13 @@ info 'Validating actions and workflows against their JSON schemas...'
 PIDS=()
 
 # Validate the actions and workflows using the JSON schemas and ajv https://github.com/ajv-validator/ajv-cli
-for ACTION in "$GITHUB_DIR"/actions/*/*/action.yml; do
+# shellcheck disable=SC2044
+for ACTION in $(find "$GITHUB_DIR/actions" -type f \( -name "*.yml" -o -name "*.yaml" \)); do
     npx ajv -s "$TEMP_SCHEMA_DIR"/github-action.json -d "$ACTION" --strict=false &
     PIDS+=($!)
 done
-for WORKFLOW in "$GITHUB_DIR"/workflows/*.yml; do
+# shellcheck disable=SC2044
+for WORKFLOW in $(find "$GITHUB_DIR/workflows" -type f \( -name "*.yml" -o -name "*.yaml" \)); do
     # Skip linting e2e workflow due to bug here: https://github.com/SchemaStore/schemastore/issues/2579
     if [[ "$WORKFLOW" =~ ^"$GITHUB_DIR"/workflows/(e2ePerformanceTests|testBuild.yml|deploy.yml).yml$ ]]; then
         continue
