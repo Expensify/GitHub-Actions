@@ -12,6 +12,7 @@ title 'Validating the Github Actions and workflows using the json schemas provid
 
 # Create a temporary directory for schemas
 TEMP_SCHEMA_DIR="$(mktemp -d)"
+readonly TEMP_SCHEMA_DIR
 trap 'rm -rf "$TEMP_SCHEMA_DIR"' EXIT
 
 function download_schema() {
