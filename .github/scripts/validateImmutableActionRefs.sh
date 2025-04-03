@@ -12,9 +12,14 @@ title 'Checking for mutable action references...'
 
 ACTION_USAGES=''
 
+# Find yaml files - these can be either:
+# - workflows, which are always stored in .github/workflows, or
+YAML_FILES="$(find "$GITHUB_DIR/workflows" -type f \( -name "*.yml" -o -name "*.yaml" \))"
+# - action metadata files, which can be anywhere in the repo, but must be called action.yml or action.yaml
+YAML_FILES+=" $(find "$GITHUB_DIR/.." -type f \( -name "action.yml" -o -name "action.yaml" \))"
+
 # Find yaml files in the `.github` directory
-# shellcheck disable=SC2044
-for FILE in $(find "$GITHUB_DIR" -type f \( -name "*.yml" -o -name "*.yaml" \)); do
+for FILE in $YAML_FILES; do
     USES_LINES="$(grep 'uses:' "$FILE")"
 
     # Ignore files without external action usages
@@ -88,7 +93,7 @@ for ACTION_USAGE in $(echo -e "$ACTION_USAGES") ; do
     # Check if the ref looks like a commit hash (40-character hexadecimal string)
     if [[ ! "$REF" =~ ^[0-9a-f]{40}$ ]]; then
         # Ref does not look like a commit hash, and therefore is probably mutable
-        MUTABLE_ACTION_USAGES+="$ACTIONS_WITH_REFS\n"
+        MUTABLE_ACTION_USAGES+="$ACTION_USAGE\n"
         continue
     fi
 
@@ -107,7 +112,7 @@ done
 
 if [[ -n "$MUTABLE_ACTION_USAGES" || $EXIT_CODE -ne 0 ]]; then
     error 'The following actions use unsafe mutable references; use an immutable commit hash reference instead!'
-    cat "$MUTABLE_ACTION_USAGES"
+    echo -e "$MUTABLE_ACTION_USAGES"
     exit 1
 fi
 
