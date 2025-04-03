@@ -5,16 +5,14 @@ readonly ROOT_DIR
 
 source "$ROOT_DIR"/.github/scripts/shellUtils.sh
 
-readonly DIRECTORIES_TO_IGNORE=(
-    "$ROOT_DIR/node_modules"
-    "$ROOT_DIR/vendor"
-    "$ROOT_DIR/ios/Pods"
-    "$ROOT_DIR/.husky"
-)
+readonly DIRECTORIES_TO_IGNORE="\
+-path $ROOT_DIR/node_modules \
+-o -path $ROOT_DIR/vendor \
+-o -path $ROOT_DIR/ios/Pods \
+-o -path $ROOT_DIR/.husky"
 
 # This lists all shell scripts in this repo except those in directories we want to ignore
-read -ra IGNORE_DIRS < <(join_by_string ' -o -path ' "${DIRECTORIES_TO_IGNORE[@]}")
-SHELL_SCRIPTS=$(find "$ROOT_DIR" -type d \( -path "${IGNORE_DIRS[@]}" \) -prune -o -name '*.sh' -print)
+SHELL_SCRIPTS=$(find "$ROOT_DIR" -type d \( "$DIRECTORIES_TO_IGNORE" \) -prune -o -name '*.sh' -print)
 info "👀 Linting the following shell scripts using ShellCheck:"
 echo "$SHELL_SCRIPTS"
 echo

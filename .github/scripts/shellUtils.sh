@@ -55,17 +55,6 @@ function assert_equal {
     fi
 }
 
-# Usage: join_by_string <delimiter> ...strings
-# example: join_by_string ' + ' 'string 1' 'string 2'
-# example: join_by_string ',' "${ARRAY_OF_STRINGS[@]}"
-function join_by_string {
-    local separator="$1"
-    shift
-    local first="$1"
-    shift
-    printf "%s" "$first" "${@/#/$separator}"
-}
-
 # Usage: get_abs_path <path>
 # Will make a path absolute, resolving any relative paths
 # example: get_abs_path "./foo/bar"
