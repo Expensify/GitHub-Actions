@@ -15,21 +15,18 @@ TEMP_SCHEMA_DIR="$(mktemp -d)"
 readonly TEMP_SCHEMA_DIR
 trap 'rm -rf "$TEMP_SCHEMA_DIR"' EXIT
 
-function download_schema() {
-    [[ $1 = 'github-action.json' ]] && SCHEMA_NAME='GitHub Action' || SCHEMA_NAME='GitHub Workflow'
-    info "Downloading $SCHEMA_NAME schema..."
-    if curl "https://json.schemastore.org/$1" --output "$TEMP_SCHEMA_DIR/$1" --silent; then
-        success "Successfully downloaded $SCHEMA_NAME schema!"
+# Download the up-to-date json schemas for github actions and workflows
+readonly SCHEMAS_TO_DOWNLOAD=('github-action.json' 'github-workflow.json')
+for SCHEMA in "${SCHEMAS_TO_DOWNLOAD[@]}"; do
+    info "Downloading $SCHEMA schema..."
+    if curl "https://json.schemastore.org/$SCHEMA" --output "$TEMP_SCHEMA_DIR/$SCHEMA" --silent; then
+        success "Successfully downloaded $SCHEMA schema!"
         echo
     else
-        error "Failed downloading $SCHEMA_NAME schema"
+        error "Failed downloading $SCHEMA schema"
         exit 1
     fi
-}
-
-# Download the up-to-date json schemas for github actions and workflows
-download_schema 'github-action.json' || exit 1
-download_schema 'github-workflow.json' || exit 1
+done
 
 info 'Validating actions and workflows against their JSON schemas...'
 
