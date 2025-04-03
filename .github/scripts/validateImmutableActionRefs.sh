@@ -79,7 +79,10 @@ function check_remote_ref() {
 MUTABLE_ACTION_USAGES=""
 PIDS=()
 for ACTION_USAGE in $(echo -e "$ACTION_USAGES") ; do
+    # Given an action usage like actions/checkout@v4, get:
+    # everything before the @
     ACTION="${ACTION_USAGE%@*}"
+    # and everything after the @
     REF="${ACTION_USAGE##*@}"
 
     # Check if the ref looks like a commit hash (40-character hexadecimal string)
