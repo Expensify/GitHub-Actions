@@ -3,12 +3,10 @@
 #    Check for unsafe action references    #
 ############################################
 
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
-readonly SCRIPT_DIR
-GITHUB_DIR="$(dirname "$SCRIPT_DIR")"
+GITHUB_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." &>/dev/null && pwd)"
 readonly GITHUB_DIR
 
-source "$SCRIPT_DIR/shellUtils.sh"
+source "$GITHUB_DIR/scripts/shellUtils.sh"
 
 title 'Checking for mutable action references...'
 
