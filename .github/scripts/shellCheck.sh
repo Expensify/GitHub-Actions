@@ -13,7 +13,7 @@ readonly DIRECTORIES_TO_IGNORE="\
 
 # This lists all shell scripts in this repo except those in directories we want to ignore
 # shellcheck disable=SC2086
-SHELL_SCRIPTS=$(find "$ROOT_DIR" -type d \( $DIRECTORIES_TO_IGNORE \) -prune -o -name '*.sh' -print)
+SHELL_SCRIPTS="$(find "$ROOT_DIR" -type d \( $DIRECTORIES_TO_IGNORE \) -prune -o -name '*.sh' -print)"
 info "👀 Linting the following shell scripts using ShellCheck:"
 echo "$SHELL_SCRIPTS"
 echo
