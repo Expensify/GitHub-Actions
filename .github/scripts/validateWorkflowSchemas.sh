@@ -21,43 +21,41 @@ for SCHEMA in "${SCHEMAS_TO_DOWNLOAD[@]}"; do
     info "Downloading $SCHEMA schema..."
     if curl "https://json.schemastore.org/$SCHEMA" --output "$TEMP_SCHEMA_DIR/$SCHEMA" --silent; then
         success "Successfully downloaded $SCHEMA schema!"
-        echo
     else
         error "Failed downloading $SCHEMA schema"
         exit 1
     fi
 done
 
-info 'Validating actions and workflows against their JSON schemas...'
-
-# This stores the process IDs of the ajv commands so they can run in parallel
-PIDS=()
-
-# Validate the actions and workflows using the JSON schemas and ajv https://github.com/ajv-validator/ajv-cli
-# shellcheck disable=SC2044
-for ACTION in $(find "$GITHUB_DIR/.." -type f \( -name "action.yml" -o -name "action.yaml" \)); do
-    npx ajv -s "$TEMP_SCHEMA_DIR"/github-action.json -d "$ACTION" --strict=false &
-    PIDS+=($!)
-done
-# shellcheck disable=SC2044
-for WORKFLOW in $(find "$GITHUB_DIR/workflows" -type f \( -name "*.yml" -o -name "*.yaml" \)); do
-    # Skip linting e2e workflow due to bug here: https://github.com/SchemaStore/schemastore/issues/2579
-    if [[ "$WORKFLOW" =~ ^"$GITHUB_DIR"/workflows/(e2ePerformanceTests|testBuild.yml|deploy.yml).yml$ ]]; then
-        continue
-    fi
-    npx ajv -s "$TEMP_SCHEMA_DIR"/github-workflow.json -d "$WORKFLOW" --strict=false &
-    PIDS+=($!)
-done
-
-# Wait for the background builds to finish
 EXIT_CODE=0
-for PID in "${PIDS[@]}"; do
-    if ! wait "$PID"; then
-        EXIT_CODE=1
-    fi
-done
 
 echo
+info 'Validating action metadata files against their JSON schema...'
+echo
+
+# Get all actions, delimited by -d (data arg for ajv)
+ACTIONS="$(find "$GITHUB_DIR/.." -type f \( -name "action.yml" -o -name "action.yaml" \) -exec echo -n ' -d '{} \;)"
+
+# Disabling shellcheck because we WANT word-splitting on ACTIONS in this case
+# shellcheck disable=SC2086
+if ! npx ajv --strict=false -s "$TEMP_SCHEMA_DIR"/github-action.json $ACTIONS; then
+    EXIT_CODE=1
+fi
+
+echo
+info 'Validating workflows against their JSON schema...'
+echo
+
+# Get all workflows, delimited by -d (data arg for ajv)
+WORKFLOWS="$(find "$GITHUB_DIR/workflows" -type f \( -name "*.yml" -o -name "*.yaml" \) -exec echo -n ' -d '{} \;)"\
+
+# shellcheck disable=SC2086
+if ! npx ajv --strict=false -s "$TEMP_SCHEMA_DIR"/github-workflow.json $WORKFLOWS; then
+    EXIT_CODE=1
+fi
+
+echo
+
 if [[ $EXIT_CODE -ne 0 ]]; then
     error "Some actions and/or workflows are invalid"
     exit $EXIT_CODE
