@@ -12,7 +12,8 @@ readonly DIRECTORIES_TO_IGNORE="\
 -o -path $ROOT_DIR/.husky"
 
 # This lists all shell scripts in this repo except those in directories we want to ignore
-SHELL_SCRIPTS=$(find "$ROOT_DIR" -type d \( "$DIRECTORIES_TO_IGNORE" \) -prune -o -name '*.sh' -print)
+# shellcheck disable=SC2086
+SHELL_SCRIPTS=$(find "$ROOT_DIR" -type d \( $DIRECTORIES_TO_IGNORE \) -prune -o -name '*.sh' -print)
 info "👀 Linting the following shell scripts using ShellCheck:"
 echo "$SHELL_SCRIPTS"
 echo
