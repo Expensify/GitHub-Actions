@@ -36,10 +36,9 @@ for PID in "${PIDS[@]}"; do
   fi
 done
 
-if [[ $EXIT_CODE == 0 ]]; then
-    success 'ShellCheck passed for all files!'
-else
+if [[ $EXIT_CODE -ne 0 ]]; then
     error 'ShellCheck failed for one or more files'
+    exit $EXIT_CODE
 fi
 
-exit $EXIT_CODE
+success 'ShellCheck passed for all files!'

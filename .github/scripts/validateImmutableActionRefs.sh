@@ -99,11 +99,7 @@ for PID in "${PIDS[@]}" ; do
     fi
 done
 
-if [[ $EXIT_CODE == 1 ]] ; then
-    exit 1
-fi
-
-if [[ -n "$MUTABLE_ACTION_USAGES" ]]; then
+if [[ -n "$MUTABLE_ACTION_USAGES" || $EXIT_CODE -ne 0 ]]; then
     error 'The following actions use unsafe mutable references; use an immutable commit hash reference instead!'
     cat "$MUTABLE_ACTION_USAGES"
     exit 1

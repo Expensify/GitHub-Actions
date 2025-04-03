@@ -59,12 +59,10 @@ for PID in "${PIDS[@]}"; do
     fi
 done
 
-if [[ $EXIT_CODE == 0 ]]; then
-    echo
-    success "All actions and workflows are valid"
-else
-    echo
+echo
+if [[ $EXIT_CODE -ne 0 ]]; then
     error "Some actions and/or workflows are invalid"
+    exit $EXIT_CODE
 fi
 
-exit $EXIT_CODE
+success "All actions and workflows are valid"
