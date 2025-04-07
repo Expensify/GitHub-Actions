@@ -8,7 +8,7 @@ readonly ACTIONLINT_VERSION=03d0035246f3e81f36aed592ffb4bebf33a03106
 
 # Verify that shellcheck is installed (preinstalled on GitHub Actions runners)
 if ! command -v shellcheck &>/dev/null; then
-    error 'This script requires shellcheck. Please install it and try again'
+    error "This script requires shellcheck. Please install it and try again"
     exit 1
 fi
 
@@ -17,25 +17,25 @@ readonly SCRIPT_DIR
 
 source "$SCRIPT_DIR/shellUtils.sh"
 
-title 'Lint Github Actions via actionlint (https://github.com/rhysd/actionlint)'
+title "Lint Github Actions via actionlint (https://github.com/rhysd/actionlint)"
 
-info 'Downloading actionlint...'
+info "Downloading actionlint..."
 if ! bash <(curl --silent https://raw.githubusercontent.com/rhysd/actionlint/"$ACTIONLINT_VERSION"/scripts/download-actionlint.bash); then
-    error 'Error downloading actionlint'
+    error "Error downloading actionlint"
     exit 1
 fi
 
-success 'Successfully downloaded actionlint!'
+success "Successfully downloaded actionlint!"
 echo
 
 # Cleanup actionlint when we're done
-trap 'rm -rf ./actionlint' EXIT
+trap "rm -rf ./actionlint" EXIT
 
-info 'Linting workflows...'
+info "Linting workflows..."
 echo
 if ! ./actionlint -color; then
-    error 'Workflows did not pass actionlint :('
+    error "Workflows did not pass actionlint :("
     exit 1
 fi
 
-success 'Workflows passed actionlint!'
+success "Workflows passed actionlint!"

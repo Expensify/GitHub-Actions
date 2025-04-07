@@ -26,8 +26,8 @@ for SHELL_SCRIPT in $SHELL_SCRIPTS; do
 done
 
 if [[ $EXIT_CODE -ne 0 ]]; then
-    error 'ShellCheck failed for one or more files'
+    error "ShellCheck failed for one or more files"
     exit $EXIT_CODE
 fi
 
-success 'ShellCheck passed for all files!'
+success "ShellCheck passed for all files!"

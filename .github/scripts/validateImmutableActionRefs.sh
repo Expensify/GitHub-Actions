@@ -8,9 +8,9 @@ readonly GITHUB_DIR
 
 source "$GITHUB_DIR/scripts/shellUtils.sh"
 
-title 'Checking for mutable action references...'
+title "Checking for mutable action references..."
 
-ACTION_USAGES=''
+ACTION_USAGES=""
 
 # Find yaml files - these can be either:
 # - workflows, which are always stored in .github/workflows, or
@@ -20,7 +20,7 @@ YAML_FILES+=" $(find "$GITHUB_DIR/.." -type f \( -name "action.yml" -o -name "ac
 
 # Find yaml files in the `.github` directory
 for FILE in $YAML_FILES; do
-    USES_LINES="$(grep 'uses:' "$FILE")"
+    USES_LINES="$(grep "uses:" "$FILE")"
 
     # Ignore files without external action usages
     if [[ -z "$USES_LINES" ]]; then
@@ -44,9 +44,9 @@ for FILE in $YAML_FILES; do
 done
 
 # De-dupe and sort action usages
-ACTION_USAGES="$(echo "$ACTION_USAGES" | grep -vE '^$' | sort | uniq)"
+ACTION_USAGES="$(echo "$ACTION_USAGES" | grep -vE "^$" | sort | uniq)"
 
-info 'All action usages...'
+info "All action usages..."
 echo "$ACTION_USAGES"
 echo
 
@@ -59,7 +59,7 @@ echo
 ACTION_USAGES="$(echo "$ACTION_USAGES" | grep -vE "^((./)?.github|Expensify/)")"
 
 # Next, we'll check all the untrusted actions we found to make sure they're immutable
-info 'Untrusted action usages...'
+info "Untrusted action usages..."
 echo "$ACTION_USAGES"
 echo
 
@@ -111,9 +111,9 @@ for PID in "${PIDS[@]}" ; do
 done
 
 if [[ -n "$MUTABLE_ACTION_USAGES" || $EXIT_CODE -ne 0 ]]; then
-    error 'The following actions use unsafe mutable references; use an immutable commit hash reference instead!'
+    error "The following actions use unsafe mutable references; use an immutable commit hash reference instead!"
     echo -e "$MUTABLE_ACTION_USAGES"
     exit 1
 fi
 
-success '✅ All untrusted actions are using immutable references'
+success "All untrusted actions are using immutable references"
