@@ -36,7 +36,7 @@ runs:
   using: composite
   steps:
     - name: Install 1Password CLI
-      uses: 1password/install-cli-action@v1
+      uses: 1password/install-cli-action@143a85f84a90555d121cde2ff5872e393a47ab9f
 
     - name: Download OSBotify GPG key
       run: op read "op://${{ inputs.OP_VAULT }}/OSBotify-private-key.asc/OSBotify-private-key.asc" --force --out-file ./OSBotify-private-key.asc

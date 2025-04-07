@@ -1,48 +1,34 @@
 #!/bin/bash
 
-CURRENT_DIR=$(pwd)
-ROOT_DIR="$(dirname "$(dirname "$(dirname "$(realpath "${BASH_SOURCE[0]}")")")")"
+ROOT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." &>/dev/null && pwd)
+readonly ROOT_DIR
 
-cd "$ROOT_DIR" || exit 1
+source "$ROOT_DIR"/.github/scripts/shellUtils.sh
 
-source ./.github/scripts/shellUtils.sh
-
-declare -r DIRECTORIES_TO_IGNORE=(
-  './node_modules'
-  './vendor'
-  './ios/Pods'
-  './.husky'
-)
+readonly DIRECTORIES_TO_IGNORE="
+-path $ROOT_DIR/node_modules
+-o -path $ROOT_DIR/vendor
+-o -path $ROOT_DIR/ios/Pods
+-o -path $ROOT_DIR/.husky"
 
 # This lists all shell scripts in this repo except those in directories we want to ignore
-read -ra IGNORE_DIRS < <(join_by_string ' -o -path ' "${DIRECTORIES_TO_IGNORE[@]}")
-SHELL_SCRIPTS=$(find . -type d \( -path "${IGNORE_DIRS[@]}" \) -prune -o -name '*.sh' -print)
-info "👀 Linting the following shell scripts using ShellCheck: $SHELL_SCRIPTS"
-info
-
-ASYNC_PROCESSES=()
-for SHELL_SCRIPT in $SHELL_SCRIPTS; do
-  if [[ "$CI" == 'true' ]]; then
-    # ShellCheck is installed by default on GitHub Actions ubuntu runners
-    shellcheck -e SC1091 "$SHELL_SCRIPT" &
-  else
-    # Otherwise shellcheck is used via npx
-    npx shellcheck -e SC1091 "$SHELL_SCRIPT" &
-  fi
-  ASYNC_PROCESSES+=($!)
-done
+# Note: `-print` is required to prevent pruned directories from being printed
+# shellcheck disable=SC2086
+SHELL_SCRIPTS="$(find "$ROOT_DIR" -type d \( $DIRECTORIES_TO_IGNORE \) -prune -o -name '*.sh' -print)"
+info "👀 Linting the following shell scripts using ShellCheck:"
+echo "$SHELL_SCRIPTS"
+echo
 
 EXIT_CODE=0
-for PID in "${ASYNC_PROCESSES[@]}"; do
-  if ! wait "$PID"; then
-    EXIT_CODE=1
-  fi
+for SHELL_SCRIPT in $SHELL_SCRIPTS; do
+    if ! shellcheck -e SC1091 "$SHELL_SCRIPT"; then
+        EXIT_CODE=1
+    fi
 done
 
-cd "$CURRENT_DIR" || exit 1
-
-if [ $EXIT_CODE == 0 ]; then
-  success "ShellCheck passed for all files!"
+if [[ $EXIT_CODE -ne 0 ]]; then
+    error "ShellCheck failed for one or more files"
+    exit $EXIT_CODE
 fi
 
-exit $EXIT_CODE
+success "ShellCheck passed for all files!"
