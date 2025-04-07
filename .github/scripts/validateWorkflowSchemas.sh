@@ -16,8 +16,7 @@ readonly TEMP_SCHEMA_DIR
 trap 'rm -rf "$TEMP_SCHEMA_DIR"' EXIT
 
 # Download the up-to-date json schemas for github actions and workflows
-readonly SCHEMAS_TO_DOWNLOAD=("github-action.json" "github-workflow.json")
-for SCHEMA in "${SCHEMAS_TO_DOWNLOAD[@]}"; do
+for SCHEMA in github-action.json github-workflow.json; do
     info "Downloading $SCHEMA schema..."
     if curl "https://json.schemastore.org/$SCHEMA" --output "$TEMP_SCHEMA_DIR/$SCHEMA" --silent; then
         success "Successfully downloaded $SCHEMA schema!"
