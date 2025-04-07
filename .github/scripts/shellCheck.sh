@@ -5,10 +5,10 @@ readonly ROOT_DIR
 
 source "$ROOT_DIR"/.github/scripts/shellUtils.sh
 
-readonly DIRECTORIES_TO_IGNORE="\
--path $ROOT_DIR/node_modules \
--o -path $ROOT_DIR/vendor \
--o -path $ROOT_DIR/ios/Pods \
+readonly DIRECTORIES_TO_IGNORE="
+-path $ROOT_DIR/node_modules
+-o -path $ROOT_DIR/vendor
+-o -path $ROOT_DIR/ios/Pods
 -o -path $ROOT_DIR/.husky"
 
 # This lists all shell scripts in this repo except those in directories we want to ignore
