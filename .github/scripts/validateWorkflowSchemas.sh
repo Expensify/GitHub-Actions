@@ -37,7 +37,7 @@ ACTIONS="$(find "$GITHUB_DIR/.." -type f \( -name "action.yml" -o -name "action.
 
 # Disabling shellcheck because we WANT word-splitting on ACTIONS in this case
 # shellcheck disable=SC2086
-if ! npx ajv --strict=false -s "$TEMP_SCHEMA_DIR"/github-action.json $ACTIONS; then
+if ! npx ajv --strict=false -s "$TEMP_SCHEMA_DIR/github-action.json" $ACTIONS; then
     EXIT_CODE=1
 fi
 
@@ -49,7 +49,7 @@ echo
 WORKFLOWS="$(find "$GITHUB_DIR/workflows" -type f \( -name "*.yml" -o -name "*.yaml" \) -exec echo -n " -d "{} \;)"\
 
 # shellcheck disable=SC2086
-if ! npx ajv --strict=false -s "$TEMP_SCHEMA_DIR"/github-workflow.json $WORKFLOWS; then
+if ! npx ajv --strict=false -s "$TEMP_SCHEMA_DIR/github-workflow.json" $WORKFLOWS; then
     EXIT_CODE=1
 fi
 
