@@ -83,7 +83,7 @@ function check_remote_ref() {
 
 MUTABLE_ACTION_USAGES=""
 PIDS=()
-for ACTION_USAGE in $(echo -e "$ACTION_USAGES") ; do
+for ACTION_USAGE in $ACTION_USAGES ; do
     # Given an action usage like actions/checkout@v4, get:
     # everything before the @
     ACTION="${ACTION_USAGE%@*}"
