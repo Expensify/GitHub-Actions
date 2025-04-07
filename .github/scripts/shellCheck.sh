@@ -18,17 +18,11 @@ info "👀 Linting the following shell scripts using ShellCheck:"
 echo "$SHELL_SCRIPTS"
 echo
 
-PIDS=()
-for SHELL_SCRIPT in $SHELL_SCRIPTS; do
-    shellcheck -e SC1091 "$SHELL_SCRIPT" &
-    PIDS+=($!)
-done
-
 EXIT_CODE=0
-for PID in "${PIDS[@]}"; do
-  if ! wait "$PID"; then
-    EXIT_CODE=1
-  fi
+for SHELL_SCRIPT in $SHELL_SCRIPTS; do
+    if ! shellcheck -e SC1091 "$SHELL_SCRIPT"; then
+        EXIT_CODE=1
+    fi
 done
 
 if [[ $EXIT_CODE -ne 0 ]]; then
