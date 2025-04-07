@@ -17,3 +17,7 @@ npm-debug.log
 yarn-debug.log
 yarn-error.log
 dist/
+
+# Ignore actionlint binary and any leftover directories related to installing it
+actionlint*
+!actionlint_checksums.txt
