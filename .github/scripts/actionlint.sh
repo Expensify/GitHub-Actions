@@ -15,6 +15,7 @@ readonly SCRIPT_DIR
 # To update the actionlint version, replace this file with the updated checksums file from the GitHub release
 readonly CHECKSUMS_FILE="$SCRIPT_DIR/actionlint_checksums.txt"
 readonly ACTIONLINT_PATH="$SCRIPT_DIR/actionlint"
+readonly REPO_ROOT="${REPO_ROOT:-.}"
 
 source "$SCRIPT_DIR/shellUtils.sh"
 
@@ -72,16 +73,17 @@ else
     # It's only possible to have one exit trap, so we have to update to include both items we wish to remove
     trap 'rm -rf "$TMPDIR" "$TARBALL"' EXIT
     tar -C "$TMPDIR" -xzf "$TARBALL"
-    mv "$TMPDIR/actionlint" "$SCRIPT_DIR/actionlint"
+    mv "$TMPDIR/actionlint" "$ACTIONLINT_PATH"
 
-    INSTALLED_VERSION="$("$SCRIPT_DIR/actionlint" -version | head -n 1)"
+    INSTALLED_VERSION="$("$ACTIONLINT_PATH" -version | head -n 1)"
     readonly INSTALLED_VERSION
     info "Successfully installed actionlint version $INSTALLED_VERSION" >&2
 fi
 
 info "Linting workflows..."
 echo
-if ! "$SCRIPT_DIR/actionlint" -color; then
+cd "$REPO_ROOT" || exit 1
+if ! "$ACTIONLINT_PATH" -color; then
     error "Workflows did not pass actionlint :("
     exit 1
 fi

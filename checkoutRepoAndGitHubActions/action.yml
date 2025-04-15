@@ -1,0 +1,26 @@
+name: Checkout target repo and GitHub Actions repo
+
+outputs:
+  NAME:
+    description: The target repo where this workflow is running (repo name w/o org prefix)
+    value: ${{ steps.repo.outputs.NAME }}
+
+runs:
+  using: composite
+  steps:
+    - name: Get target repo name
+      id: repo
+      run: echo "NAME=$(basename ${{ github.repository }})" >> "$GITHUB_OUTPUT"
+      shell: bash
+
+    # v4.2.2
+    - name: Checkout
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      with:
+        path: ${{ steps.repo.outputs.NAME }}
+
+    - name: Checkout Expensify/GitHub-Actions
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      with:
+        repository: Expensify/GitHub-Actions
+        path: GitHub-Actions

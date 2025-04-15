@@ -10,9 +10,9 @@ jobs:
   validateSchemas:
     runs-on: ubuntu-latest
     steps:
-      # v4.2.2
-      - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Checkout repos
+        id: repo
+        uses: Expensify/GitHub-Actions/checkoutRepoAndGitHubActions@main
 
       # v4.3.0
       - name: Setup Node
@@ -20,27 +20,33 @@ jobs:
 
       # Install node to get the ajv-cli
       - name: Install node modules
-        run: npm ci
+        run: npm i -g ajv-cli@5.0.0
 
       - name: Validate action and workflow schemas
-        run: .github/scripts/validateWorkflowSchemas.sh
+        run: GitHub-Actions/.github/scripts/validateWorkflowSchemas.sh
+        env:
+          REPO_ROOT: ${{ steps.repo.outputs.NAME }}
 
   actionlint:
     runs-on: ubuntu-latest
     steps:
-      # v4.2.2
-      - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Checkout repos
+        id: repo
+        uses: Expensify/GitHub-Actions/checkoutRepoAndGitHubActions@main
 
       - name: Lint workflows with actionlint
-        run: .github/scripts/actionlint.sh
+        run: GitHub-Actions/.github/scripts/actionlint.sh
+        env:
+          REPO_ROOT: ${{ steps.repo.outputs.NAME }}
 
   validateImmutableActionRefs:
     runs-on: ubuntu-latest
     steps:
-      # v4.2.2
-      - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Checkout repos
+        id: repo
+        uses: Expensify/GitHub-Actions/checkoutRepoAndGitHubActions@main
 
       - name: Validate actions refs are immutable
-        run: .github/scripts/validateImmutableActionRefs.sh
+        run: GitHub-Actions/.github/scripts/validateImmutableActionRefs.sh
+        env:
+          REPO_ROOT: ${{ steps.repo.outputs.NAME }}
