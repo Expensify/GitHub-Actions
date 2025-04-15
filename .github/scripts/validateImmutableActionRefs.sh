@@ -3,10 +3,10 @@
 #    Check for unsafe action references    #
 ############################################
 
-GITHUB_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." &>/dev/null && pwd)"
-readonly GITHUB_DIR
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
+readonly SCRIPT_DIR
 
-source "$GITHUB_DIR/scripts/shellUtils.sh"
+source "$SCRIPT_DIR/shellUtils.sh"
 
 title "Checking for mutable action references..."
 
@@ -14,9 +14,18 @@ ACTION_USAGES=""
 
 # Find yaml files - these can be either:
 # - workflows, which are always stored in .github/workflows, or
-YAML_FILES="$(find "$GITHUB_DIR/workflows" -type f \( -name "*.yml" -o -name "*.yaml" \))"
+WORKFLOWS="$(find .github/workflows -type f \( -name "*.yml" -o -name "*.yaml" \))"
+if [[ -z "$WORKFLOWS" ]]; then
+    warning "No workflows found. Did you remember to run this script from the root of a repository?" >&2
+fi
+
 # - action metadata files, which can be anywhere in the repo, but must be called action.yml or action.yaml
-YAML_FILES+=" $(find "$GITHUB_DIR/.." -type f \( -name "action.yml" -o -name "action.yaml" \))"
+ACTIONS="$(find . -type f \( -name "action.yml" -o -name "action.yaml" \))"
+if [[ -z "$ACTIONS" ]]; then
+    warning "No workflows found. Did you remember to run this script from the root of a repository?" >&2
+fi
+
+readonly YAML_FILES="$WORKFLOWS $ACTIONS"
 
 # Find yaml files in the `.github` directory
 for FILE in $YAML_FILES; do
