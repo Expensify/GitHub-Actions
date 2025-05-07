@@ -38,12 +38,12 @@ echo
 ACTIONS="$(find "$REPO_ROOT" -type f \( -name "action.yml" -o -name "action.yaml" \) -exec echo -n " -d "{} \;)"
 if [[ -z "$ACTIONS" ]]; then
     warning "No actions found. Did you remember to run this script from the root of a repo?" >&2
-fi
-
-# Disabling shellcheck because we WANT word-splitting on ACTIONS in this case
-# shellcheck disable=SC2086
-if ! npx ajv --strict=false -s "$TEMP_SCHEMA_DIR/github-action.json" $ACTIONS; then
-    EXIT_CODE=1
+else
+    # Disabling shellcheck because we WANT word-splitting on ACTIONS in this case
+    # shellcheck disable=SC2086
+    if ! npx ajv --strict=false -s "$TEMP_SCHEMA_DIR/github-action.json" $ACTIONS; then
+        EXIT_CODE=1
+    fi
 fi
 
 echo
@@ -54,11 +54,11 @@ echo
 WORKFLOWS="$(find "${REPO_ROOT}/.github/workflows" -type f \( -name "*.yml" -o -name "*.yaml" \) -exec echo -n " -d "{} \;)"
 if [[ -z "$WORKFLOWS" ]]; then
     warning "No workflows found. Did you remember to run this script from the root of a repo?" >&2
-fi
-
-# shellcheck disable=SC2086
-if ! npx ajv --strict=false -s "$TEMP_SCHEMA_DIR/github-workflow.json" $WORKFLOWS; then
-    EXIT_CODE=1
+else
+    # shellcheck disable=SC2086
+    if ! npx ajv --strict=false -s "$TEMP_SCHEMA_DIR/github-workflow.json" $WORKFLOWS; then
+        EXIT_CODE=1
+    fi
 fi
 
 echo
