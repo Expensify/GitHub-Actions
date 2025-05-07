@@ -22,7 +22,7 @@ jobs:
         run: npm i -g ajv-cli@5.0.0
 
       - name: Validate action and workflow schemas
-        run: GitHub-Actions/.github/scripts/validateWorkflowSchemas.sh
+        run: GitHub-Actions/scripts/validateWorkflowSchemas.sh
         env:
           REPO_ROOT: ${{ steps.repo.outputs.NAME }}
 
@@ -38,7 +38,7 @@ jobs:
         uses: Expensify/GitHub-Actions/checkoutRepoAndGitHubActions@main
 
       - name: Lint workflows with actionlint
-        run: GitHub-Actions/.github/scripts/actionlint.sh
+        run: GitHub-Actions/scripts/actionlint.sh
         env:
           REPO_ROOT: ${{ steps.repo.outputs.NAME }}
 
@@ -54,7 +54,7 @@ jobs:
         uses: Expensify/GitHub-Actions/checkoutRepoAndGitHubActions@main
 
       - name: Validate actions refs are immutable
-        run: GitHub-Actions/.github/scripts/validateImmutableActionRefs.sh
+        run: GitHub-Actions/scripts/validateImmutableActionRefs.sh
         env:
           REPO_ROOT: ${{ steps.repo.outputs.NAME }}
 

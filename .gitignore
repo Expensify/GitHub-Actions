@@ -20,5 +20,5 @@ dist/
 
 # Ignore actionlint binary and any leftover directories related to installing it
 actionlint*
-!.github/scripts/actionlint.sh
-!.github/scripts/actionlint_checksums.txt
+!scripts/actionlint.sh
+!scripts/actionlint_checksums.txt
