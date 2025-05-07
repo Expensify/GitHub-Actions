@@ -1,9 +1,9 @@
 #!/bin/bash
 
-ROOT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." &>/dev/null && pwd)
+ROOT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." &>/dev/null && pwd)
 readonly ROOT_DIR
 
-source "$ROOT_DIR"/.github/scripts/shellUtils.sh
+source "$ROOT_DIR"/scripts/shellUtils.sh
 
 readonly DIRECTORIES_TO_IGNORE="
 -path $ROOT_DIR/node_modules
