@@ -28,7 +28,7 @@ jobs:
 
       - name: Tell people how to run the failing check
         if: failure()
-        run: echo "The validateWorkflowSchemas check failed! To run it locally, go to the root of ${{ steps.repo.outputs.NAME }} and run <path_to_github_actions_repo>/scripts/validateWorkflowSchemas.sh"
+        run: echo "::error::The validateWorkflowSchemas check failed! To run it locally, go to the root of ${{ steps.repo.outputs.NAME }} and run <path_to_github_actions_repo>/scripts/validateWorkflowSchemas.sh"
 
   actionlint:
     runs-on: ubuntu-latest
@@ -44,7 +44,7 @@ jobs:
 
       - name: Tell people how to run the failing check
         if: failure()
-        run: echo "The actionlint check failed! To run it locally, go to the root of ${{ steps.repo.outputs.NAME }} and run <path_to_github_actions_repo>/scripts/actionlint.sh"
+        run: echo "::error::The actionlint check failed! To run it locally, go to the root of ${{ steps.repo.outputs.NAME }} and run <path_to_github_actions_repo>/scripts/actionlint.sh"
 
   validateImmutableActionRefs:
     runs-on: ubuntu-latest
@@ -60,4 +60,4 @@ jobs:
 
       - name: Tell people how to run the failing check
         if: failure()
-        run: echo "The validateImmutableActionRefs check failed! To run it locally, go to the root of ${{ steps.repo.outputs.NAME }} and run <path_to_github_actions_repo>/scripts/validateImmutableActionRefs.sh"
+        run: echo "::error::The validateImmutableActionRefs check failed! To run it locally, go to the root of ${{ steps.repo.outputs.NAME }} and run <path_to_github_actions_repo>/scripts/validateImmutableActionRefs.sh"
