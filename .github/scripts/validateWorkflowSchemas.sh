@@ -3,10 +3,12 @@
 #    Validate GitHub action and workflow yaml schemas    #
 ##########################################################
 
-GITHUB_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." &>/dev/null && pwd)"
-readonly GITHUB_DIR
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
+readonly SCRIPT_DIR
 
-source "$GITHUB_DIR/scripts/shellUtils.sh"
+source "$SCRIPT_DIR/shellUtils.sh"
+
+readonly REPO_ROOT="${REPO_ROOT:-.}"
 
 title "Validating the Github Actions and workflows using the json schemas provided by (https://www.schemastore.org/json/)"
 
@@ -21,7 +23,7 @@ for SCHEMA in github-action.json github-workflow.json; do
     if curl "https://json.schemastore.org/$SCHEMA" --output "$TEMP_SCHEMA_DIR/$SCHEMA" --silent; then
         success "Successfully downloaded $SCHEMA schema!"
     else
-        error "Failed downloading $SCHEMA schema"
+        error "Failed downloading $SCHEMA schema" >&2
         exit 1
     fi
 done
@@ -33,7 +35,10 @@ info "Validating action metadata files against their JSON schema..."
 echo
 
 # Get all actions, delimited by -d (data arg for ajv)
-ACTIONS="$(find "$GITHUB_DIR/.." -type f \( -name "action.yml" -o -name "action.yaml" \) -exec echo -n " -d "{} \;)"
+ACTIONS="$(find "$REPO_ROOT" -type f \( -name "action.yml" -o -name "action.yaml" \) -exec echo -n " -d "{} \;)"
+if [[ -z "$ACTIONS" ]]; then
+    warning "No actions found. Did you remember to run this script from the root of a repo?" >&2
+fi
 
 # Disabling shellcheck because we WANT word-splitting on ACTIONS in this case
 # shellcheck disable=SC2086
@@ -46,7 +51,10 @@ info "Validating workflows against their JSON schema..."
 echo
 
 # Get all workflows, delimited by -d (data arg for ajv)
-WORKFLOWS="$(find "$GITHUB_DIR/workflows" -type f \( -name "*.yml" -o -name "*.yaml" \) -exec echo -n " -d "{} \;)"\
+WORKFLOWS="$(find "${REPO_ROOT}/.github/workflows" -type f \( -name "*.yml" -o -name "*.yaml" \) -exec echo -n " -d "{} \;)"
+if [[ -z "$WORKFLOWS" ]]; then
+    warning "No workflows found. Did you remember to run this script from the root of a repo?" >&2
+fi
 
 # shellcheck disable=SC2086
 if ! npx ajv --strict=false -s "$TEMP_SCHEMA_DIR/github-workflow.json" $WORKFLOWS; then
@@ -56,7 +64,7 @@ fi
 echo
 
 if [[ $EXIT_CODE -ne 0 ]]; then
-    error "Some actions and/or workflows are invalid"
+    error "Some actions and/or workflows are invalid" >&2
     exit $EXIT_CODE
 fi
 
