@@ -1,4 +1,5 @@
 name: Checkout target repo and GitHub Actions repo
+description: Checkout target repo and GitHub Actions repo
 
 outputs:
   NAME:
