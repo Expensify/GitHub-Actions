@@ -8,7 +8,7 @@ Expensify has multiple repositories that use the same GitHub Actions workflows. 
 
 ### `npmPublish.yml`
 
-Used to publish a package to [npmjs](https://www.npmjs.com/), should be triggered when code is merged into the `main` branch. 
+Used to publish a package to [npmjs](https://www.npmjs.com/), should be triggered when code is merged into the `main` branch. **Note**: Please follow [these instructions](https://stackoverflowteams.com/c/expensify/questions/17043/17044#17044) to grant our bots the correct access to publish.
 
 ```yml
 jobs:
