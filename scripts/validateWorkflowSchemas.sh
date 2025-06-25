@@ -20,7 +20,7 @@ trap 'rm -rf "$TEMP_SCHEMA_DIR"' EXIT
 # Download the up-to-date json schemas for github actions and workflows
 for SCHEMA in github-action.json github-workflow.json; do
     info "Downloading $SCHEMA schema..."
-    if curl "https://json.schemastore.org/$SCHEMA" --output "$TEMP_SCHEMA_DIR/$SCHEMA" --silent; then
+    if curl "https://raw.githubusercontent.com/SchemaStore/schemastore/refs/heads/master/src/schemas/json/$SCHEMA" --output "$TEMP_SCHEMA_DIR/$SCHEMA" --silent; then
         success "Successfully downloaded $SCHEMA schema!"
     else
         error "Failed downloading $SCHEMA schema" >&2
