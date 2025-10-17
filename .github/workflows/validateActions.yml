@@ -4,6 +4,11 @@ on:
   pull_request:
     types: [opened, synchronize]
     branches-ignore: [staging, production]
+    paths:
+      - '.github/workflows/*.yml'
+      - '.github/workflows/*.yaml'
+      - '**/action.yml'
+      - '**/action.yaml'
 
 jobs:
   validateSchemas:
