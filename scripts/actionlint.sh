@@ -21,6 +21,14 @@ source "$SCRIPT_DIR/shellUtils.sh"
 
 title "Lint Github Actions via actionlint (https://github.com/rhysd/actionlint)"
 
+# Make sure there are workflows or actions to check before downloading and running actionlint
+WORKFLOWS="$(find "$REPO_ROOT/.github/workflows" -type f \( -name "*.yml" -o -name "*.yaml" \))"
+ACTIONS="$(find "$REPO_ROOT" -type f \( -name "action.yml" -o -name "action.yaml" \))"
+if [[ -z "$WORKFLOWS" && -z "$ACTIONS" ]]; then
+    success "No workflows or actions to check!"
+    exit 0
+fi
+
 # Get the actionlint tarball name from the checksums file, used both for downloading and verifying checksums
 OS="$(uname)"
 ARCH="$(uname -m)"
