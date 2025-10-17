@@ -1,14 +1,12 @@
+# Note: This workflow is configured to run on all pull requests throughout the Expensify org, not just this repo.
+# That has a few consequences:
+#    - We need to checkout the repo it's running on, and not just the GitHub-Actions repo
+#    - branch and path matching does not work in the workflow layer. From the docs: https://docs.github.com/en/enterprise-cloud@latest/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets#supported-event-triggers
+#        > Any filters you specify for the supported events are ignored - for example, branches, branches-ignore, paths, types and so on. The workflow is only triggered, and is always triggered, by the default activity types of the supported events
+#    - We configure the workflow to run only on the main branch of the repo it's running on, and only on pull requests that modify workflow or action yml files. But those configes live in GitHub Settings.
 name: Validate Github Actions and Workflows
 
-on:
-  pull_request:
-    types: [opened, synchronize]
-    branches-ignore: [staging, production]
-    paths:
-      - '.github/workflows/*.yml'
-      - '.github/workflows/*.yaml'
-      - '**/action.yml'
-      - '**/action.yaml'
+on: pull_request
 
 jobs:
   validateSchemas:
