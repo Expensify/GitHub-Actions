@@ -9,6 +9,7 @@ self-hosted-runner:
     - macos-15-xlarge
     - macos-12
     - ubuntu-24.04-v4
+    - ubuntu-24.04-v64
 
 paths:
   '**/*':
