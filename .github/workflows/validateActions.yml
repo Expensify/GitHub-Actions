@@ -3,15 +3,40 @@
 #    - We need to checkout the repo it's running on, and not just the GitHub-Actions repo
 #    - branch and path matching does not work in the workflow layer. From the docs: https://docs.github.com/en/enterprise-cloud@latest/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets#supported-event-triggers
 #        > Any filters you specify for the supported events are ignored - for example, branches, branches-ignore, paths, types and so on. The workflow is only triggered, and is always triggered, by the default activity types of the supported events
-#    - We configure the workflow to run only on the main branch of the repo it's running on, and only on pull requests that modify workflow or action yml files. But those configes live in GitHub Settings.
 name: Validate Github Actions and Workflows
 
 on: pull_request
 
 jobs:
-  validateSchemas:
+  # Rulesets don't support branch and path matching, so we need to use a job to check files changed by a pull request and either run the validations or don't.
+  shouldRun:
     runs-on: ubuntu-latest
     if: ${{ !contains(github.actor, '[bot]') && github.actor != 'MelvinBot' && github.actor != 'botify' && github.actor != 'OSBotify' }}
+    outputs:
+      SHOULD_RUN: ${{ steps.checkChangedFiles.outputs.HAS_WORKFLOW_OR_ACTION_CHANGES }}
+    steps:
+      # v5.0.0
+      - name: Checkout target repo
+        uses: actions/checkout@ff7abcd0c3c05ccf6adc123a8cd1fd4fb30fb493
+
+      - name: Check changed files
+        id: checkChangedFiles
+        run: |
+          CHANGED_FILES=$(gh pr diff --name-only)
+          for FILE in $CHANGED_FILES; do
+            if [[ $FILE == '.github/workflows/*.yml' || $FILE == '.github/workflows/*.yaml' || $FILE == '**/action.yml' || $FILE == '**/action.yaml' ]]; then
+              echo "HAS_WORKFLOW_OR_ACTION_CHANGES=true" >> "$GITHUB_OUTPUT"
+              break
+            fi
+          done
+          echo "HAS_WORKFLOW_OR_ACTION_CHANGES=false" >> "$GITHUB_OUTPUT"
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+  validateSchemas:
+    runs-on: ubuntu-latest
+    needs: shouldRun
+    if: ${{ needs.shouldRun.outputs.SHOULD_RUN == 'true' }}
     steps:
       - name: Checkout repos
         id: repo
@@ -35,8 +60,9 @@ jobs:
         run: echo "::error::The validateWorkflowSchemas check failed! To run it locally, go to the root of ${{ steps.repo.outputs.NAME }} and run <path_to_github_actions_repo>/scripts/validateWorkflowSchemas.sh"
 
   actionlint:
+    needs: shouldRun
+    if: ${{ needs.shouldRun.outputs.SHOULD_RUN == 'true' }}
     runs-on: ubuntu-latest
-    if: ${{ !contains(github.actor, '[bot]') && github.actor != 'MelvinBot' && github.actor != 'botify' && github.actor != 'OSBotify' }}
     steps:
       - name: Checkout repos
         id: repo
@@ -52,8 +78,9 @@ jobs:
         run: echo "::error::The actionlint check failed! To run it locally, go to the root of ${{ steps.repo.outputs.NAME }} and run <path_to_github_actions_repo>/scripts/actionlint.sh"
 
   validateImmutableActionRefs:
+    needs: shouldRun
+    if: ${{ needs.shouldRun.outputs.SHOULD_RUN == 'true' }}
     runs-on: ubuntu-latest
-    if: ${{ !contains(github.actor, '[bot]') && github.actor != 'MelvinBot' && github.actor != 'botify' && github.actor != 'OSBotify' }}
     steps:
       - name: Checkout repos
         id: repo
