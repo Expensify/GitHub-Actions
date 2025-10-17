@@ -8,6 +8,7 @@ on:
 jobs:
   validateSchemas:
     runs-on: ubuntu-latest
+    if: ${{ !contains(github.actor, '[bot]') && github.actor != 'MelvinBot' && github.actor != 'botify' && github.actor != 'OSBotify' }}
     steps:
       - name: Checkout repos
         id: repo
@@ -32,6 +33,7 @@ jobs:
 
   actionlint:
     runs-on: ubuntu-latest
+    if: ${{ !contains(github.actor, '[bot]') && github.actor != 'MelvinBot' && github.actor != 'botify' && github.actor != 'OSBotify' }}
     steps:
       - name: Checkout repos
         id: repo
@@ -48,6 +50,7 @@ jobs:
 
   validateImmutableActionRefs:
     runs-on: ubuntu-latest
+    if: ${{ !contains(github.actor, '[bot]') && github.actor != 'MelvinBot' && github.actor != 'botify' && github.actor != 'OSBotify' }}
     steps:
       - name: Checkout repos
         id: repo
