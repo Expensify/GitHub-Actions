@@ -20,11 +20,11 @@ on:
         type: boolean
 
 jobs:
-  version:
+  publish:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write
+      id-token: write # Required for OIDC: https://docs.npmjs.com/trusted-publishers
     steps:
       - name: Generate a GitHub App token
         id: generateAppToken
@@ -102,8 +102,6 @@ jobs:
 
       - name: Publish to npm
         run: npm publish --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Set name version in GitHub ENV
         run: echo "NAME=$(jq '.name' package.json)" >> "$GITHUB_ENV"
