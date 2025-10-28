@@ -19,16 +19,12 @@ on:
         required: false
         type: boolean
 
-permissions:
-  id-token: write  # Required for OIDC: https://docs.npmjs.com/trusted-publishers
-  contents: read
-
 jobs:
-  version:
+  publish:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write
+      id-token: write # Required for OIDC: https://docs.npmjs.com/trusted-publishers
     steps:
       - name: Generate a GitHub App token
         id: generateAppToken
