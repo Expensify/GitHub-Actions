@@ -60,8 +60,32 @@ else
     info "Downloading and verifying actionlint verion $EXPECTED_VERSION..." >&2
 
     readonly TARBALL="$SCRIPT_DIR/actionlint.tar.gz"
-    if ! curl -sL "https://github.com/rhysd/actionlint/releases/download/v${EXPECTED_VERSION}/${TARBALL_NAME}" -o "$TARBALL"; then
-        error "Unable to download actionlint binary"
+
+    # --fail: Makes curl return error on HTTP errors (4xx, 5xx)
+    # --location: Follow redirects
+    curl --fail --location \
+        "https://github.com/rhysd/actionlint/releases/download/v${EXPECTED_VERSION}/${TARBALL_NAME}" \
+        --output "$TARBALL"
+    CURL_EXIT=$?
+
+    if [[ $CURL_EXIT -ne 0 ]]; then
+        case $CURL_EXIT in
+            18)
+                error "Download failed: partial file transfer (network interrupted)" >&2
+                ;;
+            22)
+                error "Download failed: HTTP error from GitHub" >&2
+                ;;
+            28)
+                error "Download failed: operation timeout" >&2
+                ;;
+            56)
+                error "Download failed: network connection issue" >&2
+                ;;
+            *)
+                error "Download failed with curl exit code $CURL_EXIT" >&2
+                ;;
+        esac
         exit 1
     fi
 
