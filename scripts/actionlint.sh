@@ -63,7 +63,11 @@ else
 
     # --fail: Makes curl return error on HTTP errors (4xx, 5xx)
     # --location: Follow redirects
+    # --retry: Retry on transient errors
+    # --retry-delay: Wait between retry attempts
     curl --fail --location \
+        --retry 3 \
+        --retry-delay 3 \
         "https://github.com/rhysd/actionlint/releases/download/v${EXPECTED_VERSION}/${TARBALL_NAME}" \
         --output "$TARBALL"
     CURL_EXIT=$?
@@ -86,7 +90,7 @@ else
                 error "Download failed with curl exit code $CURL_EXIT" >&2
                 ;;
         esac
-        exit 1
+        exit "$CURL_EXIT"
     fi
 
     # Ensure tarball is cleaned up
