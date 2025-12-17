@@ -5,6 +5,10 @@ inputs:
   OP_SERVICE_ACCOUNT_TOKEN:
     description: 1Password service account token
     required: true
+  NEEDS_SSL_CERTIFICATES:
+    description: Whether the action needs to set up SSL certificates
+    required: false
+    default: "true"
 
 runs:
   using: composite
@@ -15,6 +19,7 @@ runs:
         OP_SERVICE_ACCOUNT_TOKEN: ${{ inputs.OP_SERVICE_ACCOUNT_TOKEN }}
 
     - name: Update SSL Certificates from 1Password
+      if: ${{ inputs.NEEDS_SSL_CERTIFICATES == 'true' }}
       run: |
         op document get --output expensify.ca.crt expensify.ca.crt && sudo cp expensify.ca.crt /usr/local/share/ca-certificates/expensify.ca.crt
         sudo update-ca-certificates
