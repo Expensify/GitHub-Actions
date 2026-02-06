@@ -9,7 +9,7 @@ on:
 
 jobs:
   CLA:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     # This job should only run for pull request comments or pull request target events (not issue comments)
     if: github.event.issue.pull_request || github.event_name == 'pull_request_target'
     steps:
