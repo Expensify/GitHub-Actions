@@ -123,10 +123,13 @@ cd "$REPO_ROOT" || exit 1
 # If a repo has it's own action lint config, use that. Otherwise, use the one in this repo.
 CONFIG=""
 if [[ ! -f "$REPO_ROOT/.github/actionlint.yml" ]] && [[ ! -f "$REPO_ROOT/.github/actionlint.yaml" ]]; then
-    CONFIG=" -config-file $(readlink -f $SCRIPT_DIR/../.github/actionlint.yml)"
+    CONFIG=" -config-file $(readlink -f "$SCRIPT_DIR"/../.github/actionlint.yml)"
     info "Using default Github-Actions repo actionlint.yml" >&2
 fi
 
+# We can't quote CONFIG here because we need the splitting on spaces for it to be recognized
+# by actionlint as a flag
+#shellcheck disable=SC2086
 if ! "$ACTIONLINT_PATH" ${CONFIG} -color; then
     error "Workflows did not pass actionlint :("
     exit 1
