@@ -2,7 +2,7 @@
 #################################################################
 #    Lint workflows with https://github.com/rhysd/actionlint    #
 #################################################################
-set -x
+
 # Verify that shellcheck is installed (preinstalled on GitHub Actions runners)
 if ! command -v shellcheck &>/dev/null; then
     error "This script requires shellcheck. Please install it and try again"
