@@ -119,7 +119,14 @@ fi
 info "Linting workflows..."
 echo
 cd "$REPO_ROOT" || exit 1
-if ! "$ACTIONLINT_PATH" -color; then
+
+# If a repo has it's own action lint config, use that. Otherwise, use the one in this repo.
+$CONFIG=""
+if [[ ! -f "$REPO_ROOT/.github/actionlint.yml" ]] && [[ ! -f "$REPO_ROOT/.github/actionlint.yaml" ]]; then
+    CONFIG="-config-file $SCRIPT_DIR/../.github/actionlint.yml"
+fi
+
+if ! "$ACTIONLINT_PATH" -color "$CONFIG"; then
     error "Workflows did not pass actionlint :("
     exit 1
 fi
