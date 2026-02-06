@@ -2,7 +2,7 @@
 #################################################################
 #    Lint workflows with https://github.com/rhysd/actionlint    #
 #################################################################
-
+set -x
 # Verify that shellcheck is installed (preinstalled on GitHub Actions runners)
 if ! command -v shellcheck &>/dev/null; then
     error "This script requires shellcheck. Please install it and try again"
@@ -121,12 +121,13 @@ echo
 cd "$REPO_ROOT" || exit 1
 
 # If a repo has it's own action lint config, use that. Otherwise, use the one in this repo.
-$CONFIG=""
+CONFIG=""
 if [[ ! -f "$REPO_ROOT/.github/actionlint.yml" ]] && [[ ! -f "$REPO_ROOT/.github/actionlint.yaml" ]]; then
-    CONFIG="-config-file $SCRIPT_DIR/../.github/actionlint.yml"
+    CONFIG=" -config-file $(readlink -f $SCRIPT_DIR/../.github/actionlint.yml)"
+    info "Using default Github-Actions repo actionlint.yml" >&2
 fi
 
-if ! "$ACTIONLINT_PATH" -color "$CONFIG"; then
+if ! "$ACTIONLINT_PATH" ${CONFIG} -color; then
     error "Workflows did not pass actionlint :("
     exit 1
 fi
