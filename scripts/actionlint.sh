@@ -125,6 +125,16 @@ CONFIG=""
 if [[ ! -f "$REPO_ROOT/.github/actionlint.yml" ]] && [[ ! -f "$REPO_ROOT/.github/actionlint.yaml" ]]; then
     CONFIG=" -config-file $(readlink -f "$SCRIPT_DIR"/../.github/actionlint.yml)"
     info "Using default Github-Actions repo actionlint.yml" >&2
+else 
+    if [[ -f "$REPO_ROOT/.github/actionlint.yml" ]]; then
+        CONFIG=" -config-file $(readlink -f "$REPO_ROOT/.github/actionlint.yml")"
+    elif [[ -f "$REPO_ROOT/.github/actionlint.yaml" ]]; then
+        CONFIG=" -config-file $(readlink -f "$REPO_ROOT/.github/actionlint.yaml")"
+    else
+        error "Should be unreachable -- previously found a valid local actionlint but cannot find it now..."
+        exit 1
+    fi
+    info "Using actionlint file from this repo" >&2
 fi
 
 # We can't quote CONFIG here because we need the splitting on spaces for it to be recognized
