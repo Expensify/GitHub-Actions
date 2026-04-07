@@ -36,7 +36,7 @@ runs:
   using: composite
   steps:
     - name: Install 1Password CLI
-      uses: 1password/install-cli-action@9a0c9dd934086b7ab1d90115d455bda1c53c2bdb
+      uses: 1password/install-cli-action@8d006a0d0a4fd505af7f7ce589e7f768385ff5e4 # v3
 
     - name: Download OSBotify GPG key
       run: op read "op://${{ inputs.OP_VAULT }}/OSBotify-private-key.asc/OSBotify-private-key.asc" --force --out-file ./OSBotify-private-key.asc
@@ -64,7 +64,7 @@ runs:
     - name: Generate a token
       id: generateToken
       if: inputs.SETUP_AS_APP == 'true'
-      uses: actions/create-github-app-token@9d97a4282b2c51a2f4f0465b9326399f53c890d4
+      uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v3
       with:
         app-id: ${{ inputs.OS_BOTIFY_APP_ID }}
         private-key: ${{ inputs.OS_BOTIFY_PRIVATE_KEY }}
