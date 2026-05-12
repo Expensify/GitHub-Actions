@@ -24,14 +24,14 @@ fi
 # - action metadata files, which can be anywhere in the repo, but must be called action.yml or action.yaml
 ACTIONS="$(find "$REPO_ROOT" -type f \( -name "action.yml" -o -name "action.yaml" \))"
 if [[ -z "$ACTIONS" ]]; then
-    warning "No workflows found. Did you remember to run this script from the root of a repository?" >&2
+    warning "No action metadata files found." >&2
 fi
 
 readonly YAML_FILES="$WORKFLOWS $ACTIONS"
 
 # Find yaml files in the `.github` directory
 for FILE in $YAML_FILES; do
-    USES_LINES="$(grep "uses:" "$FILE")"
+    USES_LINES="$(grep -E "^[[:space:]]*-?[[:space:]]*uses:[[:space:]]+" "$FILE")"
 
     # Ignore files without external action usages
     if [[ -z "$USES_LINES" ]]; then
