@@ -31,7 +31,7 @@ readonly YAML_FILES="$WORKFLOWS $ACTIONS"
 
 # Find yaml files in the `.github` directory
 for FILE in $YAML_FILES; do
-    USES_LINES="$(grep "uses:" "$FILE")"
+    USES_LINES="$(grep -E "^[[:space:]]*-?[[:space:]]*uses:[[:space:]]+" "$FILE")"
 
     # Ignore files without external action usages
     if [[ -z "$USES_LINES" ]]; then
