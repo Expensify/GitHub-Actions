@@ -24,7 +24,7 @@ fi
 # - action metadata files, which can be anywhere in the repo, but must be called action.yml or action.yaml
 ACTIONS="$(find "$REPO_ROOT" -type f \( -name "action.yml" -o -name "action.yaml" \))"
 if [[ -z "$ACTIONS" ]]; then
-    warning "No action metadata files found." >&2
+    warning "No workflows found. Did you remember to run this script from the root of a repository?" >&2
 fi
 
 readonly YAML_FILES="$WORKFLOWS $ACTIONS"
