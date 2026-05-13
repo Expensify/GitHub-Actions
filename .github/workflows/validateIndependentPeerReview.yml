@@ -20,7 +20,7 @@ jobs:
         id: generateAppToken
         uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3
         with:
-          app-id: ${{ secrets.OS_BOTIFY_APP_ID }}
+          client-id: ${{ secrets.OS_BOTIFY_CLIENT_ID }}
           private-key: ${{ secrets.OS_BOTIFY_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
           repositories: |
