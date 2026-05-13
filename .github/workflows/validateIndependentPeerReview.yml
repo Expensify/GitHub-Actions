@@ -1,0 +1,51 @@
+# Note: This workflow is configured to run on all pull requests throughout the Expensify org, not just this repo.
+# That has a few consequences:
+#    - We need to checkout the repo it's running on, and not just the GitHub-Actions repo
+#    - branch and path matching does not work in the workflow layer. From the docs: https://docs.github.com/en/enterprise-cloud@latest/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets#supported-event-triggers
+#        > Any filters you specify for the supported events are ignored - for example, branches, branches-ignore, paths, types and so on. The workflow is only triggered, and is always triggered, by the default activity types of the supported events
+name: Validate independent peer review
+
+on: pull_request
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  validateIndependentPeerReview:
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    steps:
+      # v3.1.1
+      - name: Generate a GitHub App token
+        id: generateAppToken
+        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3
+        with:
+          app-id: ${{ secrets.OS_BOTIFY_APP_ID }}
+          private-key: ${{ secrets.OS_BOTIFY_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: |
+            ${{ github.event.repository.name }}
+            GitHub-Actions
+          permission-administration: read
+          permission-contents: read
+          permission-members: read
+          permission-metadata: read
+          permission-pull-requests: read
+
+      - name: Checkout repos
+        id: repo
+        uses: Expensify/GitHub-Actions/checkoutRepoAndGitHubActions@main
+
+      # v4.3.0
+      - name: Setup Node
+        uses: actions/setup-node@cdca7365b2dadb8aad0a33bc7601856ffabcc48e
+
+      - name: Install npm packages
+        run: npm ci
+        working-directory: GitHub-Actions
+
+      - name: Validate independent peer review
+        run: npm run validate-independent-peer-review
+        working-directory: GitHub-Actions
+        env:
+          GITHUB_TOKEN: ${{ steps.generateAppToken.outputs.token }}
