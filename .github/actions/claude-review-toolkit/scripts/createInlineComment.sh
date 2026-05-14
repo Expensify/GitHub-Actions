@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # Secure proxy script to create an inline comment on a GitHub PR.
-# When ALLOWED_RULES_FILE is set and non-empty, the comment body is validated
-# against the allowlist. When unset or empty, validation is skipped.
+# Validates that the comment body references a rule tag present in
+# $ALLOWED_RULES_FILE (exported by the toolkit's extract-rules step).
 set -eu
 
 readonly ALLOWED_RULES_FILE="${ALLOWED_RULES_FILE:-}"
@@ -46,13 +46,10 @@ readonly LINE_ARG="${4:-}"
 [[ -z "$PR_NUMBER" || -z "$PATH_ARG" || -z "$BODY_ARG" || -z "$LINE_ARG" ]] && usage
 [[ "$PR_NUMBER" =~ ^[0-9]+$ ]] || die "PR_NUMBER must be a positive integer"
 [[ -z "${GITHUB_REPOSITORY:-}" ]] && die "Environment variable GITHUB_REPOSITORY is required"
+[[ -n "$ALLOWED_RULES_FILE" ]] || die "Environment variable ALLOWED_RULES_FILE is required"
 
-if [[ -n "$ALLOWED_RULES_FILE" ]]; then
-    validate_rule "$BODY_ARG"
-    echo "Comment approved: $COMMENT_STATUS_REASON"
-else
-    echo "Comment approved: ALLOWED_RULES_FILE not set, skipping rule validation"
-fi
+validate_rule "$BODY_ARG"
+echo "Comment approved: $COMMENT_STATUS_REASON"
 
 COMMIT_ID=$(gh api "/repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" --jq '.head.sha')
 readonly COMMIT_ID

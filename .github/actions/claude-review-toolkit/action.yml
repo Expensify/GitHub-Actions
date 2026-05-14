@@ -1,10 +1,5 @@
 name: 'Claude Review Toolkit'
 description: 'Sets up scripts and schema for the Claude PR review pipeline'
-inputs:
-  enforce_allowed_rules:
-    description: 'When true, walks .claude/skills/coding-standards/rules/ in the caller workspace, writes an allowlist, and exports ALLOWED_RULES_FILE so createInlineComment.sh enforces a per-comment rule-ID gate.'
-    required: false
-    default: 'false'
 outputs:
   schema_path:
     description: 'Filesystem path to the canonical schema JSON'
@@ -24,8 +19,7 @@ runs:
       run: |
         echo "schema_path=$GITHUB_ACTION_PATH/schemas/code-review-output.json" >> "$GITHUB_OUTPUT"
         echo "schema_json=$(jq -c . "$GITHUB_ACTION_PATH/schemas/code-review-output.json")" >> "$GITHUB_OUTPUT"
-    - name: Extract allowed rules (when enforce_allowed_rules=true)
-      if: inputs.enforce_allowed_rules == 'true'
+    - name: Extract allowed rules
       shell: bash
       run: |
         "$GITHUB_ACTION_PATH/scripts/extractAllowedRules.sh" \

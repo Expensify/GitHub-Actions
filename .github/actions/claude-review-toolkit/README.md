@@ -2,7 +2,7 @@
 
 Composite action that ships the shared scaffolding for the Claude PR review pipeline used by `Expensify/App`, `Expensify/Auth`, and `Expensify/Web-Expensify`.
 
-It places a set of helper scripts on `GITHUB_PATH`, exposes the canonical violations-only JSON schema as both a file and a compacted string, and optionally enables a per-comment rule-ID security gate.
+It places a set of helper scripts on `GITHUB_PATH`, exposes the canonical violations-only JSON schema as both a file and a compacted string, and enforces a per-comment rule-ID security gate on inline comments.
 
 ## Usage
 
@@ -10,8 +10,6 @@ It places a set of helper scripts on `GITHUB_PATH`, exposes the canonical violat
 - name: Setup Claude review toolkit
   id: toolkit
   uses: Expensify/GitHub-Actions/.github/actions/claude-review-toolkit@<sha>
-  with:
-    enforce_allowed_rules: 'true'  # optional; default 'false'
 
 - name: Run Claude Code
   uses: anthropics/claude-code-action@<sha>
@@ -25,11 +23,7 @@ It places a set of helper scripts on `GITHUB_PATH`, exposes the canonical violat
   run: createInlineComment.sh "${{ github.event.pull_request.number }}" "src/foo.ts" "PERF-1: ..." 42
 ```
 
-## Inputs
-
-| Name | Default | Description |
-| --- | --- | --- |
-| `enforce_allowed_rules` | `false` | When `true`, walks `.claude/skills/coding-standards/rules/` in the caller's workspace, writes a deduplicated allowlist to `$RUNNER_TEMP/allowed-rules.txt`, and exports `ALLOWED_RULES_FILE` so `createInlineComment.sh` enforces a per-comment rule-ID gate. Today only `Expensify/App` opts in; `Auth` and `Web-Expensify` run without the gate. |
+Caller repos must ship a `.claude/skills/coding-standards/rules/` directory with at least one `.md` rule file whose YAML frontmatter declares a `ruleId:` tag matching `[A-Z]+(-[A-Z]+)*-[0-9]+` (e.g. `PERF-1`, `GEN-01`, `CLEAN-REACT-PATTERNS-0`). The action's extract step builds an allowlist from those tags and fails the workflow if the directory is missing or yields no tags.
 
 ## Outputs
 
@@ -41,7 +35,7 @@ It places a set of helper scripts on `GITHUB_PATH`, exposes the canonical violat
 ## Side effects
 
 - Prepends `<action-path>/scripts` to `GITHUB_PATH`, so the helper scripts below are callable by bare name in later steps.
-- When `enforce_allowed_rules: 'true'`, exports `ALLOWED_RULES_FILE` to `$GITHUB_ENV`.
+- Exports `ALLOWED_RULES_FILE` to `$GITHUB_ENV`, pointing at the deduplicated allowlist extracted from the caller's rules directory.
 
 ## Scripts on `PATH`
 
@@ -49,8 +43,8 @@ It places a set of helper scripts on `GITHUB_PATH`, exposes the canonical violat
 | --- | --- | --- |
 | `addPrReaction.sh` | `<PR_NUMBER> <REACTION>` | Adds a reaction (`+1`, `-1`, `laugh`, `confused`, `heart`, `hooray`, `rocket`, `eyes`) to the PR. |
 | `removePrReaction.sh` | `<PR_NUMBER> <REACTION> <USER>` | Removes the matching reaction authored by `<USER>` (typically `github-actions[bot]`). Idempotent. |
-| `createInlineComment.sh` | `<PR_NUMBER> <path> <body> <line>` | Posts an inline review comment. Requires `GITHUB_REPOSITORY` and `GH_TOKEN` in env. When `ALLOWED_RULES_FILE` is set and non-empty, the body must reference a rule tag matching `[A-Z]+(-[A-Z]+)*-[0-9]+` (e.g. `PERF-1`) that is present in the allowlist; otherwise the comment is rejected. When unset, validation is skipped. |
-| `extractAllowedRules.sh` | `<rules-dir> <output-file>` | Walks `<rules-dir>` for `.md` rule files and writes their rule-ID tags to `<output-file>`. Invoked automatically by the action when `enforce_allowed_rules: 'true'`; rarely called directly. |
+| `createInlineComment.sh` | `<PR_NUMBER> <path> <body> <line>` | Posts an inline review comment. Requires `GITHUB_REPOSITORY`, `GH_TOKEN`, and `ALLOWED_RULES_FILE` in env. The body must reference a rule tag matching `[A-Z]+(-[A-Z]+)*-[0-9]+` (e.g. `PERF-1`) that is present in the allowlist; otherwise the comment is rejected. |
+| `extractAllowedRules.sh` | `<rules-dir> <output-file>` | Walks `<rules-dir>` for `.md` rule files and writes their `ruleId:` tags to `<output-file>`. Invoked automatically by the action; rarely called directly. |
 
 ## Schema extension
 
