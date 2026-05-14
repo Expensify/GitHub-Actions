@@ -15,7 +15,7 @@ die() {
 
 # Usage helper to avoid repeated text.
 usage() {
-    die "Usage: $0 <path> <body> <line>"
+    die "Usage: $0 <PR_NUMBER> <path> <body> <line>"
 }
 
 COMMENT_STATUS_REASON=""
@@ -38,13 +38,14 @@ validate_rule() {
     die "Comment rejected: rule $rule not present in allowed list"
 }
 
-readonly PATH_ARG="${1:-}"
-readonly BODY_ARG="${2:-}"
-readonly LINE_ARG="${3:-}"
+readonly PR_NUMBER="${1:-}"
+readonly PATH_ARG="${2:-}"
+readonly BODY_ARG="${3:-}"
+readonly LINE_ARG="${4:-}"
 
-[[ -z "${PR_NUMBER:-}" ]] && die "Environment variable PR_NUMBER is required"
+[[ -z "$PR_NUMBER" || -z "$PATH_ARG" || -z "$BODY_ARG" || -z "$LINE_ARG" ]] && usage
+[[ "$PR_NUMBER" =~ ^[0-9]+$ ]] || die "PR_NUMBER must be a positive integer"
 [[ -z "${GITHUB_REPOSITORY:-}" ]] && die "Environment variable GITHUB_REPOSITORY is required"
-[[ -z "$PATH_ARG" || -z "$BODY_ARG" || -z "$LINE_ARG" ]] && usage
 
 if [[ -n "$ALLOWED_RULES_FILE" ]]; then
     validate_rule "$BODY_ARG"
