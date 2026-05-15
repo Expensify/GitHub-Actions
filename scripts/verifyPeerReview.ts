@@ -1,4 +1,4 @@
-import {readFileSync} from 'node:fs';
+import {appendFileSync, readFileSync} from 'node:fs';
 import {graphql} from '@octokit/graphql';
 import {Octokit, type RestEndpointMethodTypes} from '@octokit/rest';
 import type {PullRequestEvent} from '@octokit/webhooks-types';
@@ -78,6 +78,35 @@ function formatUsers(users: string[]): string {
 
 function unique(values: string[]): string[] {
     return [...new Set(values)].sort((a, b) => a.localeCompare(b));
+}
+
+function escapeWorkflowCommandValue(value: string): string {
+    return value.replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A');
+}
+
+function escapeWorkflowCommandProperty(value: string): string {
+    return escapeWorkflowCommandValue(value).replace(/:/g, '%3A').replace(/,/g, '%2C');
+}
+
+function getFailureTitle(message: string): string {
+    if (message.includes('does not have enough independent Expensify employee approvals')) {
+        return 'Missing independent peer review';
+    }
+    if (message.includes('Unable to resolve Expensify co-author emails')) {
+        return 'Unresolved Expensify co-author';
+    }
+    if (message.includes('has no human commit authors or co-authors')) {
+        return 'No human commit author';
+    }
+    return 'Peer review verification failed';
+}
+
+function writeStepSummary(title: string, message: string): void {
+    const stepSummaryPath = process.env.GITHUB_STEP_SUMMARY;
+    if (!stepSummaryPath) {
+        return;
+    }
+    appendFileSync(stepSummaryPath, `## ${title}\n\n${message.replace(/\n/g, '\n\n')}\n`);
 }
 
 function getPullRequestContext(): PullRequestContext {
@@ -272,6 +301,8 @@ async function main(): Promise<void> {
 
 main().catch((error: unknown) => {
     const message = error instanceof Error ? error.message : String(error);
-    console.error(`::error::${message.replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A')}`);
+    const title = getFailureTitle(message);
+    writeStepSummary(title, message);
+    console.error(`::error title=${escapeWorkflowCommandProperty(title)}::${escapeWorkflowCommandValue(message)}`);
     process.exit(1);
 });
