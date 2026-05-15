@@ -46,9 +46,7 @@ jobs:
         working-directory: GitHub-Actions
 
       - name: Verify peer review
-        continue-on-error: true
         run: npm run verify-peer-review
         working-directory: GitHub-Actions
         env:
           GITHUB_TOKEN: ${{ steps.generateAppToken.outputs.token }}
-          VERIFY_PEER_REVIEW_MODE: informational

@@ -57,7 +57,6 @@ const botUsers = new Set(['botify', 'MelvinBot', 'exfy-zapier']);
 const defaultRequiredApprovingReviewCount = 1;
 const expensifyOrganization = 'Expensify';
 const expensifyEmployeeTeamSlug = 'expensify-expensify';
-const isInformationalMode = process.env.VERIFY_PEER_REVIEW_MODE === 'informational';
 const githubToken = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN;
 if (!githubToken) {
     throw new Error('GITHUB_TOKEN or GH_TOKEN is required');
@@ -303,9 +302,7 @@ async function main(): Promise<void> {
 main().catch((error: unknown) => {
     const message = error instanceof Error ? error.message : String(error);
     const title = getFailureTitle(message);
-    const annotationType = isInformationalMode ? 'warning' : 'error';
-    const summary = isInformationalMode ? `${message}\n\nThis check is running in informational mode, so the workflow continues after reporting this failure.` : message;
-    writeStepSummary(title, summary);
-    console.error(`::${annotationType} title=${escapeWorkflowCommandProperty(title)}::${escapeWorkflowCommandValue(summary)}`);
+    writeStepSummary(title, message);
+    console.error(`::error title=${escapeWorkflowCommandProperty(title)}::${escapeWorkflowCommandValue(message)}`);
     process.exit(1);
 });
