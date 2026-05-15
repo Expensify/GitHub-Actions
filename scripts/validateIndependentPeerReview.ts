@@ -52,7 +52,6 @@ type TeamMembersResponse = {
         } | null;
     } | null;
 };
-type TeamResponse = NonNullable<TeamMembersResponse['organization']>['team'];
 
 const botUsers = new Set(['botify', 'MelvinBot', 'exfy-zapier']);
 const defaultRequiredApprovingReviewCount = 1;
@@ -210,23 +209,21 @@ async function getEmployeeLogins(): Promise<Set<string>> {
             teamSlug: expensifyEmployeeTeamSlug,
             cursor,
         });
-        const team: TeamResponse = response.organization?.team ?? null;
-        if (!team) {
+        const members = response.organization?.team?.members;
+        if (!members) {
             throw new Error(`${expensifyOrganization}/${expensifyEmployeeTeamSlug} team could not be found.`);
         }
-        for (const member of team.members.nodes) {
+        for (const member of members.nodes) {
             employeeLogins.add(member.login);
         }
-        cursor = team.members.pageInfo.hasNextPage ? team.members.pageInfo.endCursor : null;
+        cursor = members.pageInfo.hasNextPage ? members.pageInfo.endCursor : null;
     } while (cursor);
     return employeeLogins;
 }
 
 function getIndependentEmployeeApprovers(approvers: string[], authors: string[], employeeLogins: Set<string>): string[] {
     const authorSet = new Set(authors);
-    return approvers.filter((approver) => {
-        return !authorSet.has(approver) && employeeLogins.has(approver);
-    });
+    return approvers.filter((approver) => !authorSet.has(approver) && employeeLogins.has(approver));
 }
 
 async function main(): Promise<void> {
