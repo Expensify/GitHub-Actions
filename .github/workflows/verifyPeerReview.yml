@@ -14,7 +14,6 @@ permissions:
 
 jobs:
   verifyPeerReview:
-    if: ${{ !github.event.pull_request.draft }}
     name: Check independent approval
     runs-on: blacksmith-2vcpu-ubuntu-2404
     steps:
