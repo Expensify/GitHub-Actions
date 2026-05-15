@@ -2,7 +2,7 @@
   "name": "@expensify/github-actions",
   "private": true,
   "scripts": {
-    "validate-independent-peer-review": "tsx scripts/validateIndependentPeerReview.ts"
+    "verify-peer-review": "tsx scripts/verifyPeerReview.ts"
   },
   "devDependencies": {
     "@octokit/webhooks-types": "^7.6.1",

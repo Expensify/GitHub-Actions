@@ -3,7 +3,7 @@
 #    - We need to checkout the repo it's running on, and not just the GitHub-Actions repo
 #    - branch and path matching does not work in the workflow layer. From the docs: https://docs.github.com/en/enterprise-cloud@latest/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets#supported-event-triggers
 #        > Any filters you specify for the supported events are ignored - for example, branches, branches-ignore, paths, types and so on. The workflow is only triggered, and is always triggered, by the default activity types of the supported events
-name: Verify peer reviews
+name: Verify peer review
 
 on: pull_request
 
@@ -12,7 +12,7 @@ permissions:
   pull-requests: read
 
 jobs:
-  validateIndependentPeerReview:
+  verifyPeerReview:
     runs-on: blacksmith-2vcpu-ubuntu-2404
     steps:
       # v3.1.1
@@ -43,8 +43,8 @@ jobs:
         run: npm ci
         working-directory: GitHub-Actions
 
-      - name: Validate independent peer review
-        run: npm run validate-independent-peer-review
+      - name: Verify peer review
+        run: npm run verify-peer-review
         working-directory: GitHub-Actions
         env:
           GITHUB_TOKEN: ${{ steps.generateAppToken.outputs.token }}
