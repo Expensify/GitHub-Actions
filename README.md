@@ -41,7 +41,7 @@ jobs:
 
 Used as an org-level ruleset workflow to block pull requests that do not have enough independent Expensify employee approvals. The check only reads GitHub pull request metadata; it does not checkout or execute code from the pull request branch.
 
-This workflow requires a GitHub App token with read access for repository metadata, pull requests, branch protection administration, and organization members. It uses `OS_BOTIFY_CLIENT_ID` and `OS_BOTIFY_PRIVATE_KEY` to generate that token. If GitHub does not return a branch-protection review count, the workflow defaults to requiring one independent approval, so the ruleset should target only the intended protected branches.
+This workflow requires a GitHub App token with read access for repository metadata, pull requests, branch protection administration, and organization members. It uses the OS Botify app ID `365978` and `OS_BOTIFY_PRIVATE_KEY` to generate that token. If GitHub does not return a branch-protection review count, the workflow defaults to requiring one independent approval, so the ruleset should target only the intended protected branches.
 
 ## Rulesets
 GitHub [org-level rulesets](https://docs.github.com/en/enterprise-cloud@latest/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets#require-workflows-to-pass-before-merging) can be configured to run a workflow check against pull requests in all repos in the org. This is a very powerful feature, but there are some caveats and best practices to be aware of when enabling a ruleset.
