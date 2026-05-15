@@ -37,7 +37,7 @@ jobs:
     secrets: inherit
 ```
 
-### `validateIndependentPeerReview.yml`
+### `verifyPeerReviews.yml`
 
 Used as an org-level ruleset workflow to block pull requests that do not have enough independent Expensify employee approvals. The check only reads GitHub pull request metadata; it does not checkout or execute code from the pull request branch.
 
@@ -53,4 +53,4 @@ GitHub [org-level rulesets](https://docs.github.com/en/enterprise-cloud@latest/r
     - If you need to target or exclude specific paths, that must be implemented manually in the workflow itself.
 - Due to a GitHub :bug:, PRs that are open when the rule is enabled will get stuck with a pending check that will never get picked up. The easiest way to fix that is to close and reopen the PR. Consider writing a script to close and reopen all open PRs across the org after the check is enabled.
 - It is less disruptive to [configure the ruleset to `Evaluate` first](https://docs.github.com/en/enterprise-cloud@latest/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets#using-evaluate-mode-for-ruleset-workflows), then `Active` once the kinks are worked out.
-- For `validateIndependentPeerReview.yml`, start with a ruleset targeting only a test branch, then test the workflow from a GitHub-Actions branch, then from `main`, and only then enable it for the intended repositories and branches.
+- For `verifyPeerReviews.yml`, start with a ruleset targeting only a test branch, then test the workflow from a GitHub-Actions branch, then from `main`, and only then enable it for the intended repositories and branches.
