@@ -304,11 +304,8 @@ main().catch((error: unknown) => {
     const message = error instanceof Error ? error.message : String(error);
     const title = getFailureTitle(message);
     const annotationType = isInformationalMode ? 'warning' : 'error';
-    const summary = isInformationalMode ? `${message}\n\nThis check is running in informational mode, so it did not fail the workflow.` : message;
+    const summary = isInformationalMode ? `${message}\n\nThis check is running in informational mode, so the workflow continues after reporting this failure.` : message;
     writeStepSummary(title, summary);
     console.error(`::${annotationType} title=${escapeWorkflowCommandProperty(title)}::${escapeWorkflowCommandValue(summary)}`);
-    if (isInformationalMode) {
-        process.exit(0);
-    }
     process.exit(1);
 });
