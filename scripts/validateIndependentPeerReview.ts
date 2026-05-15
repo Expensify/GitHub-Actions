@@ -65,6 +65,7 @@ if (!githubToken) {
 const octokit = new Octokit({
     auth: githubToken,
 });
+
 const githubGraphql = graphql.defaults({
     headers: {
         authorization: `token ${githubToken}`,
