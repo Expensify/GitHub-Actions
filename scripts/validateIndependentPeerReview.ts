@@ -1,10 +1,9 @@
 import {readFileSync} from 'node:fs';
-import {RequestError} from '@octokit/request-error';
+import {graphql} from '@octokit/graphql';
 import {Octokit, type RestEndpointMethodTypes} from '@octokit/rest';
 import type {PullRequestEvent} from '@octokit/webhooks-types';
 
 type Commit = RestEndpointMethodTypes['pulls']['listCommits']['response']['data'][number];
-type Review = RestEndpointMethodTypes['pulls']['listReviews']['response']['data'][number];
 
 type PullRequestContext = {
     owner: string;
@@ -13,8 +12,52 @@ type PullRequestContext = {
     baseRef: string;
 };
 
+type BranchProtectionResponse = {
+    repository: {
+        ref: {
+            branchProtectionRule: {
+                requiredApprovingReviewCount: number;
+            } | null;
+        } | null;
+    } | null;
+};
+
+type LatestOpinionatedReviewsResponse = {
+    repository: {
+        pullRequest: {
+            latestOpinionatedReviews: {
+                nodes: Array<{
+                    state: string;
+                    author: {
+                        login: string;
+                    } | null;
+                }>;
+            };
+        } | null;
+    } | null;
+};
+
+type TeamMembersResponse = {
+    organization: {
+        team: {
+            members: {
+                pageInfo: {
+                    hasNextPage: boolean;
+                    endCursor: string | null;
+                };
+                nodes: Array<{
+                    login: string;
+                }>;
+            };
+        } | null;
+    } | null;
+};
+type TeamResponse = NonNullable<TeamMembersResponse['organization']>['team'];
+
 const botUsers = new Set(['botify', 'MelvinBot', 'exfy-zapier']);
 const defaultRequiredApprovingReviewCount = 1;
+const expensifyOrganization = 'Expensify';
+const expensifyEmployeeTeamSlug = 'expensify-expensify';
 const githubToken = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN;
 if (!githubToken) {
     throw new Error('GITHUB_TOKEN or GH_TOKEN is required');
@@ -22,6 +65,11 @@ if (!githubToken) {
 
 const octokit = new Octokit({
     auth: githubToken,
+});
+const githubGraphql = graphql.defaults({
+    headers: {
+        authorization: `token ${githubToken}`,
+    },
 });
 
 function formatUsers(users: string[]): string {
@@ -49,35 +97,55 @@ function getPullRequestContext(): PullRequestContext {
 
 async function getRequiredApprovingReviewCount({owner, repo, baseRef}: PullRequestContext): Promise<number> {
     try {
-        const {data} = await octokit.rest.repos.getPullRequestReviewProtection({
+        const response = await githubGraphql<BranchProtectionResponse>(`
+            query RequiredApprovingReviewCount($owner: String!, $repo: String!, $branchRef: String!) {
+                repository(owner: $owner, name: $repo) {
+                    ref(qualifiedName: $branchRef) {
+                        branchProtectionRule {
+                            requiredApprovingReviewCount
+                        }
+                    }
+                }
+            }
+        `, {
             owner,
             repo,
-            branch: baseRef,
+            branchRef: `refs/heads/${baseRef}`,
         });
-        return data.required_approving_review_count ?? 0;
+        return response.repository?.ref?.branchProtectionRule?.requiredApprovingReviewCount ?? 0;
     } catch (error: unknown) {
-        if (error instanceof RequestError && error.status === 404) {
-            console.log(`${owner}/${repo}@${baseRef} did not return a branch protection review count; requiring ${defaultRequiredApprovingReviewCount} independent approval(s).`);
-            return defaultRequiredApprovingReviewCount;
-        }
-        throw error;
+        const message = error instanceof Error ? error.message : String(error);
+        console.log(`${owner}/${repo}@${baseRef} did not return a branch protection review count (${message}); requiring ${defaultRequiredApprovingReviewCount} independent approval(s).`);
+        return defaultRequiredApprovingReviewCount;
     }
 }
 
-function getLatestApprovers(reviews: Review[]): string[] {
-    const latestOpinionatedReviewByUser = new Map<string, string>();
-    const opinionatedStates = new Set(['APPROVED', 'CHANGES_REQUESTED', 'DISMISSED']);
-
-    for (const review of reviews) {
-        const login = review.user?.login;
-        if (login && opinionatedStates.has(review.state)) {
-            latestOpinionatedReviewByUser.set(login, review.state);
+async function getLatestApprovers({owner, repo, number}: PullRequestContext): Promise<string[]> {
+    const response = await githubGraphql<LatestOpinionatedReviewsResponse>(`
+        query LatestOpinionatedReviews($owner: String!, $repo: String!, $prNumber: Int!) {
+            repository(owner: $owner, name: $repo) {
+                pullRequest(number: $prNumber) {
+                    latestOpinionatedReviews(last: 100, writersOnly: true) {
+                        nodes {
+                            state
+                            author {
+                                login
+                            }
+                        }
+                    }
+                }
+            }
         }
-    }
+    `, {
+        owner,
+        repo,
+        prNumber: number,
+    });
 
-    return unique([...latestOpinionatedReviewByUser.entries()]
-        .filter(([, state]) => state === 'APPROVED')
-        .map(([login]) => login));
+    return unique(response.repository?.pullRequest?.latestOpinionatedReviews.nodes
+        .filter((review) => review.state === 'APPROVED')
+        .map((review) => review.author?.login ?? '')
+        .filter((login) => login !== '') ?? []);
 }
 
 function coAuthorEmails(message: string): string[] {
@@ -117,39 +185,48 @@ function getCommitAuthors(commits: Commit[]): {authors: string[]; unresolvedExpe
     };
 }
 
-async function isEmployee(username: string): Promise<boolean> {
-    try {
-        await octokit.rest.orgs.checkMembershipForUser({
-            org: 'Expensify',
-            username,
+async function getEmployeeLogins(): Promise<Set<string>> {
+    const employeeLogins = new Set<string>();
+    let cursor: string | null = null;
+    do {
+        const response: TeamMembersResponse = await githubGraphql<TeamMembersResponse>(`
+            query TeamMembers($organization: String!, $teamSlug: String!, $cursor: String) {
+                organization(login: $organization) {
+                    team(slug: $teamSlug) {
+                        members(first: 100, after: $cursor) {
+                            pageInfo {
+                                hasNextPage
+                                endCursor
+                            }
+                            nodes {
+                                login
+                            }
+                        }
+                    }
+                }
+            }
+        `, {
+            organization: expensifyOrganization,
+            teamSlug: expensifyEmployeeTeamSlug,
+            cursor,
         });
-        return true;
-    } catch (error: unknown) {
-        if (error instanceof RequestError && error.status === 404) {
-            return false;
+        const team: TeamResponse = response.organization?.team ?? null;
+        if (!team) {
+            throw new Error(`${expensifyOrganization}/${expensifyEmployeeTeamSlug} team could not be found.`);
         }
-        throw error;
-    }
+        for (const member of team.members.nodes) {
+            employeeLogins.add(member.login);
+        }
+        cursor = team.members.pageInfo.hasNextPage ? team.members.pageInfo.endCursor : null;
+    } while (cursor);
+    return employeeLogins;
 }
 
-async function isRepoWriter({owner, repo}: PullRequestContext, username: string): Promise<boolean> {
-    const {data} = await octokit.rest.repos.getCollaboratorPermissionLevel({
-        owner,
-        repo,
-        username,
-    });
-    return ['admin', 'maintain', 'write'].includes(data.permission);
-}
-
-async function getIndependentEmployeeApprovers(context: PullRequestContext, approvers: string[], authors: string[]): Promise<string[]> {
+function getIndependentEmployeeApprovers(approvers: string[], authors: string[], employeeLogins: Set<string>): string[] {
     const authorSet = new Set(authors);
-    const independentEmployeeApprovers: string[] = [];
-    for (const approver of approvers) {
-        if (!authorSet.has(approver) && await isEmployee(approver) && await isRepoWriter(context, approver)) {
-            independentEmployeeApprovers.push(approver);
-        }
-    }
-    return independentEmployeeApprovers;
+    return approvers.filter((approver) => {
+        return !authorSet.has(approver) && employeeLogins.has(approver);
+    });
 }
 
 async function main(): Promise<void> {
@@ -161,12 +238,11 @@ async function main(): Promise<void> {
         pull_number: number,
         per_page: 100,
     };
-    const [requiredApprovingReviewCount, reviews, commits] = await Promise.all([
+    const [requiredApprovingReviewCount, approvers, commits] = await Promise.all([
         getRequiredApprovingReviewCount(context),
-        octokit.paginate(octokit.rest.pulls.listReviews, pullRequestParams),
+        getLatestApprovers(context),
         octokit.paginate(octokit.rest.pulls.listCommits, pullRequestParams),
     ]);
-    const approvers = getLatestApprovers(reviews);
 
     if (requiredApprovingReviewCount === 0) {
         console.log(`${owner}/${repo}#${number} targets ${context.baseRef}, which does not require approving reviews.`);
@@ -181,7 +257,8 @@ async function main(): Promise<void> {
         throw new Error(`Unable to verify independent peer review because ${owner}/${repo}#${number} has no human commit authors or co-authors.`);
     }
 
-    const independentEmployeeApprovers = await getIndependentEmployeeApprovers(context, approvers, authors);
+    const employeeLogins = await getEmployeeLogins();
+    const independentEmployeeApprovers = getIndependentEmployeeApprovers(approvers, authors, employeeLogins);
     if (independentEmployeeApprovers.length < requiredApprovingReviewCount) {
         throw new Error([
             `${owner}/${repo}#${number} does not have enough independent Expensify employee approvals.`,
