@@ -20,13 +20,12 @@ jobs:
         id: generateAppToken
         uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3
         with:
-          client-id: 365978
+          client-id: Iv1.26553ed1d375dd3c
           private-key: ${{ secrets.OS_BOTIFY_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
           repositories: |
             ${{ github.event.repository.name }}
             GitHub-Actions
-          permission-administration: read
           permission-contents: read
           permission-members: read
           permission-metadata: read
