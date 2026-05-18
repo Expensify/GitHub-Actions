@@ -22,8 +22,8 @@ jobs:
         id: generateAppToken
         uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3
         with:
-          client-id: Iv1.26553ed1d375dd3c
-          private-key: ${{ secrets.OS_BOTIFY_PRIVATE_KEY }}
+          app-id: '179547'
+          private-key: ${{ secrets.MELVIN_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
           repositories: |
             ${{ github.event.repository.name }}
