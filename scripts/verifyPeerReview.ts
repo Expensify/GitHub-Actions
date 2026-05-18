@@ -275,6 +275,10 @@ async function main(): Promise<void> {
         console.log(`${owner}/${repo}#${number} targets ${context.baseRef}, which does not require approving reviews.`);
         return;
     }
+    if (approvers.length === 0) {
+        console.log(`${owner}/${repo}#${number} has no approving reviews from writers; regular branch protection will block merge until an approval exists.`);
+        return;
+    }
 
     const {authors, unresolvedExpensifyCoAuthors} = getCommitAuthors(commits);
     if (unresolvedExpensifyCoAuthors.length > 0) {
