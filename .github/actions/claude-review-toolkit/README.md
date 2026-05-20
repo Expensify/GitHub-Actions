@@ -48,15 +48,19 @@ Caller repos must ship a `.claude/skills/coding-standards/rules/` directory with
 
 ## Schema extension
 
-Repos that need extra fields on top of the canonical schema should `jq`-merge them in a follow-up step before feeding `claude_args`:
+Repos that need extra fields on top of the canonical schema should `jq`-merge them in a follow-up step before feeding `claude_args`. Read the canonical schema from `schema_path` (a file) rather than piping `schema_json` through `echo`, so the shell never sees the schema's `"` characters:
 
 ```yaml
 - name: Extend schema
   id: schema
+  env:
+    SCHEMA_PATH: ${{ steps.toolkit.outputs.schema_path }}
   run: |
-    EXTENDED=$(echo "${{ steps.toolkit.outputs.schema_json }}" \
-      | jq -c '.properties.missingQueryTimings = {"type":"boolean"} | .required += ["missingQueryTimings"]')
+    EXTENDED=$(jq -c '.properties.missingQueryTimings = {"type":"boolean"} | .required += ["missingQueryTimings"]' "$SCHEMA_PATH")
     echo "json=$EXTENDED" >> "$GITHUB_OUTPUT"
 ```
 
 Keep extensions narrow - the canonical schema stays the source of truth for the violations array shared across all reviewers.
+
+> [!WARNING]
+> Do **not** consume `schema_json` from a shell step via `echo "${{ steps.toolkit.outputs.schema_json }}"`. GitHub Actions interpolates the expression before bash parses the line, and the schema's inner `"` characters terminate the surrounding shell string - `jq` then sees mangled input and exits with a parse error. Use the `schema_path` form above for any `jq`/shell manipulation; reserve `schema_json` for the single-quoted `claude_args:` form shown in [Usage](#usage), where the action's argv parser handles it correctly.
