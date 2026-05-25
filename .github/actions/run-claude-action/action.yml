@@ -1,0 +1,47 @@
+name: 'Run Claude Code Action'
+description: 'Pins anthropics/claude-code-action to a centralised SHA with the defaults used across Expensify client repos.'
+inputs:
+  anthropic_api_key:
+    description: 'Anthropic API key. Pass via secret from the caller workflow.'
+    required: true
+  github_token:
+    description: 'GitHub token used by claude-code-action for repo interactions.'
+    required: true
+  prompt:
+    description: 'Prompt passed to Claude (typically a slash command plus PR context).'
+    required: true
+  model:
+    description: 'Model passed via --model in claude_args. Defaults to claude-opus-4-6.'
+    required: false
+    default: 'claude-opus-4-6'
+  claude_args:
+    description: 'Additional arguments appended to the default claude_args (e.g. --allowedTools, --json-schema). Caller-specific, varies per invocation.'
+    required: false
+    default: ''
+  allowed_non_write_users:
+    description: 'Passthrough to claude-code-action allowed_non_write_users. Defaults to "*".'
+    required: false
+    default: '*'
+  display_report:
+    description: 'Passthrough to claude-code-action display_report. Defaults to "true".'
+    required: false
+    default: 'true'
+outputs:
+  structured_output:
+    description: 'Passthrough of the structured_output produced by claude-code-action.'
+    value: ${{ steps.claude.outputs.structured_output }}
+runs:
+  using: 'composite'
+  steps:
+    - name: Run Claude Code
+      id: claude
+      uses: anthropics/claude-code-action@ba026a3e56b9f646ae3b1be02dd9c0812aa2f8ae # v1.0.86
+      with:
+        anthropic_api_key: ${{ inputs.anthropic_api_key }}
+        github_token: ${{ inputs.github_token }}
+        prompt: ${{ inputs.prompt }}
+        allowed_non_write_users: ${{ inputs.allowed_non_write_users }}
+        display_report: ${{ inputs.display_report }}
+        claude_args: |
+          --model ${{ inputs.model }}
+          ${{ inputs.claude_args }}
