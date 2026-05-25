@@ -2,7 +2,7 @@
 
 Composite action that pins [`anthropics/claude-code-action`](https://github.com/anthropics/claude-code-action) to a single SHA shared across `Expensify/App`, `Expensify/Auth`, and `Expensify/Web-Expensify`. Bump the pin here once instead of editing every client `claude-review.yml`.
 
-The composite intentionally stays thin: it sets the common defaults (`display_report`, `allowed_non_write_users`, `--model`) and exposes the upstream `structured_output`. Caller-specific concerns - the `claude-review-toolkit` setup, the eyes-reaction lifecycle, the post-violations loop, and any schema extension - remain in the caller workflow.
+The composite intentionally stays thin: it sets the common defaults (`display_report`, `allowed_non_write_users`) and exposes the upstream `structured_output`. The model, allowed tools, and JSON schema vary per caller and live in `claude_args`. Caller-specific concerns - the `claude-review-toolkit` setup, the eyes-reaction lifecycle, the post-violations loop, and any schema extension - remain in the caller workflow.
 
 ## Usage
 
@@ -19,8 +19,11 @@ The composite intentionally stays thin: it sets the common defaults (`display_re
     github_token: ${{ secrets.GITHUB_TOKEN }}
     prompt: "/review-code-pr REPO: ${{ github.repository }} PR_NUMBER: ${{ github.event.pull_request.number }}"
     claude_args: |
+      --model claude-opus-4-6
       --allowedTools "Task,Glob,Grep,Read,Bash(gh pr diff:*),Bash(gh pr view:*)" --json-schema '${{ steps.toolkit.outputs.schema_json }}'
 ```
+
+If you omit `--model`, `claude-code-action` uses its own default (currently Sonnet). Pass `--model claude-opus-4-6` (or whichever model you want) explicitly to lock the choice.
 
 ## Inputs
 
@@ -29,8 +32,7 @@ The composite intentionally stays thin: it sets the common defaults (`display_re
 | `anthropic_api_key` | yes | - | Anthropic API key. Pass via a caller secret. |
 | `github_token` | yes | - | GitHub token used by `claude-code-action`. |
 | `prompt` | yes | - | Prompt passed to Claude. Typically the slash command plus PR context (`REPO:`, `PR_NUMBER:`). |
-| `model` | no | `claude-opus-4-6` | Model passed via `--model` in `claude_args`. |
-| `claude_args` | no | `''` | Caller-specific extra args appended after `--model` (e.g. `--allowedTools`, `--json-schema`). Tools and schemas vary per caller so they live here, not in the composite. |
+| `claude_args` | no | `''` | Forwarded verbatim to `claude-code-action.claude_args`. Put `--model`, `--allowedTools`, `--json-schema`, etc. here. Model selection lives caller-side because today's three client repos disagree (App: Opus; Auth/Web: CLI default). |
 | `allowed_non_write_users` | no | `*` | Passthrough to `claude-code-action`. |
 | `display_report` | no | `true` | Passthrough to `claude-code-action`. |
 

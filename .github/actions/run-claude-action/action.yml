@@ -10,12 +10,8 @@ inputs:
   prompt:
     description: 'Prompt passed to Claude (typically a slash command plus PR context).'
     required: true
-  model:
-    description: 'Model passed via --model in claude_args. Defaults to claude-opus-4-6.'
-    required: false
-    default: 'claude-opus-4-6'
   claude_args:
-    description: 'Additional arguments appended to the default claude_args (e.g. --allowedTools, --json-schema). Caller-specific, varies per invocation.'
+    description: 'Arguments forwarded to claude-code-action.claude_args (e.g. --model, --allowedTools, --json-schema). Pass --model X if you want a specific model; otherwise the underlying CLI default is used.'
     required: false
     default: ''
   allowed_non_write_users:
@@ -42,6 +38,4 @@ runs:
         prompt: ${{ inputs.prompt }}
         allowed_non_write_users: ${{ inputs.allowed_non_write_users }}
         display_report: ${{ inputs.display_report }}
-        claude_args: |
-          --model ${{ inputs.model }}
-          ${{ inputs.claude_args }}
+        claude_args: ${{ inputs.claude_args }}
