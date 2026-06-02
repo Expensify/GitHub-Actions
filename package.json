@@ -1,0 +1,17 @@
+{
+  "name": "@expensify/github-actions",
+  "private": true,
+  "scripts": {
+    "verify-peer-review": "tsx scripts/verifyPeerReview.ts"
+  },
+  "devDependencies": {
+    "@octokit/webhooks-types": "^7.6.1",
+    "@types/node": "^25.7.0",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3"
+  },
+  "dependencies": {
+    "@octokit/graphql": "^9.0.3",
+    "@octokit/rest": "^22.0.1"
+  }
+}
