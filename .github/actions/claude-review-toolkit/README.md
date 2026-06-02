@@ -44,6 +44,7 @@ Caller repos must ship a `.claude/skills/coding-standards/rules/` directory with
 | `addPrReaction.sh` | `<PR_NUMBER> <REACTION>` | Adds a reaction (`+1`, `-1`, `laugh`, `confused`, `heart`, `hooray`, `rocket`, `eyes`) to the PR. |
 | `removePrReaction.sh` | `<PR_NUMBER> <REACTION> <USER>` | Removes the matching reaction authored by `<USER>` (typically `github-actions[bot]`). Idempotent. |
 | `createInlineComment.sh` | `<PR_NUMBER> <path> <body> <line>` | Posts an inline review comment. Requires `GITHUB_REPOSITORY`, `GH_TOKEN`, and `ALLOWED_RULES_FILE` in env. The body must reference a rule tag matching `[A-Z]+(-[A-Z]+)*-[0-9]+` (e.g. `PERF-1`) that is present in the allowlist; otherwise the comment is rejected. |
+| `postCodeReviewResults.sh` | `<PR_NUMBER>` | Posts the result of a Claude code review. With no violations, adds a `+1` reaction to the PR; with violations, posts one inline comment per violation. Reads the JSON output from env `STRUCTURED_OUTPUT`. Requires `GH_TOKEN`, `GITHUB_REPOSITORY`, `ALLOWED_RULES_FILE`, and `STRUCTURED_OUTPUT` in env. Individual comment failures are swallowed so one rejected comment does not kill the loop. |
 | `extractAllowedRules.sh` | `<rules-dir> <output-file>` | Walks `<rules-dir>` for `.md` rule files and writes their `ruleId:` tags to `<output-file>`. Invoked automatically by the action; rarely called directly. |
 
 ## Schema extension
