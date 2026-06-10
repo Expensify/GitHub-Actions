@@ -2,7 +2,9 @@
   "name": "@expensify/github-actions",
   "private": true,
   "scripts": {
-    "verify-peer-review": "tsx scripts/verifyPeerReview.ts"
+    "verify-peer-review": "tsx scripts/verifyPeerReview.ts",
+    "test": "tsx --test tests/**/*.test.ts",
+    "test:peer-review": "tsx --test tests/peerReview/**/*.test.ts"
   },
   "devDependencies": {
     "@octokit/webhooks-types": "^7.6.1",
