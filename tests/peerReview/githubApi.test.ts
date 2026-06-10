@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it, afterEach } from "node:test";
 import { RequestError } from "@octokit/request-error";
-import GithubUtils from "../../libs/github/GithubUtils";
-import { getRequiredApprovingReviewCount } from "../../libs/peerReview/githubApi";
+import GitHubAPI from "../../libs/github/GitHubAPI";
+import PeerReviewGitHubApi from "../../libs/peerReview/githubApi";
 
 const context = {
   owner: "Expensify",
@@ -13,20 +13,20 @@ const context = {
 
 describe("getRequiredApprovingReviewCount", () => {
   afterEach(() => {
-    GithubUtils.internalOctokit = undefined;
-    GithubUtils.graphqlClient = undefined;
+    GitHubAPI.internalOctokit = undefined;
+    GitHubAPI.graphqlClient = undefined;
   });
 
   it("returns 0 when branch protection rule is missing", async () => {
-    GithubUtils.graphqlClient = (async () => ({
+    GitHubAPI.graphqlClient = (async () => ({
       repository: {
         ref: {
           branchProtectionRule: null,
         },
       },
-    })) as NonNullable<typeof GithubUtils.graphqlClient>;
+    })) as NonNullable<typeof GitHubAPI.graphqlClient>;
 
-    const count = await getRequiredApprovingReviewCount({
+    const count = await PeerReviewGitHubApi.getRequiredApprovingReviewCount({
       ...context,
       baseRef: "staging",
     });
@@ -34,7 +34,7 @@ describe("getRequiredApprovingReviewCount", () => {
   });
 
   it("throws on permission errors", async () => {
-    GithubUtils.graphqlClient = (async () => {
+    GitHubAPI.graphqlClient = (async () => {
       throw new RequestError("Resource not accessible by integration", 403, {
         request: {
           method: "POST",
@@ -42,10 +42,10 @@ describe("getRequiredApprovingReviewCount", () => {
           headers: {},
         },
       });
-    }) as typeof GithubUtils.graphqlClient;
+    }) as typeof GitHubAPI.graphqlClient;
 
     await assert.rejects(
-      () => getRequiredApprovingReviewCount(context),
+      () => PeerReviewGitHubApi.getRequiredApprovingReviewCount(context),
       /Unable to read branch protection rules/,
     );
   });

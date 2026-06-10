@@ -1,11 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import type { Commit } from "../../libs/peerReview/coAuthors";
-import {
-  coAuthorEmails,
-  getCommitAuthors,
-  resolveCoAuthorLogin,
-} from "../../libs/peerReview/coAuthors";
+import CoAuthors, { type Commit } from "../../libs/peerReview/coAuthors";
 
 function makeCommit(
   authorLogin: string | undefined,
@@ -24,14 +19,16 @@ function makeCommit(
 describe("resolveCoAuthorLogin", () => {
   it("parses standard noreply addresses", () => {
     assert.equal(
-      resolveCoAuthorLogin("AndrewGable@users.noreply.github.com"),
+      CoAuthors.resolveCoAuthorLogin("AndrewGable@users.noreply.github.com"),
       "AndrewGable",
     );
   });
 
   it("parses numeric noreply prefixes", () => {
     assert.equal(
-      resolveCoAuthorLogin("2838819+AndrewGable@users.noreply.github.com"),
+      CoAuthors.resolveCoAuthorLogin(
+        "2838819+AndrewGable@users.noreply.github.com",
+      ),
       "AndrewGable",
     );
   });
@@ -46,7 +43,7 @@ describe("coAuthorEmails", () => {
       "Co-authored-by: Monil Bhavsar <MonilBhavsar@users.noreply.github.com>",
     ].join("\n");
 
-    assert.deepEqual(coAuthorEmails(message), [
+    assert.deepEqual(CoAuthors.coAuthorEmails(message), [
       "AndrewGable@users.noreply.github.com",
       "MonilBhavsar@users.noreply.github.com",
     ]);
@@ -55,7 +52,7 @@ describe("coAuthorEmails", () => {
 
 describe("getCommitAuthors", () => {
   it("counts co-authors for bot-authored commits", () => {
-    const result = getCommitAuthors([
+    const result = CoAuthors.getCommitAuthors([
       makeCommit(
         "MelvinBot",
         undefined,
@@ -68,7 +65,7 @@ describe("getCommitAuthors", () => {
   });
 
   it("ignores co-authors when canonical author is human", () => {
-    const result = getCommitAuthors([
+    const result = CoAuthors.getCommitAuthors([
       makeCommit(
         "rafecolton",
         undefined,
@@ -80,7 +77,7 @@ describe("getCommitAuthors", () => {
   });
 
   it("falls back to commit author name when github login is missing", () => {
-    const result = getCommitAuthors([
+    const result = CoAuthors.getCommitAuthors([
       makeCommit(undefined, "AndrewGable", "Change"),
     ]);
 
@@ -88,7 +85,7 @@ describe("getCommitAuthors", () => {
   });
 
   it("normalizes expensify email casing and whitespace for unresolved detection", () => {
-    const result = getCommitAuthors([
+    const result = CoAuthors.getCommitAuthors([
       makeCommit(
         "MelvinBot",
         undefined,
@@ -102,7 +99,7 @@ describe("getCommitAuthors", () => {
   });
 
   it("collects unresolved expensify co-author emails", () => {
-    const result = getCommitAuthors([
+    const result = CoAuthors.getCommitAuthors([
       makeCommit(
         "MelvinBot",
         undefined,

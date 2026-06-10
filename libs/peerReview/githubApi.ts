@@ -1,9 +1,9 @@
 import { RequestError } from "@octokit/request-error";
-import { EXPENSIFY_EMPLOYEE_TEAM_SLUG, EXPENSIFY_ORG } from "../github/CONST";
-import GithubUtils from "../github/GithubUtils";
-import { DEFAULT_REQUIRED_APPROVING_REVIEW_COUNT } from "./policy";
+import CONST from "../github/CONST";
+import GitHubAPI from "../github/GitHubAPI";
+import Policy from "./policy";
 import type { PullRequestContext } from "./types";
-import { unique } from "./workflowOutput";
+import WorkflowOutput from "./workflowOutput";
 
 type BranchProtectionResponse = {
   repository: {
@@ -77,13 +77,13 @@ function isPermissionError(error: unknown): boolean {
   );
 }
 
-export async function getRequiredApprovingReviewCount({
+async function getRequiredApprovingReviewCount({
   owner,
   repo,
   baseRef,
 }: PullRequestContext): Promise<number> {
   try {
-    const response = await GithubUtils.graphql<BranchProtectionResponse>(
+    const response = await GitHubAPI.graphql<BranchProtectionResponse>(
       `
             query RequiredApprovingReviewCount($owner: String!, $repo: String!, $branchRef: String!) {
                 repository(owner: $owner, name: $repo) {
@@ -115,18 +115,18 @@ export async function getRequiredApprovingReviewCount({
 
     const message = error instanceof Error ? error.message : String(error);
     console.log(
-      `${owner}/${repo}@${baseRef} did not return a branch protection review count (${message}); requiring ${DEFAULT_REQUIRED_APPROVING_REVIEW_COUNT} independent approval(s).`,
+      `${owner}/${repo}@${baseRef} did not return a branch protection review count (${message}); requiring ${Policy.DEFAULT_REQUIRED_APPROVING_REVIEW_COUNT} independent approval(s).`,
     );
-    return DEFAULT_REQUIRED_APPROVING_REVIEW_COUNT;
+    return Policy.DEFAULT_REQUIRED_APPROVING_REVIEW_COUNT;
   }
 }
 
-export async function getLatestApprovers({
+async function getLatestApprovers({
   owner,
   repo,
   number,
 }: PullRequestContext): Promise<string[]> {
-  const response = await GithubUtils.graphql<LatestOpinionatedReviewsResponse>(
+  const response = await GitHubAPI.graphql<LatestOpinionatedReviewsResponse>(
     `
         query LatestOpinionatedReviews($owner: String!, $repo: String!, $prNumber: Int!) {
             repository(owner: $owner, name: $repo) {
@@ -152,7 +152,7 @@ export async function getLatestApprovers({
 
   const reviews: OpinionatedReviewNode[] =
     response.repository?.pullRequest?.latestOpinionatedReviews.nodes ?? [];
-  return unique(
+  return WorkflowOutput.unique(
     reviews
       .filter((review) => review.state === "APPROVED")
       .map((review) => review.author?.login ?? "")
@@ -160,13 +160,13 @@ export async function getLatestApprovers({
   );
 }
 
-export async function getEmployeeLogins(): Promise<Set<string>> {
+async function getEmployeeLogins(): Promise<Set<string>> {
   const employeeLogins = new Set<string>();
   let cursor: string | null = null;
 
   do {
     const response: TeamMembersResponse =
-      await GithubUtils.graphql<TeamMembersResponse>(
+      await GitHubAPI.graphql<TeamMembersResponse>(
         `
             query TeamMembers($organization: String!, $teamSlug: String!, $cursor: String) {
                 organization(login: $organization) {
@@ -185,8 +185,8 @@ export async function getEmployeeLogins(): Promise<Set<string>> {
             }
         `,
         {
-          organization: EXPENSIFY_ORG,
-          teamSlug: EXPENSIFY_EMPLOYEE_TEAM_SLUG,
+          organization: CONST.EXPENSIFY_ORG,
+          teamSlug: CONST.EXPENSIFY_EMPLOYEE_TEAM_SLUG,
           cursor,
         },
       );
@@ -194,7 +194,7 @@ export async function getEmployeeLogins(): Promise<Set<string>> {
     const members = response.organization?.team?.members;
     if (!members) {
       throw new Error(
-        `${EXPENSIFY_ORG}/${EXPENSIFY_EMPLOYEE_TEAM_SLUG} team could not be found.`,
+        `${CONST.EXPENSIFY_ORG}/${CONST.EXPENSIFY_EMPLOYEE_TEAM_SLUG} team could not be found.`,
       );
     }
 
@@ -208,11 +208,18 @@ export async function getEmployeeLogins(): Promise<Set<string>> {
   return employeeLogins;
 }
 
-export async function listPullRequestCommits(context: PullRequestContext) {
-  return GithubUtils.paginate(GithubUtils.octokit.pulls.listCommits, {
+async function listPullRequestCommits(context: PullRequestContext) {
+  return GitHubAPI.paginate(GitHubAPI.octokit.pulls.listCommits, {
     owner: context.owner,
     repo: context.repo,
     pull_number: context.number,
     per_page: 100,
   });
 }
+
+export default {
+  getEmployeeLogins,
+  getLatestApprovers,
+  getRequiredApprovingReviewCount,
+  listPullRequestCommits,
+};

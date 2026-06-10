@@ -1,11 +1,11 @@
-export type PullRequestContext = {
+type PullRequestContext = {
   owner: string;
   repo: string;
   number: number;
   baseRef: string;
 };
 
-export type PeerReviewInput = {
+type PeerReviewInput = {
   owner: string;
   repo: string;
   number: number;
@@ -17,7 +17,9 @@ export type PeerReviewInput = {
   employeeLogins: Set<string>;
 };
 
-export type PeerReviewResult =
+type PeerReviewResult =
   | { status: "pass"; reason: string }
   | { status: "skip"; reason: string }
   | { status: "fail"; error: Error };
+
+export type { PeerReviewInput, PeerReviewResult, PullRequestContext };

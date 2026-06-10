@@ -1,10 +1,10 @@
-import { BOT_USERS } from "../github/CONST";
-import { formatUsers } from "./workflowOutput";
+import CONST from "../github/CONST";
+import WorkflowOutput from "./workflowOutput";
 import type { PeerReviewInput, PeerReviewResult } from "./types";
 
-export const DEFAULT_REQUIRED_APPROVING_REVIEW_COUNT = 1;
+const DEFAULT_REQUIRED_APPROVING_REVIEW_COUNT = 1;
 
-export function getIndependentEmployeeApprovers(
+function getIndependentEmployeeApprovers(
   approvers: string[],
   authors: string[],
   employeeLogins: Set<string>,
@@ -15,7 +15,7 @@ export function getIndependentEmployeeApprovers(
   );
 }
 
-export function evaluatePeerReview(input: PeerReviewInput): PeerReviewResult {
+function evaluatePeerReview(input: PeerReviewInput): PeerReviewResult {
   const {
     owner,
     repo,
@@ -46,12 +46,12 @@ export function evaluatePeerReview(input: PeerReviewInput): PeerReviewResult {
     return {
       status: "fail",
       error: new Error(
-        `Unable to resolve Expensify co-author emails to GitHub users: ${formatUsers(unresolvedExpensifyCoAuthors)}`,
+        `Unable to resolve Expensify co-author emails to GitHub users: ${WorkflowOutput.formatUsers(unresolvedExpensifyCoAuthors)}`,
       ),
     };
   }
 
-  if (authors.every((author) => BOT_USERS.has(author))) {
+  if (authors.every((author) => CONST.BOT_USERS.has(author))) {
     return {
       status: "fail",
       error: new Error(
@@ -72,9 +72,9 @@ export function evaluatePeerReview(input: PeerReviewInput): PeerReviewResult {
         [
           `${owner}/${repo}#${number} does not have enough independent Expensify employee approvals.`,
           `Required independent approvals: ${requiredApprovingReviewCount}`,
-          `Commit authors/co-authors: ${formatUsers(authors)}`,
-          `Approvers: ${formatUsers(approvers)}`,
-          `Independent employee approvers: ${formatUsers(independentEmployeeApprovers)}`,
+          `Commit authors/co-authors: ${WorkflowOutput.formatUsers(authors)}`,
+          `Approvers: ${WorkflowOutput.formatUsers(approvers)}`,
+          `Independent employee approvers: ${WorkflowOutput.formatUsers(independentEmployeeApprovers)}`,
         ].join("\n"),
       ),
     };
@@ -85,3 +85,9 @@ export function evaluatePeerReview(input: PeerReviewInput): PeerReviewResult {
     reason: `${owner}/${repo}#${number} has ${independentEmployeeApprovers.length} independent Expensify employee approval(s).`,
   };
 }
+
+export default {
+  DEFAULT_REQUIRED_APPROVING_REVIEW_COUNT,
+  evaluatePeerReview,
+  getIndependentEmployeeApprovers,
+};

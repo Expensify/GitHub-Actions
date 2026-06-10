@@ -1,9 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import {
-  evaluatePeerReview,
-  getIndependentEmployeeApprovers,
-} from "../../libs/peerReview/policy";
+import Policy from "../../libs/peerReview/policy";
 import type { PeerReviewInput } from "../../libs/peerReview/types";
 
 const baseInput: PeerReviewInput = {
@@ -20,7 +17,7 @@ const baseInput: PeerReviewInput = {
 
 describe("getIndependentEmployeeApprovers", () => {
   it("excludes commit authors and non-employees", () => {
-    const independent = getIndependentEmployeeApprovers(
+    const independent = Policy.getIndependentEmployeeApprovers(
       ["AndrewGable", "MonilBhavsar", "externalCollab"],
       ["AndrewGable"],
       new Set(["AndrewGable", "MonilBhavsar"]),
@@ -32,7 +29,7 @@ describe("getIndependentEmployeeApprovers", () => {
 
 describe("evaluatePeerReview", () => {
   it("skips when branch requires no approving reviews", () => {
-    const result = evaluatePeerReview({
+    const result = Policy.evaluatePeerReview({
       ...baseInput,
       requiredApprovingReviewCount: 0,
       approvers: ["AndrewGable"],
@@ -43,7 +40,7 @@ describe("evaluatePeerReview", () => {
   });
 
   it("skips when there are no approving reviews yet", () => {
-    const result = evaluatePeerReview({
+    const result = Policy.evaluatePeerReview({
       ...baseInput,
       approvers: [],
       authors: ["MelvinBot", "AndrewGable"],
@@ -53,7 +50,7 @@ describe("evaluatePeerReview", () => {
   });
 
   it("fails on self-review from commit co-author", () => {
-    const result = evaluatePeerReview({
+    const result = Policy.evaluatePeerReview({
       ...baseInput,
       approvers: ["AndrewGable"],
       authors: ["MelvinBot", "AndrewGable"],
@@ -67,7 +64,7 @@ describe("evaluatePeerReview", () => {
   });
 
   it("passes when an independent employee approves", () => {
-    const result = evaluatePeerReview({
+    const result = Policy.evaluatePeerReview({
       ...baseInput,
       approvers: ["MonilBhavsar", "AndrewGable"],
       authors: ["MelvinBot", "AndrewGable"],
@@ -77,7 +74,7 @@ describe("evaluatePeerReview", () => {
   });
 
   it("fails when independent approver count is below required", () => {
-    const result = evaluatePeerReview({
+    const result = Policy.evaluatePeerReview({
       ...baseInput,
       requiredApprovingReviewCount: 2,
       approvers: ["MonilBhavsar", "AndrewGable"],
@@ -88,7 +85,7 @@ describe("evaluatePeerReview", () => {
   });
 
   it("passes when independent approver count meets required", () => {
-    const result = evaluatePeerReview({
+    const result = Policy.evaluatePeerReview({
       ...baseInput,
       requiredApprovingReviewCount: 2,
       approvers: ["MonilBhavsar", "rafecolton"],
@@ -99,7 +96,7 @@ describe("evaluatePeerReview", () => {
   });
 
   it("fails when all authors are bots", () => {
-    const result = evaluatePeerReview({
+    const result = Policy.evaluatePeerReview({
       ...baseInput,
       approvers: ["AndrewGable"],
       authors: ["MelvinBot"],
@@ -113,7 +110,7 @@ describe("evaluatePeerReview", () => {
   });
 
   it("fails on unresolved expensify co-author emails", () => {
-    const result = evaluatePeerReview({
+    const result = Policy.evaluatePeerReview({
       ...baseInput,
       approvers: ["AndrewGable"],
       authors: ["MelvinBot"],

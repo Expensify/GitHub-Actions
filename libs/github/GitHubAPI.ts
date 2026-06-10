@@ -13,12 +13,12 @@ type InternalOctokit = InstanceType<typeof OctokitWithPlugins>;
 
 const OctokitWithPlugins = Octokit.plugin(throttling, paginateRest);
 
-class GithubUtils {
+class GitHubAPI {
   static internalOctokit: InternalOctokit | undefined;
 
   static graphqlClient: GraphqlQuery | undefined;
 
-  static initOctokitWithToken(token: string): void {
+  static initWithToken(token: string): void {
     this.internalOctokit = new OctokitWithPlugins({
       auth: token,
       throttle: {
@@ -50,18 +50,18 @@ class GithubUtils {
     }) as GraphqlQuery;
   }
 
-  static initOctokit(): void {
+  static init(): void {
     const token = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN;
     if (!token) {
       throw new Error("GITHUB_TOKEN or GH_TOKEN is required");
     }
 
-    this.initOctokitWithToken(token);
+    this.initWithToken(token);
   }
 
   static get octokit(): InternalOctokit["rest"] {
     if (!this.internalOctokit) {
-      this.initOctokit();
+      this.init();
     }
 
     return (this.internalOctokit as InternalOctokit).rest;
@@ -69,7 +69,7 @@ class GithubUtils {
 
   static get graphql(): GraphqlQuery {
     if (!this.graphqlClient) {
-      this.initOctokit();
+      this.init();
     }
 
     return this.graphqlClient as GraphqlQuery;
@@ -77,11 +77,11 @@ class GithubUtils {
 
   static get paginate(): PaginateInterface {
     if (!this.internalOctokit) {
-      this.initOctokit();
+      this.init();
     }
 
     return (this.internalOctokit as InternalOctokit).paginate;
   }
 }
 
-export default GithubUtils;
+export default GitHubAPI;

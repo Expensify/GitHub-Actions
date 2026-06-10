@@ -7,7 +7,7 @@ import type { PullRequestContext } from "./types";
 
 type PullRequestWebhookEvent = PullRequestEvent | PullRequestReviewEvent;
 
-export function getPullRequestContext(): PullRequestContext {
+function getPullRequestContext(): PullRequestContext {
   const eventPath = process.env.GITHUB_EVENT_PATH;
   if (!eventPath) {
     throw new Error("GITHUB_EVENT_PATH is required");
@@ -23,3 +23,7 @@ export function getPullRequestContext(): PullRequestContext {
     baseRef: event.pull_request.base.ref,
   };
 }
+
+export default {
+  getPullRequestContext,
+};

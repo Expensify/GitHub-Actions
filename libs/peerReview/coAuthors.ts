@@ -1,17 +1,17 @@
 import type { RestEndpointMethodTypes } from "@octokit/rest";
-import { BOT_USERS } from "../github/CONST";
-import { unique } from "./workflowOutput";
+import CONST from "../github/CONST";
+import WorkflowOutput from "./workflowOutput";
 
-export type Commit =
+type Commit =
   RestEndpointMethodTypes["pulls"]["listCommits"]["response"]["data"][number];
 
-export function coAuthorEmails(message: string): string[] {
+function coAuthorEmails(message: string): string[] {
   return [...message.matchAll(/^Co-authored-by:\s+.+<(.+)>$/gim)].map((match) =>
     match[1].trim(),
   );
 }
 
-export function resolveCoAuthorLogin(email: string): string | null {
+function resolveCoAuthorLogin(email: string): string | null {
   const normalizedEmail = email.trim();
   return (
     normalizedEmail.match(
@@ -34,7 +34,7 @@ function getCanonicalAuthorLogin(commit: Commit): string {
   return commit.commit.author?.name?.trim() ?? "";
 }
 
-export function getCommitAuthors(commits: Commit[]): {
+function getCommitAuthors(commits: Commit[]): {
   authors: string[];
   unresolvedExpensifyCoAuthors: string[];
 } {
@@ -49,7 +49,7 @@ export function getCommitAuthors(commits: Commit[]): {
 
     // Co-authorship between two humans from making and accepting a suggestion does not violate peer review.
     // Only parse co-authors when the canonical commit author is missing or is a bot.
-    if (canonicalAuthor && !BOT_USERS.has(canonicalAuthor)) {
+    if (canonicalAuthor && !CONST.BOT_USERS.has(canonicalAuthor)) {
       continue;
     }
 
@@ -65,7 +65,17 @@ export function getCommitAuthors(commits: Commit[]): {
   }
 
   return {
-    authors: unique([...authors]),
-    unresolvedExpensifyCoAuthors: unique([...unresolvedExpensifyCoAuthors]),
+    authors: WorkflowOutput.unique([...authors]),
+    unresolvedExpensifyCoAuthors: WorkflowOutput.unique([
+      ...unresolvedExpensifyCoAuthors,
+    ]),
   };
 }
+
+export type { Commit };
+
+export default {
+  coAuthorEmails,
+  getCommitAuthors,
+  resolveCoAuthorLogin,
+};

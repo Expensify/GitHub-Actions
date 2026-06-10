@@ -1,32 +1,28 @@
-import { getCommitAuthors } from "../libs/peerReview/coAuthors";
-import { getPullRequestContext } from "../libs/peerReview/eventContext";
-import {
-  getEmployeeLogins,
-  getLatestApprovers,
-  getRequiredApprovingReviewCount,
-  listPullRequestCommits,
-} from "../libs/peerReview/githubApi";
-import { evaluatePeerReview } from "../libs/peerReview/policy";
-import { emitFailure } from "../libs/peerReview/workflowOutput";
+import CoAuthors from "../libs/peerReview/coAuthors";
+import EventContext from "../libs/peerReview/eventContext";
+import PeerReviewGitHubApi from "../libs/peerReview/githubApi";
+import Policy from "../libs/peerReview/policy";
+import WorkflowOutput from "../libs/peerReview/workflowOutput";
 
-export async function main(): Promise<void> {
-  const context = getPullRequestContext();
+async function main(): Promise<void> {
+  const context = EventContext.getPullRequestContext();
   const { owner, repo, number, baseRef } = context;
 
   const [requiredApprovingReviewCount, approvers, commits] = await Promise.all([
-    getRequiredApprovingReviewCount(context),
-    getLatestApprovers(context),
-    listPullRequestCommits(context),
+    PeerReviewGitHubApi.getRequiredApprovingReviewCount(context),
+    PeerReviewGitHubApi.getLatestApprovers(context),
+    PeerReviewGitHubApi.listPullRequestCommits(context),
   ]);
 
-  const { authors, unresolvedExpensifyCoAuthors } = getCommitAuthors(commits);
+  const { authors, unresolvedExpensifyCoAuthors } =
+    CoAuthors.getCommitAuthors(commits);
 
   const employeeLogins =
     approvers.length > 0 && requiredApprovingReviewCount > 0
-      ? await getEmployeeLogins()
+      ? await PeerReviewGitHubApi.getEmployeeLogins()
       : new Set<string>();
 
-  const result = evaluatePeerReview({
+  const result = Policy.evaluatePeerReview({
     owner,
     repo,
     number,
@@ -46,6 +42,10 @@ export async function main(): Promise<void> {
   throw result.error;
 }
 
+export default {
+  main,
+};
+
 if (import.meta.main) {
-  main().catch(emitFailure);
+  main().catch(WorkflowOutput.emitFailure);
 }
