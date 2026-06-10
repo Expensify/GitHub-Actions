@@ -12,7 +12,11 @@
   },
   "dependencies": {
     "@octokit/graphql": "^9.0.3",
-    "@octokit/rest": "^22.0.1"
+    "@octokit/rest": "^22.0.1",
+    "@octokit/plugin-paginate-rest": "^14.0.0",
+    "@octokit/plugin-throttling": "^11.0.0",
+    "@octokit/request-error": "^7.0.0"
   },
-  "packageManager": "npm@11.13.0"
+  "packageManager": "npm@11.13.0",
+  "type": "module"
 }
