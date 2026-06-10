@@ -4,13 +4,14 @@
   "scripts": {
     "verify-peer-review": "tsx scripts/verifyPeerReview.ts",
     "test": "tsx --test tests/**/*.test.ts",
-    "test:peer-review": "tsx --test tests/peerReview/**/*.test.ts"
+    "test:peer-review": "tsx --test tests/peerReview/**/*.test.ts",
+    "typecheck": "tsgo --noEmit -p tsconfig.json"
   },
   "devDependencies": {
     "@octokit/webhooks-types": "^7.6.1",
     "@types/node": "^25.7.0",
-    "tsx": "^4.21.0",
-    "typescript": "^6.0.3"
+    "@typescript/native-preview": "beta",
+    "tsx": "^4.21.0"
   },
   "dependencies": {
     "@octokit/graphql": "^9.0.3",

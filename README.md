@@ -1,4 +1,4 @@
-# Expensify Shared GitHub Actions workflows 🔄 
+# Expensify Shared GitHub Actions workflows 🔄
 
 ## What is the repository used for?
 
@@ -18,7 +18,7 @@ jobs:
     with:
       # Repository name with owner. For example, Expensify/eslint-config-expensify
       # Required, String, default: ${{ github.repository }}
-      repository: ''
+      repository: ""
 
       # True if we should run npm run build for the package
       # Optional, Boolean, default: false
@@ -37,20 +37,58 @@ jobs:
     secrets: inherit
 ```
 
+### `typecheck.yml`
+
+Runs on pull requests that touch TypeScript or related config in this repository. Typechecking uses the TypeScript 7 beta native compiler (`tsgo`) via `@typescript/native-preview`.
+
+```bash
+cd GitHub-Actions
+nvm use
+npm ci
+npm run typecheck
+```
+
+### `test.yml`
+
+Runs unit tests on pull requests that touch TypeScript or related config in this repository.
+
+```bash
+cd GitHub-Actions
+nvm use
+npm ci
+npm test
+```
+
 ### `verifyPeerReview.yml`
 
 Used as an org-level ruleset workflow to block pull requests that do not have enough independent Expensify employee approvals. The check only reads GitHub pull request metadata; it does not checkout or execute code from the pull request branch.
 
-This workflow requires a GitHub App token with read access for repository metadata, pull requests, and organization members. It uses the Melvin Bot app ID `179547` and `MELVIN_APP_PRIVATE_KEY` to generate that token. If GitHub does not return a branch-protection review count, the workflow defaults to requiring one independent approval, so the ruleset should target only the intended protected branches.
+This workflow requires a GitHub App token with read access for repository metadata, pull requests, organization members, and branch administration. It uses the Peer Review Checker app ID `3877737` and the org secret `PEER_REVIEW_CHECKER_PRIVATE_KEY` to generate that token.
+
+The workflow runs on `pull_request` and `pull_request_review` (`submitted`, `dismissed`) so the check re-evaluates when reviews change without a new push. Org rulesets may only trigger default `pull_request` activity types; `pull_request_review` support under rulesets depends on GitHub's ruleset event coverage.
+
+If branch protection cannot be read due to missing permissions, the check fails. If the target branch has no branch-protection review requirement, the check skips. If branch protection cannot be queried due to a transient API error, the script defaults to requiring one independent approval.
+
+#### Local development
+
+```bash
+cd GitHub-Actions
+nvm use
+npm ci
+npm test
+```
+
+Smoke-test against a real pull request by pointing `GITHUB_EVENT_PATH` at a `pull_request` or `pull_request_review` webhook payload JSON file and setting `GITHUB_TOKEN` (or `GH_TOKEN`) to a token with the same read permissions as the Peer Review Checker app.
 
 ## Rulesets
+
 GitHub [org-level rulesets](https://docs.github.com/en/enterprise-cloud@latest/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets#require-workflows-to-pass-before-merging) can be configured to run a workflow check against pull requests in all repos in the org. This is a very powerful feature, but there are some caveats and best practices to be aware of when enabling a ruleset.
 
 - Supported Event Triggers are documented [here](https://docs.github.com/en/enterprise-cloud@latest/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets#supported-event-triggers). However:
-    - When a workflow runs in response to a ruleset, some configs such as `branches`, `paths`, `paths-ignore`, that would normally be valid in a workflow are ignored.
-    - The default activity types for each event will be used. This means that something like `pull_request:comment` will not work - the `pull_request` event will always be triggered for the default activity types listed in the documentation.
-    - If you need to target or exclude specific branches, that can be configured in the ruleset settings.
-    - If you need to target or exclude specific paths, that must be implemented manually in the workflow itself.
+  - When a workflow runs in response to a ruleset, some configs such as `branches`, `paths`, `paths-ignore`, that would normally be valid in a workflow are ignored.
+  - The default activity types for each event will be used. This means that something like `pull_request:comment` will not work - the `pull_request` event will always be triggered for the default activity types listed in the documentation.
+  - If you need to target or exclude specific branches, that can be configured in the ruleset settings.
+  - If you need to target or exclude specific paths, that must be implemented manually in the workflow itself.
 - Due to a GitHub :bug:, PRs that are open when the rule is enabled will get stuck with a pending check that will never get picked up. The easiest way to fix that is to close and reopen the PR. Consider writing a script to close and reopen all open PRs across the org after the check is enabled.
 - It is less disruptive to [configure the ruleset to `Evaluate` first](https://docs.github.com/en/enterprise-cloud@latest/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets#using-evaluate-mode-for-ruleset-workflows), then `Active` once the kinks are worked out.
 - For `verifyPeerReview.yml`, start with a ruleset targeting only a test branch, then test the workflow from a GitHub-Actions branch, then from `main`, and only then enable it for the intended repositories and branches.
