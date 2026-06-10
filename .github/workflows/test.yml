@@ -13,7 +13,6 @@ on:
 
 jobs:
   test:
-    if: ${{ github.actor != 'OSBotify' }}
     runs-on: blacksmith-2vcpu-ubuntu-2404
     steps:
       - name: Checkout
