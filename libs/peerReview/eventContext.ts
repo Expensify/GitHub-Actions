@@ -1,6 +1,11 @@
 import { readFileSync } from "node:fs";
-import type { PullRequestEvent } from "@octokit/webhooks-types";
+import type {
+  PullRequestEvent,
+  PullRequestReviewEvent,
+} from "@octokit/webhooks-types";
 import type { PullRequestContext } from "./types";
+
+type PullRequestWebhookEvent = PullRequestEvent | PullRequestReviewEvent;
 
 export function getPullRequestContext(): PullRequestContext {
   const eventPath = process.env.GITHUB_EVENT_PATH;
@@ -8,7 +13,9 @@ export function getPullRequestContext(): PullRequestContext {
     throw new Error("GITHUB_EVENT_PATH is required");
   }
 
-  const event = JSON.parse(readFileSync(eventPath, "utf8")) as PullRequestEvent;
+  const event = JSON.parse(
+    readFileSync(eventPath, "utf8"),
+  ) as PullRequestWebhookEvent;
   return {
     owner: event.repository.owner.login,
     repo: event.repository.name,

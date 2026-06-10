@@ -1,3 +1,4 @@
+import { RequestError } from "@octokit/request-error";
 import { EXPENSIFY_EMPLOYEE_TEAM_SLUG, EXPENSIFY_ORG } from "../github/CONST";
 import GithubUtils from "../github/GithubUtils";
 import { DEFAULT_REQUIRED_APPROVING_REVIEW_COUNT } from "./policy";
@@ -14,16 +15,18 @@ type BranchProtectionResponse = {
   } | null;
 };
 
+type OpinionatedReviewNode = {
+  state: string;
+  author: {
+    login: string;
+  } | null;
+};
+
 type LatestOpinionatedReviewsResponse = {
   repository: {
     pullRequest: {
       latestOpinionatedReviews: {
-        nodes: Array<{
-          state: string;
-          author: {
-            login: string;
-          } | null;
-        }>;
+        nodes: OpinionatedReviewNode[];
       };
     } | null;
   } | null;
@@ -44,6 +47,35 @@ type TeamMembersResponse = {
     } | null;
   } | null;
 };
+
+type GraphQLErrorResponse = {
+  errors?: Array<{
+    type?: string;
+    message?: string;
+  }>;
+};
+
+function isPermissionError(error: unknown): boolean {
+  if (error instanceof RequestError) {
+    return error.status === 401 || error.status === 403;
+  }
+
+  if (typeof error === "object" && error !== null && "errors" in error) {
+    const { errors } = error as GraphQLErrorResponse;
+    return (
+      errors?.some(
+        (graphQLError) =>
+          graphQLError.type === "FORBIDDEN" ||
+          graphQLError.type === "INSUFFICIENT_SCOPES",
+      ) ?? false
+    );
+  }
+
+  const message = error instanceof Error ? error.message : String(error);
+  return /resource not accessible by integration|must have admin access|insufficient scopes|permission denied/i.test(
+    message,
+  );
+}
 
 export async function getRequiredApprovingReviewCount({
   owner,
@@ -75,6 +107,12 @@ export async function getRequiredApprovingReviewCount({
         ?.requiredApprovingReviewCount ?? 0
     );
   } catch (error: unknown) {
+    if (isPermissionError(error)) {
+      throw new Error(
+        `Unable to read branch protection rules for ${owner}/${repo}@${baseRef}. Ensure the GitHub App has administration:read permission.`,
+      );
+    }
+
     const message = error instanceof Error ? error.message : String(error);
     console.log(
       `${owner}/${repo}@${baseRef} did not return a branch protection review count (${message}); requiring ${DEFAULT_REQUIRED_APPROVING_REVIEW_COUNT} independent approval(s).`,
@@ -112,11 +150,13 @@ export async function getLatestApprovers({
     },
   );
 
+  const reviews: OpinionatedReviewNode[] =
+    response.repository?.pullRequest?.latestOpinionatedReviews.nodes ?? [];
   return unique(
-    response.repository?.pullRequest?.latestOpinionatedReviews.nodes
+    reviews
       .filter((review) => review.state === "APPROVED")
       .map((review) => review.author?.login ?? "")
-      .filter((login) => login !== "") ?? [],
+      .filter((login) => login !== ""),
   );
 }
 

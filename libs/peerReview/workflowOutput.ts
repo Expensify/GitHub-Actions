@@ -32,6 +32,9 @@ export function getFailureTitle(message: string): string {
   if (message.includes("has no human commit authors or co-authors")) {
     return "No human commit author";
   }
+  if (message.includes("Unable to read branch protection rules")) {
+    return "Branch protection lookup failed";
+  }
   return "Peer review verification failed";
 }
 
