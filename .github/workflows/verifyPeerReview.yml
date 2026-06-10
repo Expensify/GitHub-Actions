@@ -37,9 +37,13 @@ jobs:
         id: repo
         uses: Expensify/GitHub-Actions/checkoutRepoAndGitHubActions@main
 
-      # v4.3.0
+      # v6.1.0
       - name: Setup Node
-        uses: actions/setup-node@cdca7365b2dadb8aad0a33bc7601856ffabcc48e
+        uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f
+        with:
+          node-version-file: GitHub-Actions/.nvmrc
+          cache: npm
+          cache-dependency-path: GitHub-Actions/package-lock.json
 
       - name: Install npm packages
         run: npm ci

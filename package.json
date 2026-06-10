@@ -13,5 +13,6 @@
   "dependencies": {
     "@octokit/graphql": "^9.0.3",
     "@octokit/rest": "^22.0.1"
-  }
+  },
+  "packageManager": "npm@11.13.0"
 }
