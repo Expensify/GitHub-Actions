@@ -6,7 +6,10 @@
 name: Verify peer review
 run-name: Verify peer review for ${{ github.repository }}#${{ github.event.pull_request.number }}
 
-on: pull_request
+on:
+  pull_request:
+  pull_request_review:
+    types: [submitted, dismissed]
 
 permissions:
   contents: read
@@ -22,12 +25,13 @@ jobs:
         id: generateAppToken
         uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3
         with:
-          app-id: '179547'
-          private-key: ${{ secrets.MELVIN_APP_PRIVATE_KEY }}
+          app-id: "3877737"
+          private-key: ${{ secrets.PEER_REVIEW_CHECKER_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
           repositories: |
             ${{ github.event.repository.name }}
             GitHub-Actions
+          permission-administration: read
           permission-contents: read
           permission-members: read
           permission-metadata: read
