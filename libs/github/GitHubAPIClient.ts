@@ -13,7 +13,7 @@ type InternalOctokit = InstanceType<typeof OctokitWithPlugins>;
 
 const OctokitWithPlugins = Octokit.plugin(throttling, paginateRest);
 
-class GitHubAPI {
+class GitHubAPIClient {
   static internalOctokit: InternalOctokit | undefined;
 
   static graphqlClient: GraphqlQuery | undefined;
@@ -84,4 +84,4 @@ class GitHubAPI {
   }
 }
 
-export default GitHubAPI;
+export default GitHubAPIClient;

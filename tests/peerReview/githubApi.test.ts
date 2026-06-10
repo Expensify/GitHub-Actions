@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it, afterEach } from "node:test";
 import { RequestError } from "@octokit/request-error";
-import GitHubAPI from "../../libs/github/GitHubAPI";
+import GitHubAPIClient from "../../libs/github/GitHubAPIClient";
 import PeerReviewGitHubApi from "../../libs/peerReview/githubApi";
 
 const context = {
@@ -13,18 +13,18 @@ const context = {
 
 describe("getRequiredApprovingReviewCount", () => {
   afterEach(() => {
-    GitHubAPI.internalOctokit = undefined;
-    GitHubAPI.graphqlClient = undefined;
+    GitHubAPIClient.internalOctokit = undefined;
+    GitHubAPIClient.graphqlClient = undefined;
   });
 
   it("returns 0 when branch protection rule is missing", async () => {
-    GitHubAPI.graphqlClient = (async () => ({
+    GitHubAPIClient.graphqlClient = (async () => ({
       repository: {
         ref: {
           branchProtectionRule: null,
         },
       },
-    })) as NonNullable<typeof GitHubAPI.graphqlClient>;
+    })) as NonNullable<typeof GitHubAPIClient.graphqlClient>;
 
     const count = await PeerReviewGitHubApi.getRequiredApprovingReviewCount({
       ...context,
@@ -34,7 +34,7 @@ describe("getRequiredApprovingReviewCount", () => {
   });
 
   it("throws on permission errors", async () => {
-    GitHubAPI.graphqlClient = (async () => {
+    GitHubAPIClient.graphqlClient = (async () => {
       throw new RequestError("Resource not accessible by integration", 403, {
         request: {
           method: "POST",
@@ -42,7 +42,7 @@ describe("getRequiredApprovingReviewCount", () => {
           headers: {},
         },
       });
-    }) as typeof GitHubAPI.graphqlClient;
+    }) as typeof GitHubAPIClient.graphqlClient;
 
     await assert.rejects(
       () => PeerReviewGitHubApi.getRequiredApprovingReviewCount(context),

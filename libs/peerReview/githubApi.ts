@@ -1,6 +1,6 @@
 import { RequestError } from "@octokit/request-error";
 import CONST from "../github/CONST";
-import GitHubAPI from "../github/GitHubAPI";
+import GitHubAPIClient from "../github/GitHubAPIClient";
 import Policy from "./policy";
 import type { PullRequestContext } from "./types";
 import WorkflowOutput from "./workflowOutput";
@@ -83,7 +83,7 @@ async function getRequiredApprovingReviewCount({
   baseRef,
 }: PullRequestContext): Promise<number> {
   try {
-    const response = await GitHubAPI.graphql<BranchProtectionResponse>(
+    const response = await GitHubAPIClient.graphql<BranchProtectionResponse>(
       `
             query RequiredApprovingReviewCount($owner: String!, $repo: String!, $branchRef: String!) {
                 repository(owner: $owner, name: $repo) {
@@ -126,8 +126,9 @@ async function getLatestApprovers({
   repo,
   number,
 }: PullRequestContext): Promise<string[]> {
-  const response = await GitHubAPI.graphql<LatestOpinionatedReviewsResponse>(
-    `
+  const response =
+    await GitHubAPIClient.graphql<LatestOpinionatedReviewsResponse>(
+      `
         query LatestOpinionatedReviews($owner: String!, $repo: String!, $prNumber: Int!) {
             repository(owner: $owner, name: $repo) {
                 pullRequest(number: $prNumber) {
@@ -143,12 +144,12 @@ async function getLatestApprovers({
             }
         }
     `,
-    {
-      owner,
-      repo,
-      prNumber: number,
-    },
-  );
+      {
+        owner,
+        repo,
+        prNumber: number,
+      },
+    );
 
   const reviews: OpinionatedReviewNode[] =
     response.repository?.pullRequest?.latestOpinionatedReviews.nodes ?? [];
@@ -166,7 +167,7 @@ async function getEmployeeLogins(): Promise<Set<string>> {
 
   do {
     const response: TeamMembersResponse =
-      await GitHubAPI.graphql<TeamMembersResponse>(
+      await GitHubAPIClient.graphql<TeamMembersResponse>(
         `
             query TeamMembers($organization: String!, $teamSlug: String!, $cursor: String) {
                 organization(login: $organization) {
@@ -209,7 +210,7 @@ async function getEmployeeLogins(): Promise<Set<string>> {
 }
 
 async function listPullRequestCommits(context: PullRequestContext) {
-  return GitHubAPI.paginate(GitHubAPI.octokit.pulls.listCommits, {
+  return GitHubAPIClient.paginate(GitHubAPIClient.octokit.pulls.listCommits, {
     owner: context.owner,
     repo: context.repo,
     pull_number: context.number,
