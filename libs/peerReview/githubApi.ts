@@ -1,0 +1,178 @@
+import { EXPENSIFY_EMPLOYEE_TEAM_SLUG, EXPENSIFY_ORG } from "../github/CONST";
+import GithubUtils from "../github/GithubUtils";
+import { DEFAULT_REQUIRED_APPROVING_REVIEW_COUNT } from "./policy";
+import type { PullRequestContext } from "./types";
+import { unique } from "./workflowOutput";
+
+type BranchProtectionResponse = {
+  repository: {
+    ref: {
+      branchProtectionRule: {
+        requiredApprovingReviewCount: number;
+      } | null;
+    } | null;
+  } | null;
+};
+
+type LatestOpinionatedReviewsResponse = {
+  repository: {
+    pullRequest: {
+      latestOpinionatedReviews: {
+        nodes: Array<{
+          state: string;
+          author: {
+            login: string;
+          } | null;
+        }>;
+      };
+    } | null;
+  } | null;
+};
+
+type TeamMembersResponse = {
+  organization: {
+    team: {
+      members: {
+        pageInfo: {
+          hasNextPage: boolean;
+          endCursor: string | null;
+        };
+        nodes: Array<{
+          login: string;
+        }>;
+      };
+    } | null;
+  } | null;
+};
+
+export async function getRequiredApprovingReviewCount({
+  owner,
+  repo,
+  baseRef,
+}: PullRequestContext): Promise<number> {
+  try {
+    const response = await GithubUtils.graphql<BranchProtectionResponse>(
+      `
+            query RequiredApprovingReviewCount($owner: String!, $repo: String!, $branchRef: String!) {
+                repository(owner: $owner, name: $repo) {
+                    ref(qualifiedName: $branchRef) {
+                        branchProtectionRule {
+                            requiredApprovingReviewCount
+                        }
+                    }
+                }
+            }
+        `,
+      {
+        owner,
+        repo,
+        branchRef: `refs/heads/${baseRef}`,
+      },
+    );
+
+    return (
+      response.repository?.ref?.branchProtectionRule
+        ?.requiredApprovingReviewCount ?? 0
+    );
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.log(
+      `${owner}/${repo}@${baseRef} did not return a branch protection review count (${message}); requiring ${DEFAULT_REQUIRED_APPROVING_REVIEW_COUNT} independent approval(s).`,
+    );
+    return DEFAULT_REQUIRED_APPROVING_REVIEW_COUNT;
+  }
+}
+
+export async function getLatestApprovers({
+  owner,
+  repo,
+  number,
+}: PullRequestContext): Promise<string[]> {
+  const response = await GithubUtils.graphql<LatestOpinionatedReviewsResponse>(
+    `
+        query LatestOpinionatedReviews($owner: String!, $repo: String!, $prNumber: Int!) {
+            repository(owner: $owner, name: $repo) {
+                pullRequest(number: $prNumber) {
+                    latestOpinionatedReviews(last: 100, writersOnly: true) {
+                        nodes {
+                            state
+                            author {
+                                login
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    `,
+    {
+      owner,
+      repo,
+      prNumber: number,
+    },
+  );
+
+  return unique(
+    response.repository?.pullRequest?.latestOpinionatedReviews.nodes
+      .filter((review) => review.state === "APPROVED")
+      .map((review) => review.author?.login ?? "")
+      .filter((login) => login !== "") ?? [],
+  );
+}
+
+export async function getEmployeeLogins(): Promise<Set<string>> {
+  const employeeLogins = new Set<string>();
+  let cursor: string | null = null;
+
+  do {
+    const response: TeamMembersResponse =
+      await GithubUtils.graphql<TeamMembersResponse>(
+        `
+            query TeamMembers($organization: String!, $teamSlug: String!, $cursor: String) {
+                organization(login: $organization) {
+                    team(slug: $teamSlug) {
+                        members(first: 100, after: $cursor) {
+                            pageInfo {
+                                hasNextPage
+                                endCursor
+                            }
+                            nodes {
+                                login
+                            }
+                        }
+                    }
+                }
+            }
+        `,
+        {
+          organization: EXPENSIFY_ORG,
+          teamSlug: EXPENSIFY_EMPLOYEE_TEAM_SLUG,
+          cursor,
+        },
+      );
+
+    const members = response.organization?.team?.members;
+    if (!members) {
+      throw new Error(
+        `${EXPENSIFY_ORG}/${EXPENSIFY_EMPLOYEE_TEAM_SLUG} team could not be found.`,
+      );
+    }
+
+    for (const member of members.nodes) {
+      employeeLogins.add(member.login);
+    }
+
+    cursor = members.pageInfo.hasNextPage ? members.pageInfo.endCursor : null;
+  } while (cursor);
+
+  return employeeLogins;
+}
+
+export async function listPullRequestCommits(context: PullRequestContext) {
+  return GithubUtils.paginate(GithubUtils.octokit.pulls.listCommits, {
+    owner: context.owner,
+    repo: context.repo,
+    pull_number: context.number,
+    per_page: 100,
+  });
+}
