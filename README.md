@@ -71,14 +71,25 @@ If branch protection cannot be read due to missing permissions, the check fails.
 
 #### Local development
 
+This script depends on the shared `CLI` utility from [expensify-common#918](https://github.com/Expensify/expensify-common/pull/918), declared in `package.json` as a git dependency until that PR is published to npm. `postinstall` clones and builds `expensify-common` because git installs do not include the compiled `dist/` output.
+
 ```bash
 cd GitHub-Actions
 nvm use
 npm ci
 npm test
+npm run verify-peer-review -- --help
 ```
 
-Smoke-test against a real pull request by pointing `GITHUB_EVENT_PATH` at a `pull_request` or `pull_request_review` webhook payload JSON file and setting `GITHUB_TOKEN` (or `GH_TOKEN`) to a token with the same read permissions as the Peer Review Checker app.
+Smoke-test against a real pull request by passing the pull request metadata as CLI arguments and setting `GITHUB_TOKEN` (or `GH_TOKEN`) to a token with the same read permissions as the Peer Review Checker app:
+
+```bash
+GITHUB_TOKEN=... npm run verify-peer-review -- \
+  --owner Expensify \
+  --repo Auth \
+  --number 12345 \
+  --base-ref main
+```
 
 ## Rulesets
 

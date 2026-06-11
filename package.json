@@ -2,23 +2,24 @@
   "name": "@expensify/github-actions",
   "private": true,
   "scripts": {
+    "postinstall": "./scripts/prepareExpensifyCommon.sh",
     "verify-peer-review": "tsx scripts/verifyPeerReview.ts",
     "test": "tsx --test tests/**/*.test.ts",
     "test:peer-review": "tsx --test tests/peerReview/**/*.test.ts",
     "typecheck": "tsgo --noEmit -p tsconfig.json"
   },
   "devDependencies": {
-    "@octokit/webhooks-types": "^7.6.1",
     "@types/node": "^25.7.0",
     "@typescript/native-preview": "beta",
     "tsx": "^4.21.0"
   },
   "dependencies": {
     "@octokit/graphql": "^9.0.3",
-    "@octokit/rest": "^22.0.1",
     "@octokit/plugin-paginate-rest": "^14.0.0",
     "@octokit/plugin-throttling": "^11.0.0",
-    "@octokit/request-error": "^7.0.0"
+    "@octokit/request-error": "^7.0.0",
+    "@octokit/rest": "^22.0.1",
+    "expensify-common": "github:Expensify/expensify-common#e1d0216"
   },
   "packageManager": "npm@11.13.0",
   "type": "module"
