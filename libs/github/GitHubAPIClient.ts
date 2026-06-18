@@ -29,7 +29,7 @@ class GitHubAPIClient {
           );
 
           if (options.request.retryCount <= 5) {
-            console.log(`Retrying after ${retryAfter} seconds!`);
+            console.warn(`Retrying after ${retryAfter} seconds!`);
             return true;
           }
 
@@ -47,7 +47,7 @@ class GitHubAPIClient {
       headers: {
         authorization: `token ${token}`,
       },
-    }) as GraphqlQuery;
+    });
   }
 
   static init(): void {
@@ -59,28 +59,40 @@ class GitHubAPIClient {
     this.initWithToken(token);
   }
 
-  static get octokit(): InternalOctokit["rest"] {
+  private static ensureOctokit(): InternalOctokit {
     if (!this.internalOctokit) {
       this.init();
     }
 
-    return (this.internalOctokit as InternalOctokit).rest;
+    if (!this.internalOctokit) {
+      throw new Error("Failed to initialize GitHub API client");
+    }
+
+    return this.internalOctokit;
   }
 
-  static get graphql(): GraphqlQuery {
+  private static ensureGraphqlClient(): GraphqlQuery {
     if (!this.graphqlClient) {
       this.init();
     }
 
-    return this.graphqlClient as GraphqlQuery;
+    if (!this.graphqlClient) {
+      throw new Error("Failed to initialize GitHub GraphQL client");
+    }
+
+    return this.graphqlClient;
+  }
+
+  static get octokit(): InternalOctokit["rest"] {
+    return this.ensureOctokit().rest;
+  }
+
+  static get graphql(): GraphqlQuery {
+    return this.ensureGraphqlClient();
   }
 
   static get paginate(): PaginateInterface {
-    if (!this.internalOctokit) {
-      this.init();
-    }
-
-    return (this.internalOctokit as InternalOctokit).paginate;
+    return this.ensureOctokit().paginate;
   }
 }
 

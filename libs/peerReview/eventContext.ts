@@ -26,6 +26,7 @@ function getPullRequestContext(): PullRequestContext {
         description: "Pull request number",
         parse: parsePullRequestNumber,
       },
+      // eslint-disable-next-line @typescript-eslint/naming-convention -- expensify-common CLI uses kebab-case argument names
       "base-ref": {
         description: "Target branch ref for the pull request",
       },

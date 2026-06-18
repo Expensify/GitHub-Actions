@@ -48,6 +48,17 @@ npm ci
 npm run typecheck
 ```
 
+### `lint.yml`
+
+Runs ESLint on pull requests that touch TypeScript or related config in this repository. Linting uses `eslint-config-expensify`.
+
+```bash
+cd GitHub-Actions
+nvm use
+npm ci
+npm run lint
+```
+
 ### `test.yml`
 
 Runs unit tests on pull requests that touch TypeScript or related config in this repository.

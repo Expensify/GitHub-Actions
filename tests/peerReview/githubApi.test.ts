@@ -42,7 +42,7 @@ describe("getRequiredApprovingReviewCount", () => {
           headers: {},
         },
       });
-    }) as typeof GitHubAPIClient.graphqlClient;
+    });
 
     await assert.rejects(
       () => PeerReviewGitHubApi.getRequiredApprovingReviewCount(context),

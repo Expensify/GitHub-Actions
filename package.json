@@ -5,11 +5,14 @@
     "verify-peer-review": "tsx scripts/verifyPeerReview.ts",
     "test": "tsx --test tests/**/*.test.ts",
     "test:peer-review": "tsx --test tests/peerReview/**/*.test.ts",
-    "typecheck": "tsgo --noEmit -p tsconfig.json"
+    "typecheck": "tsgo --noEmit -p tsconfig.json",
+    "lint": "eslint libs scripts tests"
   },
   "devDependencies": {
     "@types/node": "^25.7.0",
     "@typescript/native-preview": "beta",
+    "eslint": "^9.39.4",
+    "eslint-config-expensify": "^4.0.5",
     "tsx": "^4.21.0"
   },
   "dependencies": {

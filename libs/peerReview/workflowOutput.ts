@@ -9,13 +9,13 @@ function unique(values: string[]): string[] {
 }
 
 function escapeWorkflowCommandValue(value: string): string {
-  return value.replace(/%/g, "%25").replace(/\r/g, "%0D").replace(/\n/g, "%0A");
+  return value.replaceAll('%', "%25").replaceAll('\r', "%0D").replaceAll('\n', "%0A");
 }
 
 function escapeWorkflowCommandProperty(value: string): string {
   return escapeWorkflowCommandValue(value)
-    .replace(/:/g, "%3A")
-    .replace(/,/g, "%2C");
+    .replaceAll(':', "%3A")
+    .replaceAll(',', "%2C");
 }
 
 function getFailureTitle(message: string): string {
@@ -45,7 +45,7 @@ function writeStepSummary(title: string, message: string): void {
   }
   appendFileSync(
     stepSummaryPath,
-    `## ${title}\n\n${message.replace(/\n/g, "\n\n")}\n`,
+    `## ${title}\n\n${message.replaceAll('\n', "\n\n")}\n`,
   );
 }
 

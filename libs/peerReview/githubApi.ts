@@ -55,13 +55,17 @@ type GraphQLErrorResponse = {
   }>;
 };
 
+function isGraphQLErrorResponse(error: unknown): error is GraphQLErrorResponse {
+  return typeof error === "object" && error !== null && "errors" in error;
+}
+
 function isPermissionError(error: unknown): boolean {
   if (error instanceof RequestError) {
     return error.status === 401 || error.status === 403;
   }
 
-  if (typeof error === "object" && error !== null && "errors" in error) {
-    const { errors } = error as GraphQLErrorResponse;
+  if (isGraphQLErrorResponse(error)) {
+    const { errors } = error;
     return (
       errors?.some(
         (graphQLError) =>
@@ -114,7 +118,7 @@ async function getRequiredApprovingReviewCount({
     }
 
     const message = error instanceof Error ? error.message : String(error);
-    console.log(
+    console.warn(
       `${owner}/${repo}@${baseRef} did not return a branch protection review count (${message}); requiring ${Policy.DEFAULT_REQUIRED_APPROVING_REVIEW_COUNT} independent approval(s).`,
     );
     return Policy.DEFAULT_REQUIRED_APPROVING_REVIEW_COUNT;
@@ -213,7 +217,9 @@ async function listPullRequestCommits(context: PullRequestContext) {
   return GitHubAPIClient.paginate(GitHubAPIClient.octokit.pulls.listCommits, {
     owner: context.owner,
     repo: context.repo,
+    // eslint-disable-next-line @typescript-eslint/naming-convention -- Octokit REST API uses snake_case parameters
     pull_number: context.number,
+    // eslint-disable-next-line @typescript-eslint/naming-convention -- Octokit REST API uses snake_case parameters
     per_page: 100,
   });
 }

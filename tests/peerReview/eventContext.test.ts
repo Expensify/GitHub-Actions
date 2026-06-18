@@ -12,7 +12,7 @@ describe("getPullRequestContext", () => {
     originalExit = process.exit;
     process.exit = ((code?: string | number | null) => {
       throw new Error(`exit ${code ?? 0}`);
-    }) as typeof process.exit;
+    });
   });
 
   afterEach(() => {
