@@ -1,0 +1,127 @@
+name: Publish Expensidev Image
+
+on:
+  workflow_call:
+    inputs:
+      image_name:
+        description: "Full GHCR image name (for example, ghcr.io/expensify/expensidev-php)"
+        required: true
+        type: string
+      dockerfile:
+        description: "Dockerfile path relative to the Expensidev repository root (for example, ci/docker/Dockerfile.php)"
+        required: true
+        type: string
+      concurrency_group:
+        description: "Concurrency group name used by the calling workflow"
+        required: true
+        type: string
+      extra_checkouts:
+        description: "JSON array of extra repository checkouts. Each object supports name, repository, ref, path, and optional submodules (boolean)."
+        required: false
+        type: string
+        default: "[]"
+
+env:
+  IMAGE_NAME: ${{ inputs.image_name }}
+  CHECKOUT_TOKEN: ${{ secrets.MELVIN_GH_TOKEN || secrets.CODE_EXPENSIFY_TOKEN || github.token }}
+
+jobs:
+  build:
+    name: Build ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: blacksmith-32vcpu-ubuntu-2404
+            platform: linux/amd64
+          - arch: arm64
+            runner: blacksmith-32vcpu-ubuntu-2404-arm
+            platform: linux/arm64
+    steps:
+      - name: Checkout Expensidev
+        uses: useblacksmith/checkout@c9796daa2a4bdebdab5bd16be2c09a70cd4e1121 # v1
+        with:
+          repository: Expensify/Expensidev
+          ref: main
+          token: ${{ env.CHECKOUT_TOKEN }}
+          path: Expensidev
+
+      - name: Checkout extra repositories
+        env:
+          EXTRA_CHECKOUTS: ${{ inputs.extra_checkouts }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "$EXTRA_CHECKOUTS" ] || [ "$EXTRA_CHECKOUTS" = "[]" ]; then
+            echo "No extra checkouts requested"
+            exit 0
+          fi
+
+          while IFS= read -r checkout; do
+            name=$(echo "$checkout" | jq -r '.name')
+            repository=$(echo "$checkout" | jq -r '.repository')
+            ref=$(echo "$checkout" | jq -r '.ref')
+            path=$(echo "$checkout" | jq -r '.path')
+            submodules=$(echo "$checkout" | jq -r '.submodules // false')
+
+            echo "Checking out ${name} (${repository}@${ref}) to ${path}"
+            mkdir -p "$(dirname "$path")"
+
+            clone_url="https://x-access-token:${CHECKOUT_TOKEN}@github.com/${repository}.git"
+            if [ "$submodules" = "true" ]; then
+              git clone --branch "$ref" --recursive "$clone_url" "$path"
+            else
+              git clone --branch "$ref" "$clone_url" "$path"
+            fi
+          done < <(echo "$EXTRA_CHECKOUTS" | jq -c '.[]')
+
+      - name: Setup Docker Builder
+        uses: useblacksmith/setup-docker-builder@33fed32c1ba8775f20366ec9e8d0cd9fe8fc1dd3 # v1.3.0
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ env.CHECKOUT_TOKEN }}
+
+      - name: Build and push image
+        uses: useblacksmith/build-push-action@30c71162f16ea2c27c3e21523255d209b8b538c1 # v2
+        with:
+          context: Expensidev
+          file: Expensidev/${{ inputs.dockerfile }}
+          push: true
+          provenance: false
+          platforms: ${{ matrix.platform }}
+          tags: ${{ env.IMAGE_NAME }}:latest-${{ matrix.arch }}
+
+  publish-manifest:
+    name: Publish multi-arch manifest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    needs: [build]
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Setup Docker Builder
+        uses: useblacksmith/setup-docker-builder@33fed32c1ba8775f20366ec9e8d0cd9fe8fc1dd3 # v1.3.0
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ env.CHECKOUT_TOKEN }}
+
+      - name: Publish latest manifest
+        run: |
+          docker buildx imagetools create \
+            --tag "${{ env.IMAGE_NAME }}:latest" \
+            "${{ env.IMAGE_NAME }}:latest-amd64" \
+            "${{ env.IMAGE_NAME }}:latest-arm64"
