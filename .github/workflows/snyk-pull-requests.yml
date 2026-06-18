@@ -1,0 +1,16 @@
+name: Review Snyk Pull Requests
+
+on:
+  workflow_call:
+
+jobs:
+  assign-pullerbear:
+    if: startsWith(github.head_ref, 'snyk-')
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    steps:
+      - name: Assign PullerBear for Snyk PR reviews
+        # v0.5
+        uses: nikosmoum/auto-assign-reviewer-team@c75b7f88a2b0ab0b6ca63ba5c49557256a32c6bb
+        with:
+          teamName: "pullerbear"
+          githubToken: ${{ secrets.MELVIN_GH_TOKEN }}
