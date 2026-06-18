@@ -1,0 +1,21 @@
+name: Set up Apt Mirror + Packages
+description: Set up Apt Mirror + Packages
+
+inputs:
+  APT_PASSWORD:
+    description: "The mirror password"
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Sets package mirrors to the sources
+      run: |
+        sudo install -o root -g root -m 644 "${{ github.action_path }}/aptly-public.gpg" /etc/apt/trusted.gpg.d/aptly.gpg
+        echo "deb [arch=amd64] https://travis:${{ inputs.APT_PASSWORD }}@apt-mirror.expensify.com:843/apt/production ubuntu-toolchain-noble main" | sudo tee -a /etc/apt/sources.list
+        echo "deb [arch=amd64] https://travis:${{ inputs.APT_PASSWORD }}@apt-mirror.expensify.com:843/apt/production php-ppa-noble main" | sudo tee -a /etc/apt/sources.list
+      shell: bash
+
+    - name: Install latest packages from our mirror
+      run: sudo apt-get update -y
+      shell: bash
