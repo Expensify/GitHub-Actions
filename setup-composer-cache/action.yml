@@ -1,0 +1,53 @@
+name: Set up Composer Cache
+description: Set up Composer download cache and optionally install dependencies
+
+inputs:
+  working_directory:
+    description: Directory containing composer.json and composer.lock
+    required: false
+    default: "."
+  dev:
+    description: Install dev packages when run_install is true
+    required: false
+    default: "false"
+  run_install:
+    description: Run composer install after restoring caches
+    required: false
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - name: Get composer cache directory
+      id: composer-cache
+      run: echo "dir=$(cd ${{ inputs.working_directory }} && composer config cache-files-dir)" >> $GITHUB_OUTPUT
+      shell: bash
+
+    # Composer's global download cache (zipped dist files). Keyed by composer.lock with
+    # restore-keys fallbacks so that when the lock changes (vendor cache below misses), we
+    # still warm-start from a previous run and only download the changed packages.
+    - name: Cache Composer Files
+      # v4.2.0
+      uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57
+      with:
+        path: ${{ steps.composer-cache.outputs.dir }}
+        key: ${{ runner.os }}-composer-${{ inputs.dev == 'true' && 'dev' || 'prod' }}-${{ hashFiles(inputs.working_directory == '.' && 'composer.lock' || format('{0}/composer.lock', inputs.working_directory)) }}
+        restore-keys: |
+          ${{ runner.os }}-composer-${{ inputs.dev == 'true' && 'dev' || 'prod' }}-
+          ${{ runner.os }}-composer-
+
+    # The installed vendor directory. Exact key only (no restore-keys) so a vendor built from
+    # a different composer.lock is never reused. On a hit, the composer install below is a
+    # near-instant no-op; on a miss it rebuilds vendor from the download cache above.
+    - name: Cache vendor directory
+      if: inputs.run_install == 'true'
+      # v4.2.0
+      uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57
+      with:
+        path: ${{ inputs.working_directory }}/vendor
+        key: ${{ runner.os }}-vendor-${{ inputs.dev == 'true' && 'dev' || 'prod' }}-${{ hashFiles(inputs.working_directory == '.' && 'composer.lock' || format('{0}/composer.lock', inputs.working_directory)) }}
+
+    - name: Composer install
+      if: inputs.run_install == 'true'
+      run: cd ${{ inputs.working_directory }} && composer install --prefer-dist --no-interaction ${{ inputs.dev == 'true' && '--dev' || '--no-dev'}}
+      shell: bash
