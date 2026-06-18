@@ -2,7 +2,6 @@
   "name": "@expensify/github-actions",
   "private": true,
   "scripts": {
-    "postinstall": "./scripts/prepareExpensifyCommon.sh",
     "verify-peer-review": "tsx scripts/verifyPeerReview.ts",
     "test": "tsx --test tests/**/*.test.ts",
     "test:peer-review": "tsx --test tests/peerReview/**/*.test.ts",
@@ -19,7 +18,7 @@
     "@octokit/plugin-throttling": "^11.0.0",
     "@octokit/request-error": "^7.0.0",
     "@octokit/rest": "^22.0.1",
-    "expensify-common": "github:Expensify/expensify-common#e1d0216"
+    "expensify-common": "2.0.184"
   },
   "packageManager": "npm@11.13.0",
   "type": "module"

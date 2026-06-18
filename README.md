@@ -71,7 +71,7 @@ If branch protection cannot be read due to missing permissions, the check fails.
 
 #### Local development
 
-This script depends on the shared `CLI` utility from [expensify-common#918](https://github.com/Expensify/expensify-common/pull/918), declared in `package.json` as a git dependency until that PR is published to npm. `postinstall` clones and builds `expensify-common` because git installs do not include the compiled `dist/` output.
+This script depends on the shared `CLI` utility from `expensify-common`.
 
 ```bash
 cd GitHub-Actions
