@@ -1,0 +1,76 @@
+name: Set up PHP cache
+description: Set up keyed caches for PHP CI runners
+
+inputs:
+  variant:
+    description: "Cache variant: full (bin, .cache, apt archives, gpg dirs, chmod) or lite (bin, .cache only)"
+    required: false
+    default: full
+
+runs:
+  using: composite
+  steps:
+    - name: Get Date for cache keying
+      id: get-date
+      run: |
+        echo "date=$(/bin/date -u "+%Y%m%d")" >> $GITHUB_OUTPUT
+      shell: bash
+
+    # Note this is important since system directories are root-owned, and the caching does not have root access.
+    # This must run before any cache step that restores into a system directory.
+    - name: Ensure permissions on system dirs and tar are all correct
+      if: inputs.variant == 'full'
+      run: |
+        sudo chmod 777 -R /etc/apt/trusted.gpg.d
+        sudo chmod 777 /etc/apt/trusted.gpg || true
+        sudo chmod 777 /var/cache/apt/archives
+        sudo chmod 777 /usr/lib/php/20230831
+        sudo chmod 777 /etc/php/8.3/mods-available
+        sudo chmod 777 /etc/php/8.3/cli/conf.d
+        sudo chown root /bin/tar && sudo chmod u+s /bin/tar
+      shell: bash
+
+    - name: Set up binary cache
+      # v4.2.0
+      uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57
+      with:
+        path: |-
+          _tools/ci/bin
+        key: "${{ runner.os }}-bin-${{ steps.get-date.outputs.date }}"
+        restore-keys: |
+          ${{ runner.os }}-bin-
+
+    - name: Set up .cache and apt package archives
+      if: inputs.variant == 'full'
+      # v4.2.0
+      uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57
+      with:
+        path: |-
+          .cache
+          /var/cache/apt/archives
+        key: "${{ runner.os }}-cache-${{ steps.get-date.outputs.date }}"
+        restore-keys: |
+          ${{ runner.os }}-cache-
+
+    - name: Set up .cache
+      if: inputs.variant == 'lite'
+      # v4.2.0
+      uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57
+      with:
+        path: |-
+          .cache
+        key: "${{ runner.os }}-cache-${{ steps.get-date.outputs.date }}"
+        restore-keys: |
+          ${{ runner.os }}-cache-
+
+    - name: Set up apt-mirror cache for ubuntu gpg keys
+      if: inputs.variant == 'full'
+      # v4.2.0
+      uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57
+      with:
+        path: |-
+          /etc/apt/trusted.gpg.d
+          /etc/apt/trusted.gpg
+        key: "${{ runner.os }}-keyserver-${{ steps.get-date.outputs.date }}"
+        restore-keys: |
+          ${{ runner.os }}-keyserver-
