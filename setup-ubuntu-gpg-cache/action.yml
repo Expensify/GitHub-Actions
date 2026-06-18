@@ -1,0 +1,49 @@
+name: Set up GPG Cache
+description: Set up GPG Cache
+
+runs:
+  using: composite
+  steps:
+    - name: Get Date for cache keying
+      id: get-date
+      run: |
+        echo "date=$(/bin/date -u "+%Y%m%d")" >> $GITHUB_OUTPUT
+      shell: bash
+
+    - name: Install local aptly key
+      run: |
+        sudo install -o root -g root -m 644 "${{ github.action_path }}/aptly-public.gpg" /etc/apt/trusted.gpg.d/aptly.gpg
+      shell: bash
+
+    - name: Restore GPG key cache
+      id: gpg-cache
+      # v4.2.0
+      uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57
+      with:
+        path: ./apt-key-export.gpg
+        key: "${{ runner.os }}-keyserver-${{ steps.get-date.outputs.date }}"
+        restore-keys: |
+          ${{ runner.os }}-keyserver-
+
+    # Only import from cache on an exact same-day hit; a restore-keys partial hit means
+    # the keys are stale and we should re-fetch from keyservers instead.
+    - name: Import keys from cache (exact hit only)
+      if: steps.gpg-cache.outputs.cache-hit == 'true'
+      run: sudo apt-key add ./apt-key-export.gpg
+      shell: bash
+
+    # Contact keyservers on a cache miss or a stale restore-keys partial hit to ensure
+    # keys are refreshed daily. This avoids perpetuating stale signing keys indefinitely.
+    - name: Fetch keys from keyservers (miss or stale partial hit)
+      if: steps.gpg-cache.outputs.cache-hit != 'true'
+      run: |
+        # NB: apt-key is deprecated so these lines will stop working in the near future
+        sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 3B4FE6ACC0B21F32 || true
+        sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 871920D1991BC93C || true
+      shell: bash
+
+    - name: Export keys for caching
+      run: |
+        sudo rm -f ./apt-key-export.gpg
+        sudo apt-key exportall > ./apt-key-export.gpg
+      shell: bash
