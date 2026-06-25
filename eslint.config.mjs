@@ -39,15 +39,6 @@ export default defineConfig([
         },
     },
     {
-        files: ['scripts/libs/peerReview/eventContext.ts'],
-        rules: {
-            'import/extensions': 'off',
-            '@typescript-eslint/no-unsafe-type-assertion': 'off',
-            '@typescript-eslint/no-unsafe-member-access': 'off',
-            '@typescript-eslint/consistent-type-imports': 'off',
-        },
-    },
-    {
         files: ['tests/**/*.ts'],
         rules: {
             'import/no-extraneous-dependencies': 'off',
