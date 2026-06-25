@@ -2,11 +2,11 @@
   "name": "@expensify/github-actions",
   "private": true,
   "scripts": {
-    "verify-peer-review": "tsx scripts/verifyPeerReview.ts",
+    "lint": "eslint libs scripts tests",
     "test": "tsx --test tests/**/*.test.ts",
     "test:peer-review": "tsx --test tests/peerReview/**/*.test.ts",
     "typecheck": "tsgo --noEmit -p tsconfig.json",
-    "lint": "eslint libs scripts tests"
+    "verify-peer-review": "tsx scripts/verifyPeerReview.ts"
   },
   "devDependencies": {
     "@types/node": "^25.7.0",
