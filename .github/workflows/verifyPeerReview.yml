@@ -20,10 +20,10 @@ jobs:
     name: Check independent approval
     runs-on: blacksmith-2vcpu-ubuntu-2404
     steps:
-      # v3.1.1
+      # v3.2.0
       - name: Generate a GitHub App token
         id: generateAppToken
-        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
         with:
           app-id: "3877737"
           private-key: ${{ secrets.PEER_REVIEW_CHECKER_PRIVATE_KEY }}
