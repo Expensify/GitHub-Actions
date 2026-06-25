@@ -1,8 +1,8 @@
-import CoAuthors from "../libs/peerReview/coAuthors";
-import EventContext from "../libs/peerReview/eventContext";
-import PeerReviewGitHubApi from "../libs/peerReview/githubApi";
-import Policy from "../libs/peerReview/policy";
-import WorkflowOutput from "../libs/peerReview/workflowOutput";
+import CoAuthors from "./libs/peerReview/coAuthors";
+import EventContext from "./libs/peerReview/eventContext";
+import PeerReviewGitHubApi from "./libs/peerReview/githubApi";
+import Policy from "./libs/peerReview/policy";
+import WorkflowOutput from "./libs/peerReview/workflowOutput";
 
 async function main(): Promise<void> {
   const context = EventContext.getPullRequestContext();

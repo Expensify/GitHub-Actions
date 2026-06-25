@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import WorkflowOutput from "../../libs/peerReview/workflowOutput";
+import WorkflowOutput from "../../scripts/libs/peerReview/workflowOutput";
 
 describe("workflowOutput helpers", () => {
   it("formats empty user lists", () => {

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, describe, it } from "node:test";
-import EventContext from "../../libs/peerReview/eventContext";
+import EventContext from "../../scripts/libs/peerReview/eventContext";
 
 const ORIGINAL_ARGV = process.argv;
 
@@ -10,9 +10,9 @@ describe("getPullRequestContext", () => {
   beforeEach(() => {
     process.argv = ["tsx", "scripts/verifyPeerReview.ts"];
     originalExit = process.exit;
-    process.exit = ((code?: string | number | null) => {
+    process.exit = (code?: string | number | null) => {
       throw new Error(`exit ${code ?? 0}`);
-    });
+    };
   });
 
   afterEach(() => {

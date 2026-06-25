@@ -2,7 +2,7 @@
   "name": "@expensify/github-actions",
   "private": true,
   "scripts": {
-    "lint": "eslint libs scripts tests",
+    "lint": "eslint scripts tests",
     "test": "tsx --test tests/**/*.test.ts",
     "test:peer-review": "tsx --test tests/peerReview/**/*.test.ts",
     "typecheck": "tsgo --noEmit -p tsconfig.json",

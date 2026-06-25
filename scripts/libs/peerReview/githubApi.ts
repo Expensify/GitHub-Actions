@@ -167,9 +167,8 @@ async function getLatestApprovers({
 
 async function getEmployeeLogins(): Promise<Set<string>> {
   const employeeLogins = new Set<string>();
-  let cursor: string | null = null;
 
-  do {
+  async function collectPage(cursor: string | null): Promise<void> {
     const response: TeamMembersResponse =
       await GitHubAPIClient.graphql<TeamMembersResponse>(
         `
@@ -207,9 +206,12 @@ async function getEmployeeLogins(): Promise<Set<string>> {
       employeeLogins.add(member.login);
     }
 
-    cursor = members.pageInfo.hasNextPage ? members.pageInfo.endCursor : null;
-  } while (cursor);
+    if (members.pageInfo.hasNextPage) {
+      await collectPage(members.pageInfo.endCursor);
+    }
+  }
 
+  await collectPage(null);
   return employeeLogins;
 }
 

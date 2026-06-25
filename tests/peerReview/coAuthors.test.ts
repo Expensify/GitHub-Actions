@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import CoAuthors, { type Commit } from "../../libs/peerReview/coAuthors";
+import CoAuthors, {
+  type Commit,
+} from "../../scripts/libs/peerReview/coAuthors";
 
 function makeCommit(
   authorLogin: string | undefined,

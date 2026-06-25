@@ -44,14 +44,7 @@ export default defineConfig([
     },
   },
   {
-    files: ["libs/**/*.ts"],
-    rules: {
-      "no-console": ["error", { allow: ["warn", "error"] }],
-      "no-await-in-loop": "off",
-    },
-  },
-  {
-    files: ["libs/peerReview/eventContext.ts"],
+    files: ["scripts/libs/peerReview/eventContext.ts"],
     rules: {
       "import/extensions": "off",
       "@typescript-eslint/no-unsafe-type-assertion": "off",

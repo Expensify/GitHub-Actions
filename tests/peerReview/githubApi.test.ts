@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it, afterEach } from "node:test";
 import { RequestError } from "@octokit/request-error";
-import GitHubAPIClient from "../../libs/github/GitHubAPIClient";
-import PeerReviewGitHubApi from "../../libs/peerReview/githubApi";
+import GitHubAPIClient from "../../scripts/libs/github/GitHubAPIClient";
+import PeerReviewGitHubApi from "../../scripts/libs/peerReview/githubApi";
 
 const context = {
   owner: "Expensify",
@@ -34,7 +34,7 @@ describe("getRequiredApprovingReviewCount", () => {
   });
 
   it("throws on permission errors", async () => {
-    GitHubAPIClient.graphqlClient = (async () => {
+    GitHubAPIClient.graphqlClient = async () => {
       throw new RequestError("Resource not accessible by integration", 403, {
         request: {
           method: "POST",
@@ -42,7 +42,7 @@ describe("getRequiredApprovingReviewCount", () => {
           headers: {},
         },
       });
-    });
+    };
 
     await assert.rejects(
       () => PeerReviewGitHubApi.getRequiredApprovingReviewCount(context),

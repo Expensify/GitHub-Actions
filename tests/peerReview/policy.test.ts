@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import Policy from "../../libs/peerReview/policy";
-import type { PeerReviewInput } from "../../libs/peerReview/types";
+import Policy from "../../scripts/libs/peerReview/policy";
+import type { PeerReviewInput } from "../../scripts/libs/peerReview/types";
 
 const baseInput: PeerReviewInput = {
   owner: "Expensify",
