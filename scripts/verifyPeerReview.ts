@@ -26,7 +26,10 @@ function isExpensifyEmail(email: string): boolean {
     return email.trim().toLowerCase().endsWith('@expensify.com');
 }
 
-function getCommitAuthors(commits: GitHubPullRequestCommit[]): {
+function getCommitAuthors(
+    commits: GitHubPullRequestCommit[],
+    employeeLogins?: Set<string>,
+): {
     authors: string[];
     unresolvedExpensifyCoAuthors: string[];
 } {
@@ -45,13 +48,12 @@ function getCommitAuthors(commits: GitHubPullRequestCommit[]): {
             continue;
         }
 
-        for (const email of GitCommitUtils.parseCoAuthorEmails(commit.commit.message)) {
-            const login = GitCommitUtils.resolveNoreplyEmailToLogin(email);
+        for (const coAuthor of GitCommitUtils.parseCoAuthors(commit.commit.message)) {
+            const login = GitCommitUtils.resolveCoAuthorToLogin(coAuthor, employeeLogins);
             if (login) {
                 authors.add(login);
-            } else if (isExpensifyEmail(email)) {
-                // Open-source action cannot resolve @expensify.com emails via internal whitelist; fail-hard instead.
-                unresolvedExpensifyCoAuthors.add(email.trim());
+            } else if (isExpensifyEmail(coAuthor.email)) {
+                unresolvedExpensifyCoAuthors.add(coAuthor.email.trim());
             }
         }
     }
@@ -175,9 +177,8 @@ async function main(): Promise<void> {
         GitHubUtils.listPullRequestCommits({owner, repo, number: pullRequestNumber}),
     ]);
 
-    const {authors, unresolvedExpensifyCoAuthors} = getCommitAuthors(commits);
-
-    const employeeLogins = approvers.length > 0 && requiredApprovingReviewCount > 0 ? await GitHubUtils.getEmployeeLogins() : new Set<string>();
+    const employeeLogins = requiredApprovingReviewCount > 0 ? await GitHubUtils.getEmployeeLogins() : new Set<string>();
+    const {authors, unresolvedExpensifyCoAuthors} = getCommitAuthors(commits, employeeLogins);
 
     const result = evaluatePeerReview({
         owner,
