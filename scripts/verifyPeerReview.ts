@@ -30,6 +30,7 @@ function formatUsers(users: string[]): string {
 }
 
 function getPullRequestContext(): PullRequestContext {
+    /* eslint-disable @typescript-eslint/naming-convention -- CLI uses kebab-case argument names */
     const cli = new CLI({
         namedArgs: {
             owner: {
@@ -38,7 +39,7 @@ function getPullRequestContext(): PullRequestContext {
             repo: {
                 description: 'Repository name',
             },
-            number: {
+            'pull-request-number': {
                 description: 'Pull request number',
                 parse: (value: string) => {
                     const number = Number(value);
@@ -48,17 +49,17 @@ function getPullRequestContext(): PullRequestContext {
                     return number;
                 },
             },
-            // eslint-disable-next-line @typescript-eslint/naming-convention -- expensify-common CLI uses kebab-case argument names
             'base-ref': {
                 description: 'Target branch ref for the pull request',
             },
         },
     });
+    /* eslint-enable @typescript-eslint/naming-convention */
 
     return {
         owner: cli.namedArgs.owner,
         repo: cli.namedArgs.repo,
-        number: cli.namedArgs.number,
+        number: cli.namedArgs['pull-request-number'],
         baseRef: cli.namedArgs['base-ref'],
     };
 }

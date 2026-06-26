@@ -21,7 +21,7 @@ describe('getPullRequestContext', () => {
     });
 
     it('parses required pull request CLI arguments', () => {
-        process.argv.push('--owner', 'Expensify', '--repo', 'Auth', '--number', '21136', '--base-ref', 'main');
+        process.argv.push('--owner', 'Expensify', '--repo', 'Auth', '--pull-request-number', '21136', '--base-ref', 'main');
 
         assert.deepEqual(VerifyPeerReview.getPullRequestContext(), {
             owner: 'Expensify',

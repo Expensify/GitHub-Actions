@@ -65,7 +65,7 @@ Smoke-test against a real pull request by passing the pull request metadata as C
 GITHUB_TOKEN=... npm run verify-peer-review -- \
   --owner Expensify \
   --repo Auth \
-  --number 12345 \
+  --pull-request-number 12345 \
   --base-ref main
 ```
 

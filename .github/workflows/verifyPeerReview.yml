@@ -58,7 +58,7 @@ jobs:
           npm run verify-peer-review --
           --owner ${{ github.repository_owner }}
           --repo ${{ github.event.repository.name }}
-          --number ${{ github.event.pull_request.number }}
+          --pull-request-number ${{ github.event.pull_request.number }}
           --base-ref ${{ github.event.pull_request.base.ref }}
         working-directory: GitHub-Actions
         env:
