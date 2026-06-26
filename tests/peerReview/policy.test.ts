@@ -53,7 +53,9 @@ describe('evaluatePeerReview', () => {
         });
 
         assert.equal(result.status, 'fail');
-        assert.match((result as {error: Error}).error.message, /does not have enough independent Expensify employee approvals/);
+        if (result.status === 'fail') {
+            assert.match(result.error.message, /does not have enough independent Expensify employee approvals/);
+        }
     });
 
     it('passes when an independent employee approves', () => {
@@ -96,7 +98,9 @@ describe('evaluatePeerReview', () => {
         });
 
         assert.equal(result.status, 'fail');
-        assert.match((result as {error: Error}).error.message, /no human commit authors or co-authors/);
+        if (result.status === 'fail') {
+            assert.match(result.error.message, /no human commit authors or co-authors/);
+        }
     });
 
     it('fails on unresolved expensify co-author emails', () => {
@@ -108,6 +112,8 @@ describe('evaluatePeerReview', () => {
         });
 
         assert.equal(result.status, 'fail');
-        assert.match((result as {error: Error}).error.message, /Unable to resolve Expensify co-author emails/);
+        if (result.status === 'fail') {
+            assert.match(result.error.message, /Unable to resolve Expensify co-author emails/);
+        }
     });
 });

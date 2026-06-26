@@ -38,12 +38,4 @@ export default defineConfig([
             'jest/no-jest-import': 'off',
         },
     },
-    {
-        files: ['tests/**/*.ts'],
-        rules: {
-            'import/no-extraneous-dependencies': 'off',
-            '@typescript-eslint/no-unsafe-type-assertion': 'off',
-            '@typescript-eslint/unbound-method': 'off',
-        },
-    },
 ]);

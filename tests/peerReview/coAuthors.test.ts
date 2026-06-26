@@ -1,15 +1,15 @@
 import assert from 'node:assert/strict';
 import {describe, it} from 'node:test';
-import CoAuthors, {type Commit} from '../../scripts/libs/peerReview/coAuthors';
+import CoAuthors, {type PeerReviewCommit} from '../../scripts/libs/peerReview/coAuthors';
 
-function makeCommit(authorLogin: string | undefined, authorName: string | undefined, message: string): Commit {
+function makeCommit(authorLogin: string | undefined, authorName: string | undefined, message: string): PeerReviewCommit {
     return {
         author: authorLogin ? {login: authorLogin} : null,
         commit: {
             message,
             author: authorName ? {name: authorName} : {},
         },
-    } as Commit;
+    };
 }
 
 describe('resolveCoAuthorLogin', () => {

@@ -1,8 +1,17 @@
-import type {RestEndpointMethodTypes} from '@octokit/rest';
 import CONST from '../github/CONST';
 import WorkflowOutput from './workflowOutput';
 
-type Commit = RestEndpointMethodTypes['pulls']['listCommits']['response']['data'][number];
+type PeerReviewCommit = {
+    author: {
+        login?: string;
+    } | null;
+    commit: {
+        message: string;
+        author?: {
+            name?: string | null;
+        } | null;
+    };
+};
 
 function coAuthorEmails(message: string): string[] {
     return [...message.matchAll(/^Co-authored-by:\s+.+<(.+)>$/gim)].map((match) => match[1].trim());
@@ -17,7 +26,7 @@ function isExpensifyEmail(email: string): boolean {
     return email.trim().toLowerCase().endsWith('@expensify.com');
 }
 
-function getCanonicalAuthorLogin(commit: Commit): string {
+function getCanonicalAuthorLogin(commit: PeerReviewCommit): string {
     const authorLogin = commit.author?.login ?? '';
     if (authorLogin) {
         return authorLogin;
@@ -27,7 +36,7 @@ function getCanonicalAuthorLogin(commit: Commit): string {
     return commit.commit.author?.name?.trim() ?? '';
 }
 
-function getCommitAuthors(commits: Commit[]): {
+function getCommitAuthors(commits: PeerReviewCommit[]): {
     authors: string[];
     unresolvedExpensifyCoAuthors: string[];
 } {
@@ -63,7 +72,7 @@ function getCommitAuthors(commits: Commit[]): {
     };
 }
 
-export type {Commit};
+export type {PeerReviewCommit};
 
 export default {
     coAuthorEmails,

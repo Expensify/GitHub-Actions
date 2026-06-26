@@ -5,6 +5,7 @@ import type {PaginateInterface} from '@octokit/plugin-paginate-rest';
 import {throttling} from '@octokit/plugin-throttling';
 
 type GraphqlQuery = <T>(query: string, variables?: Record<string, unknown>) => Promise<T>;
+type GraphqlHandler = (query: string, variables?: Record<string, unknown>) => Promise<unknown>;
 
 type InternalOctokit = InstanceType<typeof OctokitWithPlugins>;
 
@@ -13,7 +14,7 @@ const OctokitWithPlugins = Octokit.plugin(throttling, paginateRest);
 class GitHubAPIClient {
     static internalOctokit: InternalOctokit | undefined;
 
-    static graphqlClient: GraphqlQuery | undefined;
+    static graphqlClient: GraphqlHandler | undefined;
 
     static initWithToken(token: string): void {
         this.internalOctokit = new OctokitWithPlugins({
@@ -64,7 +65,7 @@ class GitHubAPIClient {
         return this.internalOctokit;
     }
 
-    private static ensureGraphqlClient(): GraphqlQuery {
+    private static ensureGraphqlClient(): GraphqlHandler {
         if (!this.graphqlClient) {
             this.init();
         }
@@ -81,7 +82,11 @@ class GitHubAPIClient {
     }
 
     static get graphql(): GraphqlQuery {
-        return this.ensureGraphqlClient();
+        const handler = this.ensureGraphqlClient();
+        return <T>(query: string, variables?: Record<string, unknown>): Promise<T> =>
+            // GraphQL responses are typed at the call site; the handler returns untyped JSON.
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- generic graphql boundary
+            handler(query, variables) as Promise<T>;
     }
 
     static get paginate(): PaginateInterface {

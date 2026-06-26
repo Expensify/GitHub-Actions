@@ -18,13 +18,13 @@ describe('getRequiredApprovingReviewCount', () => {
     });
 
     it('returns 0 when branch protection rule is missing', async () => {
-        GitHubAPIClient.graphqlClient = (async () => ({
+        GitHubAPIClient.graphqlClient = async () => ({
             repository: {
                 ref: {
                     branchProtectionRule: null,
                 },
             },
-        })) as NonNullable<typeof GitHubAPIClient.graphqlClient>;
+        });
 
         const count = await PeerReviewGitHubApi.getRequiredApprovingReviewCount({
             ...context,

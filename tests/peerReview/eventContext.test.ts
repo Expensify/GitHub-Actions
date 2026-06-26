@@ -9,7 +9,7 @@ describe('getPullRequestContext', () => {
 
     beforeEach(() => {
         process.argv = ['tsx', 'scripts/verifyPeerReview.ts'];
-        originalExit = process.exit;
+        originalExit = process.exit.bind(process);
         process.exit = (code?: string | number | null) => {
             throw new Error(`exit ${code ?? 0}`);
         };
