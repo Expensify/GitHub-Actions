@@ -69,18 +69,19 @@ function getIndependentEmployeeApprovers(approvers: string[], authors: string[],
 
 function evaluatePeerReview(input: PeerReviewInput): PeerReviewResult {
     const {owner, repo, number, baseRef, requiredApprovingReviewCount, approvers, authors, unresolvedExpensifyCoAuthors, employeeLogins} = input;
+    const prSlug = `${owner}/${repo}#${number}`;
 
     if (requiredApprovingReviewCount === 0) {
         return {
             status: 'skip',
-            reason: `${owner}/${repo}#${number} targets ${baseRef}, which does not require approving reviews.`,
+            reason: `${prSlug} targets ${baseRef}, which does not require approving reviews.`,
         };
     }
 
     if (approvers.length === 0) {
         return {
             status: 'skip',
-            reason: `${owner}/${repo}#${number} has no approving reviews from writers; regular branch protection will block merge until an approval exists.`,
+            reason: `${prSlug} has no approving reviews from writers; regular branch protection will block merge until an approval exists.`,
         };
     }
 
@@ -94,7 +95,7 @@ function evaluatePeerReview(input: PeerReviewInput): PeerReviewResult {
     if (authors.every((author) => GitHubUtils.isBotUser(author))) {
         return {
             status: 'fail',
-            error: new Error(`Unable to verify independent peer review because ${owner}/${repo}#${number} has no human commit authors or co-authors.`),
+            error: new Error(`Unable to verify independent peer review because ${prSlug} has no human commit authors or co-authors.`),
         };
     }
 
@@ -104,7 +105,7 @@ function evaluatePeerReview(input: PeerReviewInput): PeerReviewResult {
             status: 'fail',
             error: new Error(
                 [
-                    `${owner}/${repo}#${number} does not have enough independent Expensify employee approvals.`,
+                    `${prSlug} does not have enough independent Expensify employee approvals.`,
                     `Required independent approvals: ${requiredApprovingReviewCount}`,
                     `Commit authors/co-authors: ${formatUsers(authors)}`,
                     `Approvers: ${formatUsers(approvers)}`,
@@ -116,7 +117,7 @@ function evaluatePeerReview(input: PeerReviewInput): PeerReviewResult {
 
     return {
         status: 'pass',
-        reason: `${owner}/${repo}#${number} has ${independentEmployeeApprovers.length} independent Expensify employee approval(s).`,
+        reason: `${prSlug} has ${independentEmployeeApprovers.length} independent Expensify employee approval(s).`,
     };
 }
 
