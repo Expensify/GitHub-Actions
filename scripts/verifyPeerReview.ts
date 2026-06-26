@@ -4,13 +4,6 @@ import GitCommitUtils, {type GitHubPullRequestCommit} from './libs/GitCommitUtil
 import GitHubUtils from './libs/GitHubUtils';
 import GitHubWorkflowUtils from './libs/GitHubWorkflowUtils';
 
-type PullRequestContext = {
-    owner: string;
-    repo: string;
-    number: number;
-    baseRef: string;
-};
-
 type PeerReviewInput = {
     owner: string;
     repo: string;
@@ -27,41 +20,6 @@ type PeerReviewResult = {status: 'pass'; reason: string} | {status: 'skip'; reas
 
 function formatUsers(users: string[]): string {
     return users.length > 0 ? users.join(', ') : '(none)';
-}
-
-function getPullRequestContext(): PullRequestContext {
-    /* eslint-disable @typescript-eslint/naming-convention -- CLI uses kebab-case argument names */
-    const cli = new CLI({
-        namedArgs: {
-            owner: {
-                description: 'Repository owner organization or user login',
-            },
-            repo: {
-                description: 'Repository name',
-            },
-            'pull-request-number': {
-                description: 'Pull request number',
-                parse: (value: string) => {
-                    const number = Number(value);
-                    if (!Number.isInteger(number) || number <= 0) {
-                        throw new Error('Must be a positive integer');
-                    }
-                    return number;
-                },
-            },
-            'base-ref': {
-                description: 'Target branch ref for the pull request',
-            },
-        },
-    });
-    /* eslint-enable @typescript-eslint/naming-convention */
-
-    return {
-        owner: cli.namedArgs.owner,
-        repo: cli.namedArgs.repo,
-        number: cli.namedArgs['pull-request-number'],
-        baseRef: cli.namedArgs['base-ref'],
-    };
 }
 
 function isExpensifyEmail(email: string): boolean {
@@ -184,12 +142,41 @@ function emitPeerReviewFailure(error: unknown): never {
 }
 
 async function main(): Promise<void> {
-    const {owner, repo, number, baseRef} = getPullRequestContext();
+    /* eslint-disable @typescript-eslint/naming-convention -- CLI uses kebab-case argument names */
+    const cli = new CLI({
+        namedArgs: {
+            owner: {
+                description: 'Repository owner organization or user login',
+            },
+            repo: {
+                description: 'Repository name',
+            },
+            'pull-request-number': {
+                description: 'Pull request number',
+                parse: (value: string) => {
+                    const number = Number(value);
+                    if (!Number.isInteger(number) || number <= 0) {
+                        throw new Error('Must be a positive integer');
+                    }
+                    return number;
+                },
+            },
+            'base-ref': {
+                description: 'Target branch ref for the pull request',
+            },
+        },
+    });
+    /* eslint-enable @typescript-eslint/naming-convention */
+
+    const owner = cli.namedArgs.owner;
+    const repo = cli.namedArgs.repo;
+    const pullRequestNumber = cli.namedArgs['pull-request-number'];
+    const baseRef = cli.namedArgs['base-ref'];
 
     const [requiredApprovingReviewCount, approvers, commits] = await Promise.all([
         GitHubUtils.getRequiredApprovingReviewCount({owner, repo, baseRef}),
-        GitHubUtils.getLatestApprovers({owner, repo, number}),
-        GitHubUtils.listPullRequestCommits({owner, repo, number}),
+        GitHubUtils.getLatestApprovers({owner, repo, number: pullRequestNumber}),
+        GitHubUtils.listPullRequestCommits({owner, repo, number: pullRequestNumber}),
     ]);
 
     const {authors, unresolvedExpensifyCoAuthors} = getCommitAuthors(commits);
@@ -199,7 +186,7 @@ async function main(): Promise<void> {
     const result = evaluatePeerReview({
         owner,
         repo,
-        number,
+        number: pullRequestNumber,
         baseRef,
         requiredApprovingReviewCount,
         approvers,
@@ -216,11 +203,10 @@ async function main(): Promise<void> {
     throw result.error;
 }
 
-export type {PeerReviewInput, PeerReviewResult, PullRequestContext};
+export type {PeerReviewInput, PeerReviewResult};
 
 export default {
     main,
-    getPullRequestContext,
     evaluatePeerReview,
     getIndependentEmployeeApprovers,
     getCommitAuthors,
