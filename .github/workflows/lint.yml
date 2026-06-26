@@ -34,8 +34,6 @@ jobs:
 
       - name: Lint
         run: npm run lint
-        env:
-          CI: true
 
       - name: Tell people how to run the failing check
         if: failure()
