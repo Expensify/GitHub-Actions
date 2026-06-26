@@ -4,8 +4,6 @@ import GitCommitUtils, {type GitHubPullRequestCommit} from './libs/GitCommitUtil
 import GitHubUtils from './libs/GitHubUtils';
 import GitHubWorkflowUtils from './libs/GitHubWorkflowUtils';
 
-const BOT_USERS = new Set(['botify', 'MelvinBot', 'exfy-zapier']);
-
 type PullRequestContext = {
     owner: string;
     repo: string;
@@ -84,7 +82,7 @@ function getCommitAuthors(commits: GitHubPullRequestCommit[]): {
 
         // Co-authorship between two humans from making and accepting a suggestion does not violate peer review.
         // Only parse co-authors when the canonical commit author is missing or is a bot.
-        if (canonicalAuthor && !BOT_USERS.has(canonicalAuthor)) {
+        if (canonicalAuthor && !GitHubUtils.isBotUser(canonicalAuthor)) {
             continue;
         }
 
@@ -134,7 +132,7 @@ function evaluatePeerReview(input: PeerReviewInput): PeerReviewResult {
         };
     }
 
-    if (authors.every((author) => BOT_USERS.has(author))) {
+    if (authors.every((author) => GitHubUtils.isBotUser(author))) {
         return {
             status: 'fail',
             error: new Error(`Unable to verify independent peer review because ${owner}/${repo}#${number} has no human commit authors or co-authors.`),

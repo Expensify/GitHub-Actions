@@ -47,3 +47,17 @@ describe('getRequiredApprovingReviewCount', () => {
         await assert.rejects(() => GitHubUtils.getRequiredApprovingReviewCount(context), /Unable to read branch protection rules/);
     });
 });
+
+describe('isBotUser', () => {
+    it('returns true for GitHub App bot accounts', () => {
+        assert.equal(GitHubUtils.isBotUser('dependabot[bot]'), true);
+    });
+
+    it('returns true for known Expensify bot accounts', () => {
+        assert.equal(GitHubUtils.isBotUser('MelvinBot'), true);
+    });
+
+    it('returns false for human accounts', () => {
+        assert.equal(GitHubUtils.isBotUser('AndrewGable'), false);
+    });
+});
