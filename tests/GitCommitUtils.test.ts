@@ -38,7 +38,7 @@ describe("resolveNoreplyEmailToLogin", () => {
   });
 });
 
-describe("coAuthorEmails", () => {
+describe("parseCoAuthorEmails", () => {
   it("extracts multiple co-author emails", () => {
     const message = [
       "Some change",
@@ -47,7 +47,7 @@ describe("coAuthorEmails", () => {
       "Co-authored-by: Monil Bhavsar <MonilBhavsar@users.noreply.github.com>",
     ].join("\n");
 
-    assert.deepEqual(GitCommitUtils.coAuthorEmails(message), [
+    assert.deepEqual(GitCommitUtils.parseCoAuthorEmails(message), [
       "AndrewGable@users.noreply.github.com",
       "MonilBhavsar@users.noreply.github.com",
     ]);

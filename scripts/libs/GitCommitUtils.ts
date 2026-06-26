@@ -10,7 +10,7 @@ type GitHubPullRequestCommit = {
   };
 };
 
-function coAuthorEmails(message: string): string[] {
+function parseCoAuthorEmails(message: string): string[] {
   return [...message.matchAll(/^Co-authored-by:\s+.+<(.+)>$/gim)].map((match) =>
     match[1].trim(),
   );
@@ -38,7 +38,7 @@ function getCanonicalAuthorLogin(commit: GitHubPullRequestCommit): string {
 export type { GitHubPullRequestCommit };
 
 export default {
-  coAuthorEmails,
+  parseCoAuthorEmails,
   getCanonicalAuthorLogin,
   resolveNoreplyEmailToLogin,
 };

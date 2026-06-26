@@ -96,7 +96,7 @@ function getCommitAuthors(commits: GitHubPullRequestCommit[]): {
       continue;
     }
 
-    for (const email of GitCommitUtils.coAuthorEmails(commit.commit.message)) {
+    for (const email of GitCommitUtils.parseCoAuthorEmails(commit.commit.message)) {
       const login = GitCommitUtils.resolveNoreplyEmailToLogin(email);
       if (login) {
         authors.add(login);
