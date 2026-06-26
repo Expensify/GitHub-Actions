@@ -136,11 +136,6 @@ function getFailureTitle(message: string): string {
     return 'Peer review verification failed';
 }
 
-function emitPeerReviewFailure(error: unknown): never {
-    const message = error instanceof Error ? error.message : String(error);
-    return GitHubWorkflowUtils.emitFailure(error, getFailureTitle(message));
-}
-
 async function main(): Promise<void> {
     /* eslint-disable @typescript-eslint/naming-convention -- CLI uses kebab-case argument names */
     const cli = new CLI({
@@ -214,5 +209,8 @@ export default {
 };
 
 if (import.meta.main) {
-    main().catch(emitPeerReviewFailure);
+    main().catch((error) => {
+        const message = error instanceof Error ? error.message : String(error);
+        GitHubWorkflowUtils.emitFailure(error, getFailureTitle(message));
+    });
 }
