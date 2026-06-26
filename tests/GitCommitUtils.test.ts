@@ -79,17 +79,11 @@ describe('resolveCoAuthorToLogin', () => {
     });
 
     it('rejects display names that do not match allowed logins', () => {
-        assert.equal(
-            GitCommitUtils.resolveCoAuthorToLogin({displayName: 'John Smith', email: 'andrew@expensify.com'}, new Set(['AndrewGable'])),
-            null,
-        );
+        assert.equal(GitCommitUtils.resolveCoAuthorToLogin({displayName: 'John Smith', email: 'andrew@expensify.com'}, new Set(['AndrewGable'])), null);
     });
 
     it('uses canonical allowed login casing', () => {
-        assert.equal(
-            GitCommitUtils.resolveCoAuthorToLogin({displayName: 'andrew gable', email: 'andrew@expensify.com'}, new Set(['AndrewGable'])),
-            'AndrewGable',
-        );
+        assert.equal(GitCommitUtils.resolveCoAuthorToLogin({displayName: 'andrew gable', email: 'andrew@expensify.com'}, new Set(['AndrewGable'])), 'AndrewGable');
     });
 });
 
