@@ -37,39 +37,6 @@ jobs:
     secrets: inherit
 ```
 
-### `typecheck.yml`
-
-Runs on pull requests that touch TypeScript or related config in this repository. Typechecking uses the TypeScript 7 beta native compiler (`tsgo`) via `@typescript/native-preview`.
-
-```bash
-cd GitHub-Actions
-nvm use
-npm ci
-npm run typecheck
-```
-
-### `lint.yml`
-
-Runs ESLint on pull requests that touch TypeScript or related config in this repository. Linting uses `eslint-config-expensify`.
-
-```bash
-cd GitHub-Actions
-nvm use
-npm ci
-npm run lint
-```
-
-### `test.yml`
-
-Runs unit tests on pull requests that touch TypeScript or related config in this repository.
-
-```bash
-cd GitHub-Actions
-nvm use
-npm ci
-npm test
-```
-
 ### `verifyPeerReview.yml`
 
 Used as an org-level ruleset workflow to block pull requests that do not have enough independent Expensify employee approvals. The check only reads GitHub pull request metadata; it does not checkout or execute code from the pull request branch.
