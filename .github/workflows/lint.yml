@@ -4,7 +4,8 @@ on:
   pull_request:
     types: [opened, synchronize]
     paths:
-      - "**.ts"
+      - "**/*.[tj]s"
+      - "**/*.?[tj]s"
       - "eslint.config.mjs"
       - "tsconfig.json"
       - "package.json"

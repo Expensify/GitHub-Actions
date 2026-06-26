@@ -4,8 +4,8 @@ on:
   pull_request:
     types: [opened, synchronize]
     paths:
-      - "**.ts"
-      - "**.mjs"
+      - "**/*.[tj]s"
+      - "**/*.?[tj]s"
       - ".prettierrc.mjs"
       - ".prettierignore"
       - "package.json"
