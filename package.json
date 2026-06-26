@@ -4,8 +4,8 @@
   "scripts": {
     "lint": "eslint scripts tests",
     "prettier": "prettier --experimental-cli --no-cache --write .",
-    "test": "tsx --test tests/**/*.test.ts",
-    "test:peer-review": "tsx --test tests/peerReview/**/*.test.ts",
+    "test": "tsx --test tests/*.test.ts",
+    "test:peer-review": "tsx --test tests/*.test.ts",
     "typecheck": "tsgo --noEmit -p tsconfig.json",
     "verify-peer-review": "tsx scripts/verifyPeerReview.ts"
   },
