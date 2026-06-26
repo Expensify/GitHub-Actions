@@ -1,4 +1,5 @@
 import CLI from 'expensify-common/CLI';
+import CollectionUtils from './libs/CollectionUtils';
 import GitCommitUtils, {type GitHubPullRequestCommit} from './libs/GitCommitUtils';
 import GitHubUtils from './libs/GitHubUtils';
 import GitHubWorkflowUtils from './libs/GitHubWorkflowUtils';
@@ -28,10 +29,6 @@ type PeerReviewResult = {status: 'pass'; reason: string} | {status: 'skip'; reas
 
 function formatUsers(users: string[]): string {
     return users.length > 0 ? users.join(', ') : '(none)';
-}
-
-function unique(values: string[]): string[] {
-    return [...new Set(values)].sort((a, b) => a.localeCompare(b));
 }
 
 function getPullRequestContext(): PullRequestContext {
@@ -103,8 +100,8 @@ function getCommitAuthors(commits: GitHubPullRequestCommit[]): {
     }
 
     return {
-        authors: unique([...authors]),
-        unresolvedExpensifyCoAuthors: unique([...unresolvedExpensifyCoAuthors]),
+        authors: CollectionUtils.uniqueSorted([...authors]),
+        unresolvedExpensifyCoAuthors: CollectionUtils.uniqueSorted([...unresolvedExpensifyCoAuthors]),
     };
 }
 

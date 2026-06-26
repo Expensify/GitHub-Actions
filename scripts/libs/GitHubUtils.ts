@@ -1,4 +1,5 @@
 import {RequestError} from '@octokit/request-error';
+import CollectionUtils from './CollectionUtils';
 import GitHubAPIClient from './GitHubAPIClient';
 
 const DEFAULT_REQUIRED_APPROVING_REVIEW_COUNT = 1;
@@ -54,10 +55,6 @@ type GraphQLErrorResponse = {
         message?: string;
     }>;
 };
-
-function uniqueSorted(values: string[]): string[] {
-    return [...new Set(values)].sort((a, b) => a.localeCompare(b));
-}
 
 function isGraphQLErrorResponse(error: unknown): error is GraphQLErrorResponse {
     return typeof error === 'object' && error !== null && 'errors' in error;
@@ -138,7 +135,7 @@ async function getLatestApprovers({owner, repo, number}: {owner: string; repo: s
     );
 
     const reviews: OpinionatedReviewNode[] = response.repository?.pullRequest?.latestOpinionatedReviews.nodes ?? [];
-    return uniqueSorted(
+    return CollectionUtils.uniqueSorted(
         reviews
             .filter((review) => review.state === 'APPROVED')
             .map((review) => review.author?.login ?? '')
