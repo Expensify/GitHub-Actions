@@ -26,77 +26,35 @@ function isExpensifyEmail(email: string): boolean {
     return email.trim().toLowerCase().endsWith('@expensify.com');
 }
 
-type FetchPullRequestCommits = (params: {owner: string; repo: string; number: number}) => Promise<GitHubPullRequestCommit[]>;
-
-function addCommitAuthor(
-    commit: GitHubPullRequestCommit,
-    authors: Set<string>,
-    unresolvedExpensifyCoAuthors: Set<string>,
-    employeeLogins?: Set<string>,
-): void {
-    const canonicalAuthor = GitCommitUtils.getCanonicalAuthorLogin(commit);
-    authors.add(canonicalAuthor);
-
-    // Co-authorship between two humans from making and accepting a suggestion does not violate peer review.
-    // Only parse co-authors when the canonical commit author is a bot.
-    if (!GitHubUtils.isBotUser(canonicalAuthor)) {
-        return;
-    }
-
-    for (const coAuthor of GitCommitUtils.parseCoAuthors(commit.commit.message)) {
-        const login = GitCommitUtils.resolveCoAuthorToLogin(coAuthor, employeeLogins);
-        if (login) {
-            authors.add(login);
-        } else if (isExpensifyEmail(coAuthor.email)) {
-            unresolvedExpensifyCoAuthors.add(coAuthor.email.trim());
-        }
-    }
-}
-
-async function getCommitAuthors(
-    owner: string,
-    repo: string,
+function getCommitAuthors(
     commits: GitHubPullRequestCommit[],
     employeeLogins?: Set<string>,
-    visitedPullRequests: Set<number> = new Set<number>(),
-    fetchPullRequestCommits: FetchPullRequestCommits = GitHubUtils.listPullRequestCommits,
-): Promise<{
+): {
     authors: string[];
     unresolvedExpensifyCoAuthors: string[];
-}> {
+} {
     const authors = new Set<string>();
     const unresolvedExpensifyCoAuthors = new Set<string>();
 
-    async function collectAuthorsFromCommits(commitsToProcess: GitHubPullRequestCommit[]): Promise<void> {
-        const referencedPullRequestFetches: Array<Promise<void>> = [];
+    for (const commit of commits) {
+        const canonicalAuthor = GitCommitUtils.getCanonicalAuthorLogin(commit);
+        authors.add(canonicalAuthor);
 
-        for (const commit of commitsToProcess) {
-            const mergePullRequestNumber = GitCommitUtils.parseMergePullRequestNumber(commit.commit.message);
-            if (mergePullRequestNumber !== null) {
-                if (!visitedPullRequests.has(mergePullRequestNumber)) {
-                    visitedPullRequests.add(mergePullRequestNumber);
-                    referencedPullRequestFetches.push(
-                        fetchPullRequestCommits({
-                            owner,
-                            repo,
-                            number: mergePullRequestNumber,
-                        }).then((referencedCommits) => collectAuthorsFromCommits(referencedCommits)),
-                    );
-                }
-                continue;
-            }
-
-            if (GitCommitUtils.isGitMergeCommit(commit)) {
-                continue;
-            }
-
-            addCommitAuthor(commit, authors, unresolvedExpensifyCoAuthors, employeeLogins);
+        // Co-authorship between two humans from making and accepting a suggestion does not violate peer review.
+        // Only parse co-authors when the canonical commit author is a bot.
+        if (!GitHubUtils.isBotUser(canonicalAuthor)) {
+            continue;
         }
 
-        await Promise.all(referencedPullRequestFetches);
+        for (const coAuthor of GitCommitUtils.parseCoAuthors(commit.commit.message)) {
+            const login = GitCommitUtils.resolveCoAuthorToLogin(coAuthor, employeeLogins);
+            if (login) {
+                authors.add(login);
+            } else if (isExpensifyEmail(coAuthor.email)) {
+                unresolvedExpensifyCoAuthors.add(coAuthor.email.trim());
+            }
+        }
     }
-
-    await collectAuthorsFromCommits(commits);
 
     return {
         authors: CollectionUtils.uniqueSorted([...authors]),
@@ -225,7 +183,7 @@ async function main(): Promise<void> {
     ]);
 
     const employeeLogins = requiredApprovingReviewCount > 0 ? await GitHubUtils.getEmployeeLogins() : new Set<string>();
-    const {authors, unresolvedExpensifyCoAuthors} = await getCommitAuthors(owner, repo, commits, employeeLogins);
+    const {authors, unresolvedExpensifyCoAuthors} = getCommitAuthors(commits, employeeLogins);
 
     const result = evaluatePeerReview({
         owner,
@@ -247,7 +205,7 @@ async function main(): Promise<void> {
     throw result.error;
 }
 
-export type {FetchPullRequestCommits, PeerReviewInput, PeerReviewResult};
+export type {PeerReviewInput, PeerReviewResult};
 
 export default {
     main,

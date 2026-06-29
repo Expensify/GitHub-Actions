@@ -8,10 +8,6 @@ type GitHubPullRequestCommit = {
             name?: string | null;
         } | null;
     };
-    parents?: Array<{sha: string}>;
-    committer?: {
-        login?: string;
-    } | null;
 };
 
 type GitHubCoAuthor = {
@@ -81,20 +77,6 @@ function resolveCoAuthorToLogin(coAuthor: GitHubCoAuthor, allowedLogins?: Set<st
     return findAllowedLogin(loginFromDisplayName, allowedLogins);
 }
 
-function parseMergePullRequestNumber(message: string): number | null {
-    const firstLine = message.split('\n').at(0)?.trim() ?? '';
-    const match = firstLine.match(/^Merge pull request #(\d+)/);
-    if (!match) {
-        return null;
-    }
-
-    return Number(match[1]);
-}
-
-function isGitMergeCommit(commit: GitHubPullRequestCommit): boolean {
-    return (commit.parents?.length ?? 0) >= 2;
-}
-
 function getCanonicalAuthorLogin(commit: GitHubPullRequestCommit): string {
     const authorLogin = commit.author?.login?.trim() ?? '';
     if (authorLogin) {
@@ -116,8 +98,6 @@ export default {
     parseCoAuthorEmails,
     parseCoAuthors,
     getCanonicalAuthorLogin,
-    isGitMergeCommit,
-    parseMergePullRequestNumber,
     resolveCoAuthorToLogin,
     resolveDisplayNameToLogin,
     resolveNoreplyEmailToLogin,
