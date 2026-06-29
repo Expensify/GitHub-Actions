@@ -2,13 +2,19 @@ import assert from 'node:assert/strict';
 import {describe, it} from 'node:test';
 import GitCommitUtils, {type GitHubPullRequestCommit} from '../scripts/libs/GitCommitUtils';
 
-function makeCommit(authorLogin: string | undefined, authorName: string | undefined, message: string): GitHubPullRequestCommit {
+function makeCommit(
+    authorLogin: string | undefined,
+    authorName: string | undefined,
+    message: string,
+    parents?: Array<{sha: string}>,
+): GitHubPullRequestCommit {
     return {
         author: authorLogin ? {login: authorLogin} : null,
         commit: {
             message,
             author: authorName ? {name: authorName} : {},
         },
+        parents,
     };
 }
 
@@ -84,6 +90,34 @@ describe('resolveCoAuthorToLogin', () => {
 
     it('uses canonical allowed login casing', () => {
         assert.equal(GitCommitUtils.resolveCoAuthorToLogin({displayName: 'andrew gable', email: 'andrew@expensify.com'}, new Set(['AndrewGable'])), 'AndrewGable');
+    });
+});
+
+describe('parseMergePullRequestNumber', () => {
+    it('parses merge pull request messages', () => {
+        assert.equal(
+            GitCommitUtils.parseMergePullRequestNumber('Merge pull request #94881 from Expensify/rory-94619-some-branch'),
+            94881,
+        );
+    });
+
+    it('returns null for normal commit messages', () => {
+        assert.equal(GitCommitUtils.parseMergePullRequestNumber('Fix something'), null);
+        assert.equal(GitCommitUtils.parseMergePullRequestNumber('Merge branch main into feature'), null);
+    });
+});
+
+describe('isGitMergeCommit', () => {
+    it('returns true when commit has two or more parents', () => {
+        assert.equal(
+            GitCommitUtils.isGitMergeCommit(makeCommit('luacmartins', undefined, 'Merge pull request #1', [{sha: 'a'}, {sha: 'b'}])),
+            true,
+        );
+    });
+
+    it('returns false for single-parent or missing parents', () => {
+        assert.equal(GitCommitUtils.isGitMergeCommit(makeCommit('roryabraham', undefined, 'Change', [{sha: 'a'}])), false);
+        assert.equal(GitCommitUtils.isGitMergeCommit(makeCommit('roryabraham', undefined, 'Change')), false);
     });
 });
 
