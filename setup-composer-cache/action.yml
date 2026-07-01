@@ -27,8 +27,8 @@ runs:
     # restore-keys fallbacks so that when the lock changes (vendor cache below misses), we
     # still warm-start from a previous run and only download the changed packages.
     - name: Cache Composer Files
-      # v4.2.0
-      uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57
+      # v6.1.0
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
       with:
         path: ${{ steps.composer-cache.outputs.dir }}
         key: ${{ runner.os }}-composer-${{ inputs.dev == 'true' && 'dev' || 'prod' }}-${{ hashFiles(inputs.working_directory == '.' && 'composer.lock' || format('{0}/composer.lock', inputs.working_directory)) }}
@@ -41,8 +41,8 @@ runs:
     # near-instant no-op; on a miss it rebuilds vendor from the download cache above.
     - name: Cache vendor directory
       if: inputs.run_install == 'true'
-      # v4.2.0
-      uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57
+      # v6.1.0
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
       with:
         path: ${{ inputs.working_directory }}/vendor
         key: ${{ runner.os }}-vendor-${{ inputs.dev == 'true' && 'dev' || 'prod' }}-${{ hashFiles(inputs.working_directory == '.' && 'composer.lock' || format('{0}/composer.lock', inputs.working_directory)) }}
