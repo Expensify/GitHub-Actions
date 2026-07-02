@@ -39,8 +39,8 @@ jobs:
           repository: ${{ inputs.repository }}
           token: ${{ steps.generateAppToken.outputs.token }}
 
-      # actions/setup-node@v4.3.0
-      - uses: actions/setup-node@cdca7365b2dadb8aad0a33bc7601856ffabcc48e
+      # actions/setup-node@v6.4.0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
           registry-url: 'https://registry.npmjs.org'
           node-version-file: '.nvmrc'
