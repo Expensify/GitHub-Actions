@@ -1,0 +1,70 @@
+#!/bin/bash
+
+# Secure proxy script to create an inline comment on a GitHub PR.
+# Validates that the comment body references a rule tag present in
+# $ALLOWED_RULES_FILE (exported by the toolkit's extract-rules step).
+set -eu
+
+readonly ALLOWED_RULES_FILE="${ALLOWED_RULES_FILE:-}"
+
+# Print error and exit.
+die() {
+    echo "Error: $*" >&2
+    exit 1
+}
+
+# Usage helper to avoid repeated text.
+usage() {
+    die "Usage: $0 <PR_NUMBER> <path> <body> <line>"
+}
+
+COMMENT_STATUS_REASON=""
+
+# Ensure the comment body references an allowed rule tag.
+validate_rule() {
+    local body="$1"
+    local rule
+
+    [[ -f "$ALLOWED_RULES_FILE" ]] || die "Comment rejected: allowed rules file missing at $ALLOWED_RULES_FILE"
+
+    rule=$(echo "$body" | grep -oE '[A-Z]+(-[A-Z]+)*-[0-9]+' | head -1 || true)
+    [[ -n "$rule" ]] || die "Comment rejected: missing allowed rule reference (e.g. PERF-1)"
+
+    if grep -qF "$rule" "$ALLOWED_RULES_FILE"; then
+        COMMENT_STATUS_REASON="rule $rule validated"
+        return 0
+    fi
+
+    die "Comment rejected: rule $rule not present in allowed list"
+}
+
+readonly PR_NUMBER="${1:-}"
+readonly PATH_ARG="${2:-}"
+readonly BODY_ARG="${3:-}"
+readonly LINE_ARG="${4:-}"
+
+[[ -z "$PR_NUMBER" || -z "$PATH_ARG" || -z "$BODY_ARG" || -z "$LINE_ARG" ]] && usage
+[[ "$PR_NUMBER" =~ ^[0-9]+$ ]] || die "PR_NUMBER must be a positive integer"
+[[ -z "${GITHUB_REPOSITORY:-}" ]] && die "Environment variable GITHUB_REPOSITORY is required"
+[[ -n "$ALLOWED_RULES_FILE" ]] || die "Environment variable ALLOWED_RULES_FILE is required"
+
+validate_rule "$BODY_ARG"
+echo "Comment approved: $COMMENT_STATUS_REASON"
+
+COMMIT_ID=$(gh api "/repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" --jq '.head.sha')
+readonly COMMIT_ID
+readonly SHORT_SHA="${COMMIT_ID:0:7}"
+
+readonly FOOTER=$'\n\n---\n\n'"Reviewed at: [${SHORT_SHA}](https://github.com/${GITHUB_REPOSITORY}/commit/${COMMIT_ID}) | Please rate this suggestion with 👍 or 👎 to help us improve! Reactions are used to monitor reviewer efficiency."
+readonly COMMENT_BODY="${BODY_ARG}${FOOTER}"
+
+PAYLOAD=$(jq -n \
+    --arg body "$COMMENT_BODY" \
+    --arg path "$PATH_ARG" \
+    --argjson line "$LINE_ARG" \
+    --arg commit_id "$COMMIT_ID" \
+    '{body: $body, path: $path, line: $line, side: "RIGHT", commit_id: $commit_id}')
+readonly PAYLOAD
+
+gh api -X POST "/repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/comments" \
+    --input - <<< "$PAYLOAD" || exit 1

@@ -69,6 +69,18 @@ GITHUB_TOKEN=... npm run verify-peer-review -- \
   --base-ref main
 ```
 
+### `setup-composer-cache`
+
+Restores Composer download caches and optionally runs `composer install`. See [setup-composer-cache/README.md](./setup-composer-cache/README.md) for details.
+
+```yml
+- name: Setup Composer Cache
+  uses: Expensify/GitHub-Actions/setup-composer-cache@main
+  with:
+    run_install: true
+    dev: false
+```
+
 ## Rulesets
 
 GitHub [org-level rulesets](https://docs.github.com/en/enterprise-cloud@latest/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets#require-workflows-to-pass-before-merging) can be configured to run a workflow check against pull requests in all repos in the org. This is a very powerful feature, but there are some caveats and best practices to be aware of when enabling a ruleset.
