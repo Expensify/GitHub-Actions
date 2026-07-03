@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "fmt": "oxfmt --write .",
-    "lint": "eslint --no-error-on-unmatched-pattern scripts tests",
+    "lint": "eslint .",
     "typecheck": "tsgo --noEmit -p tsconfig.json",
     "verify-peer-review": "tsx scripts/verifyPeerReview.ts",
     "test": "tsx --test tests/*.test.ts"
