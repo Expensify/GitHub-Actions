@@ -6,6 +6,19 @@ Expensify has multiple repositories that use the same GitHub Actions workflows. 
 
 ## Usage
 
+### `verifyPeerReview.ts`
+
+A CLI script (not yet wired into a workflow) that will validate independent Expensify employee peer review on pull requests. Currently a no-op skeleton that always succeeds.
+
+#### Local development
+
+```bash
+cd GitHub-Actions
+nvm use
+npm ci
+npm run verify-peer-review -- --owner Expensify --repo Auth --pull-request-number 12345 --base-ref main
+```
+
 ### `npmPublish.yml`
 
 Used to publish a package to [npmjs](https://www.npmjs.com/), should be triggered when code is merged into the `main` branch. **Note**: Please follow [these instructions](https://stackoverflowteams.com/c/expensify/questions/17043/17044#17044) to grant our bots the correct access to publish.

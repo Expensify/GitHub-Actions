@@ -1,0 +1,14 @@
+{
+  "name": "@expensify/github-actions",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "verify-peer-review": "tsx scripts/verifyPeerReview.ts"
+  },
+  "dependencies": {
+    "expensify-common": "2.0.189"
+  },
+  "devDependencies": {
+    "tsx": "^4.21.0"
+  }
+}
