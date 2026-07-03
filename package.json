@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "fmt": "oxfmt --write .",
     "typecheck": "tsgo --noEmit -p tsconfig.json",
     "verify-peer-review": "tsx scripts/verifyPeerReview.ts"
   },
@@ -12,6 +13,7 @@
   "devDependencies": {
     "@types/node": "^25.9.4",
     "@typescript/native-preview": "7.0.0-dev.20260702.3",
+    "oxfmt": "^0.57.0",
     "tsx": "^4.22.5"
   }
 }

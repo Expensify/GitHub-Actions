@@ -1,0 +1,22 @@
+{
+    "tabWidth": 4,
+    "singleQuote": true,
+    "trailingComma": "all",
+    "bracketSpacing": false,
+    "arrowParens": "always",
+    "printWidth": 190,
+    "singleAttributePerLine": true,
+    "sortPackageJson": false,
+    "sortImports": {
+        "ignoreCase": true
+    },
+    "ignorePatterns": ["package.json", "package-lock.json", "*.md", "*.markdown", "dist/**"],
+    "overrides": [
+        {
+            "files": ["*.yml", "*.yaml"],
+            "options": {
+                "tabWidth": 2
+            }
+        }
+    ]
+}
