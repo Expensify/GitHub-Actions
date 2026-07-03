@@ -3,12 +3,16 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "lint": "eslint --no-error-on-unmatched-pattern scripts tests",
     "verify-peer-review": "tsx scripts/verifyPeerReview.ts"
   },
   "dependencies": {
     "expensify-common": "2.0.189"
   },
   "devDependencies": {
+    "eslint": "^9.39.4",
+    "eslint-config-expensify": "^4.0.6",
+    "eslint-plugin-rulesdir": "^0.2.2",
     "tsx": "^4.22.5"
   }
 }
