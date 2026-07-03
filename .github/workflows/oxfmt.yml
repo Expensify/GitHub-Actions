@@ -1,0 +1,40 @@
+name: Oxfmt
+
+on:
+  workflow_call:
+  pull_request:
+    types: [opened, synchronize]
+    paths:
+      - "**.[tj]s"
+      - ".oxfmtrc.json"
+      - "package.json"
+      - "package-lock.json"
+      - ".nvmrc"
+      - ".github/workflows/oxfmt.yml"
+
+jobs:
+  oxfmt:
+    if: ${{ github.actor != 'OSBotify' || github.event_name == 'workflow_call' }}
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    steps:
+      - name: Checkout
+        # 4.2.2
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Setup Node
+        # v6.4.0
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install npm packages
+        run: npm ci
+
+      - name: Check formatting with Oxfmt
+        run: npx oxfmt --check .
+
+      - name: Tell people how to run the failing check
+        if: failure()
+        run: echo "::error::The Oxfmt check failed! Run \`npm run fmt\` from the GitHub-Actions repo root and commit the changes."
