@@ -1,3 +1,5 @@
+#!/usr/bin/env tsx
+
 import CLI from "expensify-common/CLI";
 
 async function main(): Promise<void> {
