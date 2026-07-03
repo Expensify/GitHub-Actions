@@ -3,7 +3,6 @@
 import CLI from 'expensify-common/CLI';
 
 async function main(): Promise<void> {
-    /* eslint-disable @typescript-eslint/naming-convention -- CLI uses kebab-case argument names */
     const cli = new CLI({
         namedArgs: {
             owner: {
@@ -27,7 +26,6 @@ async function main(): Promise<void> {
             },
         },
     });
-    /* eslint-enable @typescript-eslint/naming-convention */
 
     const owner = cli.namedArgs.owner;
     const repo = cli.namedArgs.repo;
