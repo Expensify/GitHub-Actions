@@ -1,6 +1,9 @@
 pre-commit:
   commands:
     oxfmt:
-      glob: '*.{js,mjs,cjs,ts,tsx,mts,cts,yml,yaml}'
+      glob:
+        - '*.{c,m,}{j,t}s'
+        - '*.tsx'
+        - '*.{yml,yaml}'
       run: npx oxfmt --write {staged_files}
       stage_fixed: true
