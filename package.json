@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "verify-peer-review": "tsx scripts/verifyPeerReview.ts"
+    "verify-peer-review": "tsx scripts/verifyPeerReview.ts",
+    "test": "tsx --test tests/*.test.ts"
   },
   "dependencies": {
     "expensify-common": "2.0.189"
