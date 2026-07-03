@@ -1,12 +1,13 @@
+import {createRequire} from 'node:module';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+
 import jestConfig from 'eslint-config-expensify/jest';
 import nodeConfig from 'eslint-config-expensify/node';
 import scriptsConfig from 'eslint-config-expensify/scripts';
 import tsConfig from 'eslint-config-expensify/typescript';
-import {defineConfig, globalIgnores} from 'eslint/config';
 import rulesdir from 'eslint-plugin-rulesdir';
-import {createRequire} from 'node:module';
-import path from 'node:path';
-import {fileURLToPath} from 'node:url';
+import {defineConfig, globalIgnores} from 'eslint/config';
 
 const projectRoot = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
