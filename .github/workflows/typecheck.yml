@@ -4,8 +4,8 @@ on:
   pull_request:
     types: [opened, synchronize]
     paths:
-      - "**/*.ts"
-      - "**/*.[mc]ts"
+      - "**/*.[tj]s"
+      - "**/*.?[tj]s"
       - "tsconfig.json"
       - "package.json"
       - "package-lock.json"
