@@ -5,15 +5,15 @@ inputs:
   working_directory:
     description: Directory containing composer.json and composer.lock
     required: false
-    default: "."
+    default: '.'
   dev:
     description: Install dev packages when run_install is true
     required: false
-    default: "false"
+    default: 'false'
   run_install:
     description: Run composer install after restoring caches
     required: false
-    default: "false"
+    default: 'false'
 
 runs:
   using: composite

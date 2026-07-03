@@ -3,16 +3,22 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "fmt": "oxfmt --write .",
     "lint": "eslint --no-error-on-unmatched-pattern scripts tests",
-    "verify-peer-review": "tsx scripts/verifyPeerReview.ts"
+    "typecheck": "tsgo --noEmit -p tsconfig.json",
+    "verify-peer-review": "tsx scripts/verifyPeerReview.ts",
+    "test": "tsx --test tests/*.test.ts"
   },
   "dependencies": {
     "expensify-common": "2.0.189"
   },
   "devDependencies": {
+    "@types/node": "^25.9.4",
+    "@typescript/native-preview": "7.0.0-dev.20260702.3",
     "eslint": "^9.39.4",
     "eslint-config-expensify": "^4.0.6",
     "eslint-plugin-rulesdir": "^0.2.2",
+    "oxfmt": "^0.57.0",
     "tsx": "^4.22.5"
   }
 }
