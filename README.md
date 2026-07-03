@@ -37,6 +37,77 @@ jobs:
     secrets: inherit
 ```
 
+### `verifyPeerReview.yml`
+
+Intended to run as an org-level ruleset workflow to block pull requests that don't have an independent approval — i.e. an approval from an Expensify employee other than the PR's author(s)/co-author(s) — across every repo in the org. See the "Rulesets" section below for the general caveats of running a workflow this way.
+
+**Current status: no-op skeleton.** The workflow itself is fully wired up (GitHub App token generation, checkout, `npm ci`, invoking `npm run verify-peer-review`), but the underlying `scripts/verifyPeerReview.ts` script it calls is still the Phase 1 no-op skeleton — it parses its CLI arguments and always exits `0` without checking anything. This lets the workflow's plumbing (App permissions, secrets, cross-repo checkout) be validated end-to-end, including via a ruleset's [`Evaluate` mode](https://docs.github.com/en/enterprise-cloud@latest/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets#using-evaluate-mode-for-ruleset-workflows), before the real peer-review logic ships in a follow-up. Until then, this check will always pass.
+
+The workflow triggers on `pull_request` and `pull_request_review` (`submitted`, `dismissed`), so it re-evaluates when reviews change without requiring a new push.
+
+It requires a GitHub App token (client ID `3877737`) generated from the `PEER_REVIEW_CHECKER_PRIVATE_KEY` org secret, requesting `administration:read`, `contents:read`, `members:read`, `metadata:read`, and `pull-requests:read` permissions on both the triggering repo and this `GitHub-Actions` repo.
+
+```yml
+name: Verify peer review
+run-name: Verify peer review for ${{ github.repository }}#${{ github.event.pull_request.number }}
+
+on:
+  pull_request:
+  pull_request_review:
+    types: [submitted, dismissed]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  verifyPeerReview:
+    name: Check independent approval
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    steps:
+      - name: Generate a GitHub App token
+        id: generateAppToken
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          client-id: "3877737"
+          private-key: ${{ secrets.PEER_REVIEW_CHECKER_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: |
+            ${{ github.event.repository.name }}
+            GitHub-Actions
+          permission-administration: read
+          permission-contents: read
+          permission-members: read
+          permission-metadata: read
+          permission-pull-requests: read
+
+      - name: Checkout repos
+        id: repo
+        uses: Expensify/GitHub-Actions/checkoutRepoAndGitHubActions@main
+
+      - name: Setup Node
+        uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f
+        with:
+          node-version-file: GitHub-Actions/.nvmrc
+          cache: npm
+          cache-dependency-path: GitHub-Actions/package-lock.json
+
+      - name: Install npm packages
+        run: npm ci
+        working-directory: GitHub-Actions
+
+      - name: Verify peer review
+        run: >-
+          npm run verify-peer-review --
+          --owner ${{ github.repository_owner }}
+          --repo ${{ github.event.repository.name }}
+          --pull-request-number ${{ github.event.pull_request.number }}
+          --base-ref ${{ github.event.pull_request.base.ref }}
+        working-directory: GitHub-Actions
+        env:
+          GITHUB_TOKEN: ${{ steps.generateAppToken.outputs.token }}
+```
+
 ### `setup-composer-cache`
 
 Restores Composer download caches and optionally runs `composer install`. See [setup-composer-cache/README.md](./setup-composer-cache/README.md) for details.
@@ -60,3 +131,4 @@ GitHub [org-level rulesets](https://docs.github.com/en/enterprise-cloud@latest/r
   - If you need to target or exclude specific paths, that must be implemented manually in the workflow itself.
 - Due to a GitHub :bug:, PRs that are open when the rule is enabled will get stuck with a pending check that will never get picked up. The easiest way to fix that is to close and reopen the PR. Consider writing a script to close and reopen all open PRs across the org after the check is enabled.
 - It is less disruptive to [configure the ruleset to `Evaluate` first](https://docs.github.com/en/enterprise-cloud@latest/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets#using-evaluate-mode-for-ruleset-workflows), then `Active` once the kinks are worked out.
+- For `verifyPeerReview.yml`, start with a ruleset targeting only a test branch, then test the workflow from a GitHub-Actions branch, then from `main`, and only then enable it for the intended repositories and branches.

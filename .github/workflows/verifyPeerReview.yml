@@ -1,0 +1,65 @@
+# Note: This workflow is configured to run on all pull requests throughout the Expensify org, not just this repo.
+# That has a few consequences:
+#    - We need to checkout the repo it's running on, and not just the GitHub-Actions repo
+#    - branch and path matching does not work in the workflow layer. From the docs: https://docs.github.com/en/enterprise-cloud@latest/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets#supported-event-triggers
+#        > Any filters you specify for the supported events are ignored - for example, branches, branches-ignore, paths, types and so on. The workflow is only triggered, and is always triggered, by the default activity types of the supported events
+name: Verify peer review
+run-name: Verify peer review for ${{ github.repository }}#${{ github.event.pull_request.number }}
+
+on:
+  pull_request:
+  pull_request_review:
+    types: [submitted, dismissed]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  verifyPeerReview:
+    name: Check independent approval
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    steps:
+      # v3.2.0
+      - name: Generate a GitHub App token
+        id: generateAppToken
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          client-id: "3877737"
+          private-key: ${{ secrets.PEER_REVIEW_CHECKER_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: |
+            ${{ github.event.repository.name }}
+            GitHub-Actions
+          permission-administration: read
+          permission-contents: read
+          permission-members: read
+          permission-metadata: read
+          permission-pull-requests: read
+
+      - name: Checkout repos
+        id: repo
+        uses: Expensify/GitHub-Actions/checkoutRepoAndGitHubActions@main
+
+      # v6.1.0
+      - name: Setup Node
+        uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f
+        with:
+          node-version-file: GitHub-Actions/.nvmrc
+          cache: npm
+          cache-dependency-path: GitHub-Actions/package-lock.json
+
+      - name: Install npm packages
+        run: npm ci
+        working-directory: GitHub-Actions
+
+      - name: Verify peer review
+        run: >-
+          npm run verify-peer-review --
+          --owner ${{ github.repository_owner }}
+          --repo ${{ github.event.repository.name }}
+          --pull-request-number ${{ github.event.pull_request.number }}
+          --base-ref ${{ github.event.pull_request.base.ref }}
+        working-directory: GitHub-Actions
+        env:
+          GITHUB_TOKEN: ${{ steps.generateAppToken.outputs.token }}
