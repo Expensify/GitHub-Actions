@@ -3,12 +3,15 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "typecheck": "tsgo --noEmit -p tsconfig.json",
     "verify-peer-review": "tsx scripts/verifyPeerReview.ts"
   },
   "dependencies": {
     "expensify-common": "2.0.189"
   },
   "devDependencies": {
+    "@types/node": "^25.9.4",
+    "@typescript/native-preview": "7.0.0-dev.20260702.3",
     "tsx": "^4.22.5"
   }
 }
