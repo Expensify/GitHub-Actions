@@ -1,0 +1,39 @@
+name: Test
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+    paths:
+      - '**/*.[tj]s'
+      - '**/*.?[tj]s'
+      - 'tsconfig.json'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.nvmrc'
+      - '.github/workflows/test.yml'
+
+jobs:
+  test:
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    steps:
+      - name: Checkout
+        # 6.0.3
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+
+      # v6.1.0
+      - name: Setup Node
+        uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install npm packages
+        run: npm ci
+
+      - name: Run unit tests
+        run: npm test
+
+      - name: Tell people how to run the failing check
+        if: failure()
+        run: echo "::error::The test check failed! To run it locally, run \`npm ci && npm test\` from the GitHub-Actions repo root."
