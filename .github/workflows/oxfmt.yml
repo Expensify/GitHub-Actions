@@ -5,12 +5,14 @@ on:
   pull_request:
     types: [opened, synchronize]
     paths:
-      - "**.[tj]s"
-      - ".oxfmtrc.json"
-      - "package.json"
-      - "package-lock.json"
-      - ".nvmrc"
-      - ".github/workflows/oxfmt.yml"
+      - '**.[tj]s'
+      - '**.yml'
+      - '**.yaml'
+      - '.oxfmtrc.json'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.nvmrc'
+      - '.github/workflows/oxfmt.yml'
 
 jobs:
   oxfmt:

@@ -10,5 +10,13 @@
     "sortImports": {
         "ignoreCase": true
     },
-    "ignorePatterns": ["package.json", "package-lock.json", "*.yml", "*.yaml", "*.md", "*.markdown", "dist/**"]
+    "ignorePatterns": ["package.json", "package-lock.json", "*.md", "*.markdown", "dist/**"],
+    "overrides": [
+        {
+            "files": ["*.yml", "*.yaml"],
+            "options": {
+                "tabWidth": 2
+            }
+        }
+    ]
 }
