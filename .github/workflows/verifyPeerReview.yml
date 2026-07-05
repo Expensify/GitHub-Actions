@@ -1,15 +1,34 @@
-# Note: This workflow is configured to run on all pull requests throughout the Expensify org, not just this repo.
-# That has a few consequences:
-#    - We need to checkout the repo it's running on, and not just the GitHub-Actions repo
-#    - branch and path matching does not work in the workflow layer. From the docs: https://docs.github.com/en/enterprise-cloud@latest/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets#supported-event-triggers
-#        > Any filters you specify for the supported events are ignored - for example, branches, branches-ignore, paths, types and so on. The workflow is only triggered, and is always triggered, by the default activity types of the supported events
+# Intended triggers (do not add others without revisiting the security model):
+#   - Org rulesets on all Expensify repos (including GitHub-Actions) via pull_request_target
+#   - PHP webhook (Web-Expensify/partners/github/webhook.php) via workflow_dispatch
+#     to re-run after pull_request_review submitted/dismissed (webhook wiring is follow-up work)
+#
+# Security model:
+#   - pull_request_target runs this workflow file from main (the default branch), not the PR head.
+#     Workflow changes in an open PR are not executed.
+#   - Only GitHub-Actions@main is checked out for scripts — peer-reviewed code only.
+#   - Never checkout the repo where the PR lives. checkoutRepoAndGitHubActions must NOT be used;
+#     it checks out the client repo. This check uses the GitHub API for PR metadata only.
+#
+# Ruleset caveats (branch/path filters in on: are ignored; default activity types only):
+# https://docs.github.com/en/enterprise-cloud@latest/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets#supported-event-triggers
 name: Verify peer review
-run-name: Verify peer review for ${{ github.repository }}#${{ github.event.pull_request.number }}
+run-name: >-
+  Verify peer review for
+  ${{ case(
+    github.event_name,
+    'workflow_dispatch', inputs.pull-request-url,
+    format('{0}#{1}', github.repository, github.event.pull_request.number)
+  ) }}
 
 on:
-  pull_request:
-  pull_request_review:
-    types: [submitted, dismissed]
+  pull_request_target:
+  workflow_dispatch:
+    inputs:
+      pull-request-url:
+        description: Full GitHub pull request URL (e.g. https://github.com/Expensify/Auth/pull/12345)
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -20,6 +39,36 @@ jobs:
     name: Check independent approval
     runs-on: blacksmith-2vcpu-ubuntu-2404
     steps:
+      - name: Resolve pull request metadata
+        id: pr
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_URL: ${{ inputs.pull-request-url }}
+        run: |
+          if [[ "$EVENT_NAME" == "pull_request_target" ]]; then
+            {
+              echo "owner=${{ github.event.pull_request.base.repo.owner.login }}"
+              echo "repo=${{ github.event.pull_request.base.repo.name }}"
+              echo "number=${{ github.event.pull_request.number }}"
+              echo "base_ref=${{ github.event.pull_request.base.ref }}"
+            } >> "$GITHUB_OUTPUT"
+          elif [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            if [[ ! "$PR_URL" =~ github\.com/([^/]+)/([^/]+)/pull/([0-9]+) ]]; then
+              echo "::error::Invalid pull request URL (expected https://github.com/OWNER/REPO/pull/NUMBER): $PR_URL"
+              exit 1
+            fi
+            {
+              echo "owner=${BASH_REMATCH[1]}"
+              echo "repo=${BASH_REMATCH[2]}"
+              echo "number=${BASH_REMATCH[3]}"
+              echo "needs_base_ref_fetch=true"
+            } >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Unexpected event: $EVENT_NAME"
+            exit 1
+          fi
+
       # v3.2.0
       - name: Generate a GitHub App token
         id: generateAppToken
@@ -27,9 +76,9 @@ jobs:
         with:
           client-id: '3877737'
           private-key: ${{ secrets.PEER_REVIEW_CHECKER_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
+          owner: ${{ steps.pr.outputs.owner }}
           repositories: |
-            ${{ github.event.repository.name }}
+            ${{ steps.pr.outputs.repo }}
             GitHub-Actions
           permission-administration: read
           permission-contents: read
@@ -37,9 +86,27 @@ jobs:
           permission-metadata: read
           permission-pull-requests: read
 
-      - name: Checkout repos
-        id: repo
-        uses: Expensify/GitHub-Actions/checkoutRepoAndGitHubActions@main
+      - name: Fetch pull request base ref
+        if: steps.pr.outputs.needs_base_ref_fetch == 'true'
+        id: baseRef
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.generateAppToken.outputs.token }}
+        run: |
+          base_ref=$(gh api "repos/${{ steps.pr.outputs.owner }}/${{ steps.pr.outputs.repo }}/pulls/${{ steps.pr.outputs.number }}" --jq .base.ref)
+          echo "base_ref=$base_ref" >> "$GITHUB_OUTPUT"
+
+      # SECURITY (pull_request_target): Never checkout the repo where the PR lives.
+      # Only run peer-reviewed code: workflow YAML comes from main (GitHub behavior),
+      # scripts are explicitly pinned to GitHub-Actions@main below.
+      # checkoutRepoAndGitHubActions must NOT be used — it checks out the client repo.
+      # v4.2.2
+      - name: Checkout GitHub-Actions
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: Expensify/GitHub-Actions
+          ref: main
+          path: GitHub-Actions
 
       # v6.4.0
       - name: Setup Node
@@ -56,10 +123,10 @@ jobs:
       - name: Verify peer review
         run: >-
           npm run verify-peer-review --
-          --owner ${{ github.repository_owner }}
-          --repo ${{ github.event.repository.name }}
-          --pull-request-number ${{ github.event.pull_request.number }}
-          --base-ref ${{ github.event.pull_request.base.ref }}
+          --owner ${{ steps.pr.outputs.owner }}
+          --repo ${{ steps.pr.outputs.repo }}
+          --pull-request-number ${{ steps.pr.outputs.number }}
+          --base-ref ${{ steps.pr.outputs.base_ref || steps.baseRef.outputs.base_ref }}
         working-directory: GitHub-Actions
         env:
           GITHUB_TOKEN: ${{ steps.generateAppToken.outputs.token }}

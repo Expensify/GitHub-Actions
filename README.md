@@ -39,11 +39,60 @@ jobs:
 
 ### `verifyPeerReview.yml`
 
-Intended to run as an org-level ruleset workflow to block pull requests that don't have an independent approval — i.e. an employee self-approves a pull request they asked Melvin to create.
+Org-level ruleset workflow to block pull requests that lack an independent employee approval — e.g. when an employee self-approves a pull request they asked Melvin to create.
 
-See the "Rulesets" section below for the general caveats of running a workflow this way.
+The check uses the GitHub API for PR metadata (authors, base branch, reviewers). It never checks out or executes code from the repo where the PR lives.
 
-**disclaimer:** this action is currently a no-op that will always pass.
+**Disclaimer:** this workflow is currently a no-op that will always pass.
+
+#### How it runs
+
+```mermaid
+flowchart TD
+    subgraph prTargetPath [pull_request_target - all repos]
+        prEvent[PR opened / synchronized / reopened] --> ruleset[Org ruleset requires workflow]
+        prEvent --> ghaNative[Or native trigger for PRs to GitHub-Actions]
+        ruleset --> wfTarget[verifyPeerReview.yml from main]
+        ghaNative --> wfTarget
+        wfTarget --> wfFromMain[Workflow YAML from main - peer reviewed]
+        wfTarget --> checkoutGA[Checkout GitHub-Actions@main only]
+        wfTarget --> apiOnly[GitHub API for PR metadata - never client repo]
+    end
+
+    subgraph reviewRerun [Re-run after approval]
+        reviewEvent[pull_request_review submitted/dismissed] --> phpWebhook[Web-Expensify webhook.php]
+        phpWebhook --> dispatch[workflow_dispatch with PR URL]
+        dispatch --> wfDispatch[verifyPeerReview.yml from main]
+        wfDispatch --> checkoutGA2[Checkout GitHub-Actions@main only]
+        wfDispatch --> apiOnly2[GitHub API for PR metadata]
+    end
+```
+
+#### Triggers
+
+| Trigger | Who fires it | Secrets (incl. fork PRs) | Workflow YAML source | Script checkout |
+| ------- | ------------ | ------------------------ | -------------------- | --------------- |
+| `pull_request_target` | Org ruleset on all repos (incl. GitHub-Actions); also auto-fires on PRs to GitHub-Actions once the workflow is on `main` | Yes | `main` (default branch) — not PR head | `GitHub-Actions@main` only |
+| `workflow_dispatch` | PHP webhook on `pull_request_review` ([`webhook.php`](https://github.com/Expensify/Web-Expensify/blob/main/partners/github/webhook.php); follow-up work) | Yes | `main` | `GitHub-Actions@main` only |
+
+`pull_request` is intentionally not used: it runs workflow YAML from the PR merge ref, which would allow unreviewed workflow changes to execute. `pull_request_review` is not supported by rulesets.
+
+#### Security
+
+- `pull_request_target` runs the workflow file from `main`, not the PR head — workflow changes in an open PR are not executed.
+- Only `GitHub-Actions@main` is checked out for scripts; `checkoutRepoAndGitHubActions` must not be used because it checks out the client repo.
+- Fork PRs are supported: secrets are available via `pull_request_target`, but untrusted code is never checked out or executed.
+
+**Development tradeoff:** workflow and script changes in an open PR are not exercised in CI until merged to `main`. Validate via local `npm run verify-peer-review`, post-merge ruleset Evaluate mode, or `workflow_dispatch`.
+
+#### Rollout
+
+1. Merge the workflow to `main`.
+2. Enable the ruleset (`pull_request_target`) in **Evaluate** mode on a test repo and GitHub-Actions.
+3. Open or sync a PR; confirm the check passes and no client repo is checked out.
+4. Switch the ruleset to **Active** and roll out org-wide (including GitHub-Actions).
+
+See the "Rulesets" section below for general ruleset caveats.
 
 ### `setup-composer-cache`
 
