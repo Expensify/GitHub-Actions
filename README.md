@@ -61,10 +61,8 @@ flowchart TD
 
     subgraph reviewRerun [Re-run after approval]
         reviewEvent[pull_request_review submitted/dismissed] --> phpWebhook[Web-Expensify webhook.php]
-        phpWebhook --> dispatch[workflow_dispatch with PR URL]
-        dispatch --> wfDispatch[verifyPeerReview.yml from main]
-        wfDispatch --> checkoutGA2[Checkout GitHub-Actions@main only]
-        wfDispatch --> apiOnly2[GitHub API for PR metadata]
+        phpWebhook --> retryCheck[Retry existing ruleset check run on PR]
+        retryCheck --> wfTarget
     end
 ```
 
@@ -73,9 +71,8 @@ flowchart TD
 | Trigger | Who fires it | Secrets (incl. fork PRs) | Workflow YAML source | Script checkout |
 | ------- | ------------ | ------------------------ | -------------------- | --------------- |
 | `pull_request_target` | Org ruleset on all repos (incl. GitHub-Actions); also auto-fires on PRs to GitHub-Actions once the workflow is on `main` | Yes | `main` (default branch) — not PR head | `GitHub-Actions@main` only |
-| `workflow_dispatch` | PHP webhook on `pull_request_review` ([`webhook.php`](https://github.com/Expensify/Web-Expensify/blob/main/partners/github/webhook.php); follow-up work) | Yes | `main` | `GitHub-Actions@main` only |
 
-`pull_request` is intentionally not used: it runs workflow YAML from the PR merge ref, which would allow unreviewed workflow changes to execute. `pull_request_review` is not supported by rulesets.
+`pull_request` is intentionally not used: it runs workflow YAML from the PR merge ref, which would allow unreviewed workflow changes to execute. `pull_request_review` is not supported by rulesets — follow-up work in [`webhook.php`](https://github.com/Expensify/Web-Expensify/blob/main/partners/github/webhook.php) will retry the existing ruleset check run on the PR after a review is submitted or dismissed (not `workflow_dispatch`, which would not clear the required check).
 
 #### Security
 
@@ -83,7 +80,7 @@ flowchart TD
 - Only `GitHub-Actions@main` is checked out for scripts; `checkoutRepoAndGitHubActions` must not be used because it checks out the client repo.
 - Fork PRs are supported: secrets are available via `pull_request_target`, but untrusted code is never checked out or executed.
 
-**Development tradeoff:** workflow and script changes in an open PR are not exercised in CI until merged to `main`. Validate via local `npm run verify-peer-review`, post-merge ruleset Evaluate mode, or `workflow_dispatch`.
+**Development tradeoff:** workflow and script changes in an open PR are not exercised in CI until merged to `main`. Validate via local `npm run verify-peer-review` or post-merge ruleset Evaluate mode.
 
 #### Rollout
 
