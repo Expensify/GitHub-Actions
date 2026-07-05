@@ -1,17 +1,11 @@
-# Intended triggers (do not add others without revisiting the security model):
-#   - Org rulesets on all Expensify repos (including GitHub-Actions) via pull_request_target
-#
-# Re-runs after pull_request_review (submitted/dismissed) are not triggered by rulesets.
-# Follow-up work in Web-Expensify/partners/github/webhook.php will retry the existing
-# ruleset check run on the PR so a stale failure can turn green after approval — not
-# workflow_dispatch, which would not update the required ruleset check.
+# This workflow is intended to be triggered by Rulesets for all PRs in the Expensify org to enforce that all code against protected branches is peer-reviewed.
 #
 # Security model:
-#   - pull_request_target runs this workflow file from main (the default branch), not the PR head.
-#     Workflow changes in an open PR are not executed.
-#   - Only GitHub-Actions@main is checked out for scripts — peer-reviewed code only.
-#   - Never checkout the repo where the PR lives. checkoutRepoAndGitHubActions must NOT be used;
-#     it checks out the client repo. This check uses the GitHub API for PR metadata only.
+#   - pull_request_target runs this workflow file from the base branch, not the PR head.
+#   - Only GitHub-Actions@main is checked out for scripts.
+#   - Never checkout the repo where the PR lives.
+#
+# Thus, all code we run for the check is itself peer-reviewed, and the check therefore can't be hacked or bypassed.
 #
 # Ruleset caveats (branch/path filters in on: are ignored; default activity types only):
 # https://docs.github.com/en/enterprise-cloud@latest/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets#supported-event-triggers
@@ -47,16 +41,15 @@ jobs:
           permission-metadata: read
           permission-pull-requests: read
 
-      # SECURITY (pull_request_target): Never checkout the repo where the PR lives.
-      # Only run peer-reviewed code: workflow YAML comes from main (GitHub behavior),
-      # scripts are explicitly pinned to GitHub-Actions@main below.
-      # checkoutRepoAndGitHubActions must NOT be used — it checks out the client repo.
-      # v4.2.2
+      # SECURITY (pull_request_target):
+      #   - Never checkout the repo where the PR lives.
+      #   - This workflow runs on the base branch (peer-reviewed)
+      #   - Thus, scripts too are checked out on the base branch (peer-reviewed)
+      # v7.0.0
       - name: Checkout GitHub-Actions
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
           repository: Expensify/GitHub-Actions
-          ref: main
           path: GitHub-Actions
 
       # v6.4.0
