@@ -63,8 +63,8 @@ jobs:
       - name: Verify peer review
         run: >-
           npm run verify-peer-review --
-          --owner '${{ github.event.pull_request.base.repo.owner.login }}
-          --repo ${{ github.event.pull_request.base.repo.name }}'
+          --owner '${{ github.event.pull_request.base.repo.owner.login }}'
+          --repo '${{ github.event.pull_request.base.repo.name }}'
           --pull-request-number '${{ github.event.pull_request.number }}'
           --base-ref '${{ github.event.pull_request.base.ref }}'
         working-directory: GitHub-Actions
