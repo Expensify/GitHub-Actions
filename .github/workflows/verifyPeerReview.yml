@@ -7,7 +7,7 @@
 #
 # Thus, all code we run for the check is itself peer-reviewed, and the check can't be hacked, bypassed, or used to leak secrets.
 #
-# Ruleset caveats (branch/path filters in on: are ignored; default activity types only):
+# Ruleset caveats (branch/path filters in `on:` are ignored; default activity types only - `opened`, `synchronize`, `reopened`):
 # https://docs.github.com/en/enterprise-cloud@latest/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets#supported-event-triggers
 name: Verify peer review
 run-name: Verify peer review for ${{ github.repository }}#${{ github.event.pull_request.number }}
