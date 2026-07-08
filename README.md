@@ -37,6 +37,14 @@ jobs:
     secrets: inherit
 ```
 
+### `verifyPeerReview.yml`
+
+Org-level ruleset workflow that verifies pull requests have an independent employee approval — e.g. blocking cases where an employee self-approves a pull request they asked Melvin to create.
+
+Configure it to run via an org [ruleset](#rulesets) that requires this workflow on `pull_request_target` events. See the Rulesets section below for caveats.
+
+**Disclaimer:** this workflow is currently a no-op that will always pass.
+
 ### `setup-composer-cache`
 
 Restores Composer download caches and optionally runs `composer install`. See [setup-composer-cache/README.md](./setup-composer-cache/README.md) for details.
