@@ -5,7 +5,7 @@
 #   - Only GitHub-Actions@main is checked out for scripts.
 #   - Never checkout the repo where the PR lives.
 #
-# Thus, all code we run for the check is itself peer-reviewed, and the check therefore can't be hacked or bypassed.
+# Thus, all code we run for the check is itself peer-reviewed, and the check can't be hacked, bypassed, or used to leak secrets.
 #
 # Ruleset caveats (branch/path filters in on: are ignored; default activity types only):
 # https://docs.github.com/en/enterprise-cloud@latest/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets#supported-event-triggers
