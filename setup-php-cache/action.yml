@@ -1,12 +1,6 @@
 name: Set up PHP cache
 description: Set up keyed caches for PHP CI runners
 
-inputs:
-  variant:
-    description: "Cache variant: full (bin, .cache, apt archives, gpg dirs, chmod) or lite (bin, .cache only)"
-    required: false
-    default: full
-
 runs:
   using: composite
   steps:
@@ -19,7 +13,6 @@ runs:
     # Note this is important since system directories are root-owned, and the caching does not have root access.
     # This must run before any cache step that restores into a system directory.
     - name: Ensure permissions on system dirs and tar are all correct
-      if: ${{ case(inputs.variant, 'full', true, false) }}
       run: |
         sudo chmod 777 -R /etc/apt/trusted.gpg.d
         sudo chmod 777 /etc/apt/trusted.gpg || true
@@ -40,18 +33,18 @@ runs:
         restore-keys: |
           ${{ runner.os }}-bin-
 
-    - name: ${{ case(inputs.variant, 'full', 'Set up .cache and apt package archives', 'Set up .cache') }}
+    - name: Set up .cache and apt package archives
       # v6.1.0
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
       with:
-        path: ${{ case(inputs.variant, 'full', '.cache
-/var/cache/apt/archives', '.cache') }}
+        path: |-
+          .cache
+          /var/cache/apt/archives
         key: "${{ runner.os }}-cache-${{ steps.get-date.outputs.date }}"
         restore-keys: |
           ${{ runner.os }}-cache-
 
     - name: Set up apt-mirror cache for ubuntu gpg keys
-      if: ${{ case(inputs.variant, 'full', true, false) }}
       # v6.1.0
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
       with:
