@@ -29,7 +29,7 @@ runs:
       with:
         path: |-
           _tools/ci/bin
-        key: "${{ runner.os }}-bin-${{ steps.get-date.outputs.date }}"
+        key: '${{ runner.os }}-bin-${{ steps.get-date.outputs.date }}'
         restore-keys: |
           ${{ runner.os }}-bin-
 
@@ -40,7 +40,7 @@ runs:
         path: |-
           .cache
           /var/cache/apt/archives
-        key: "${{ runner.os }}-cache-${{ steps.get-date.outputs.date }}"
+        key: '${{ runner.os }}-cache-${{ steps.get-date.outputs.date }}'
         restore-keys: |
           ${{ runner.os }}-cache-
 
@@ -51,6 +51,6 @@ runs:
         path: |-
           /etc/apt/trusted.gpg.d
           /etc/apt/trusted.gpg
-        key: "${{ runner.os }}-keyserver-${{ steps.get-date.outputs.date }}"
+        key: '${{ runner.os }}-keyserver-${{ steps.get-date.outputs.date }}'
         restore-keys: |
           ${{ runner.os }}-keyserver-
