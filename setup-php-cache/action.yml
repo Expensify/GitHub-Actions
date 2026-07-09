@@ -19,7 +19,7 @@ runs:
     # Note this is important since system directories are root-owned, and the caching does not have root access.
     # This must run before any cache step that restores into a system directory.
     - name: Ensure permissions on system dirs and tar are all correct
-      if: inputs.variant == 'full'
+      if: ${{ case(inputs.variant, 'full', true, false) }}
       run: |
         sudo chmod 777 -R /etc/apt/trusted.gpg.d
         sudo chmod 777 /etc/apt/trusted.gpg || true
@@ -40,31 +40,18 @@ runs:
         restore-keys: |
           ${{ runner.os }}-bin-
 
-    - name: Set up .cache and apt package archives
-      if: inputs.variant == 'full'
+    - name: ${{ case(inputs.variant, 'full', 'Set up .cache and apt package archives', 'Set up .cache') }}
       # v6.1.0
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
       with:
-        path: |-
-          .cache
-          /var/cache/apt/archives
-        key: "${{ runner.os }}-cache-${{ steps.get-date.outputs.date }}"
-        restore-keys: |
-          ${{ runner.os }}-cache-
-
-    - name: Set up .cache
-      if: inputs.variant == 'lite'
-      # v6.1.0
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-      with:
-        path: |-
-          .cache
+        path: ${{ case(inputs.variant, 'full', '.cache
+/var/cache/apt/archives', '.cache') }}
         key: "${{ runner.os }}-cache-${{ steps.get-date.outputs.date }}"
         restore-keys: |
           ${{ runner.os }}-cache-
 
     - name: Set up apt-mirror cache for ubuntu gpg keys
-      if: inputs.variant == 'full'
+      if: ${{ case(inputs.variant, 'full', true, false) }}
       # v6.1.0
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
       with:
