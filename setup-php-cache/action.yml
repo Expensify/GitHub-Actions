@@ -1,6 +1,11 @@
 name: Set up PHP cache
 description: Set up keyed caches for PHP CI runners
 
+inputs:
+  php-version:
+    description: PHP version used by the consumer workflow (for example 8.3.31)
+    required: true
+
 runs:
   using: composite
   steps:
@@ -14,12 +19,42 @@ runs:
     # This must run before any cache step that restores into a system directory.
     - name: Ensure permissions on system dirs and tar are all correct
       run: |
-        sudo chmod 777 -R /etc/apt/trusted.gpg.d
-        sudo chmod 777 /etc/apt/trusted.gpg || true
-        sudo chmod 777 /var/cache/apt/archives
-        sudo chmod 777 /usr/lib/php/20230831
-        sudo chmod 777 /etc/php/8.3/mods-available
-        sudo chmod 777 /etc/php/8.3/cli/conf.d
+        PHP_VERSION='${{ inputs.php-version }}'
+        PHP_MAJOR_MINOR="$(echo "$PHP_VERSION" | cut -d. -f1,2)"
+
+        case "$PHP_MAJOR_MINOR" in
+          8.1) PHP_ABI=20210902 ;;
+          8.2) PHP_ABI=20220829 ;;
+          8.3) PHP_ABI=20230831 ;;
+          8.4) PHP_ABI=20240924 ;;
+          8.5) PHP_ABI=20250925 ;;
+          *)
+            echo "Unsupported php-version for setup-php-cache: $PHP_VERSION"
+            exit 1
+            ;;
+        esac
+
+        chmod_path_if_exists() {
+          local path="$1"
+          local recursive="${2:-false}"
+
+          if [ ! -e "$path" ]; then
+            return 0
+          fi
+
+          if [ "$recursive" = "true" ]; then
+            sudo chmod 777 -R "$path"
+          else
+            sudo chmod 777 "$path"
+          fi
+        }
+
+        chmod_path_if_exists /etc/apt/trusted.gpg.d true
+        chmod_path_if_exists /etc/apt/trusted.gpg false
+        chmod_path_if_exists /var/cache/apt/archives false
+        chmod_path_if_exists "/usr/lib/php/$PHP_ABI" false
+        chmod_path_if_exists "/etc/php/$PHP_MAJOR_MINOR/mods-available" false
+        chmod_path_if_exists "/etc/php/$PHP_MAJOR_MINOR/cli/conf.d" false
         sudo chown root /bin/tar && sudo chmod u+s /bin/tar
       shell: bash
 
