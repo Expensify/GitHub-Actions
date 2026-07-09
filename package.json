@@ -14,11 +14,16 @@
   },
   "devDependencies": {
     "@types/node": "^25.9.4",
-    "typescript": "7.0.2",
     "eslint": "^9.39.4",
     "eslint-config-expensify": "^4.0.6",
     "lefthook": "2.1.9",
     "oxfmt": "^0.57.0",
-    "tsx": "^4.22.5"
+    "tsx": "^4.22.5",
+    "typescript": "7.0.2"
+  },
+  "overrides": {
+    "ts-api-utils": {
+      "typescript": "6.0.3"
+    }
   }
 }
