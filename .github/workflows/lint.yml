@@ -4,14 +4,14 @@ on:
   pull_request:
     types: [opened, synchronize]
     paths:
-      - "**/*.[tj]s"
-      - "**/*.?[tj]s"
-      - "eslint.config.mjs"
-      - "tsconfig.json"
-      - "package.json"
-      - "package-lock.json"
-      - ".nvmrc"
-      - ".github/workflows/lint.yml"
+      - '**/*.[tj]s'
+      - '**/*.?[tj]s'
+      - 'eslint.config.mjs'
+      - 'tsconfig.json'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.nvmrc'
+      - '.github/workflows/lint.yml'
 
 jobs:
   lint:

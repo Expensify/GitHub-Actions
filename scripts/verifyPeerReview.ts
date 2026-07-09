@@ -1,4 +1,7 @@
+#!/usr/bin/env -S node --import tsx
+
 import CLI from 'expensify-common/CLI';
+
 import CollectionUtils from './libs/CollectionUtils';
 import GitCommitUtils, {type GitHubPullRequestCommit} from './libs/GitCommitUtils';
 import GitHubUtils from './libs/GitHubUtils';

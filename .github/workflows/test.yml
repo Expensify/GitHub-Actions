@@ -4,13 +4,13 @@ on:
   pull_request:
     types: [opened, synchronize]
     paths:
-      - "**/*.[tj]s"
-      - "**/*.?[tj]s"
-      - "tsconfig.json"
-      - "package.json"
-      - "package-lock.json"
-      - ".nvmrc"
-      - ".github/workflows/test.yml"
+      - '**/*.[tj]s'
+      - '**/*.?[tj]s'
+      - 'tsconfig.json'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.nvmrc'
+      - '.github/workflows/test.yml'
 
 jobs:
   test:

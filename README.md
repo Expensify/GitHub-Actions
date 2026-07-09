@@ -39,11 +39,13 @@ jobs:
 
 ### `verifyPeerReview.yml`
 
-Used as an org-level ruleset workflow to block pull requests that do not have enough independent Expensify employee approvals. The check only reads GitHub pull request metadata; it does not checkout or execute code from the pull request branch.
+Org-level ruleset workflow that verifies pull requests have an independent employee approval — e.g. blocking cases where an employee self-approves a pull request they asked Melvin to create.
+
+Configure it to run via an org [ruleset](#rulesets) that requires this workflow on `pull_request_target` events. See the Rulesets section below for caveats.
+
+The check only reads GitHub pull request metadata via the API; it does not checkout or execute code from the pull request branch. It uses `pull_request_target` so the workflow YAML and scripts always run from `main`, and only `GitHub-Actions@main` is checked out.
 
 This workflow requires a GitHub App token with read access for repository metadata, pull requests, organization members, and branch administration. It uses the Peer Review Checker app ID `3877737` and the org secret `PEER_REVIEW_CHECKER_PRIVATE_KEY` to generate that token.
-
-The workflow runs on `pull_request` and `pull_request_review` (`submitted`, `dismissed`) so the check re-evaluates when reviews change without a new push. Org rulesets may only trigger default `pull_request` activity types; `pull_request_review` support under rulesets depends on GitHub's ruleset event coverage.
 
 If branch protection cannot be read due to missing permissions, the check fails. If the target branch has no branch-protection review requirement, the check skips. If branch protection cannot be queried due to a transient API error, the script defaults to requiring one independent approval.
 

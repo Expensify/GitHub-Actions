@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {describe, it} from 'node:test';
+
 import GitHubWorkflowUtils from '../scripts/libs/GitHubWorkflowUtils';
 
 describe('GitHubWorkflowUtils helpers', () => {

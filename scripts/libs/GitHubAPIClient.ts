@@ -1,8 +1,8 @@
 import {graphql as createGraphql} from '@octokit/graphql';
-import {Octokit} from '@octokit/rest';
 import {paginateRest} from '@octokit/plugin-paginate-rest';
 import type {PaginateInterface} from '@octokit/plugin-paginate-rest';
 import {throttling} from '@octokit/plugin-throttling';
+import {Octokit} from '@octokit/rest';
 
 type GraphqlQuery = <T>(query: string, variables?: Record<string, unknown>) => Promise<T>;
 

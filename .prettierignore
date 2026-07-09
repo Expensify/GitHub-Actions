@@ -1,7 +1,0 @@
-package.json
-package-lock.json
-*.yml
-*.yaml
-*.md
-*.markdown
-dist/
