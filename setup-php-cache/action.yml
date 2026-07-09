@@ -31,8 +31,8 @@ runs:
       shell: bash
 
     - name: Set up binary cache
-      # v4.2.0
-      uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57
+      # v6.1.0
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
       with:
         path: |-
           _tools/ci/bin
@@ -42,8 +42,8 @@ runs:
 
     - name: Set up .cache and apt package archives
       if: inputs.variant == 'full'
-      # v4.2.0
-      uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57
+      # v6.1.0
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
       with:
         path: |-
           .cache
@@ -54,8 +54,8 @@ runs:
 
     - name: Set up .cache
       if: inputs.variant == 'lite'
-      # v4.2.0
-      uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57
+      # v6.1.0
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
       with:
         path: |-
           .cache
@@ -65,8 +65,8 @@ runs:
 
     - name: Set up apt-mirror cache for ubuntu gpg keys
       if: inputs.variant == 'full'
-      # v4.2.0
-      uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57
+      # v6.1.0
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
       with:
         path: |-
           /etc/apt/trusted.gpg.d
