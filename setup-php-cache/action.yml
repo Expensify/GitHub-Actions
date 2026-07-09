@@ -64,9 +64,9 @@ runs:
       with:
         path: |-
           _tools/ci/bin
-        key: '${{ runner.os }}-bin-${{ steps.get-date.outputs.date }}'
+        key: '${{ runner.os }}-${{ runner.arch }}-bin-${{ steps.get-date.outputs.date }}'
         restore-keys: |
-          ${{ runner.os }}-bin-
+          ${{ runner.os }}-${{ runner.arch }}-bin-
 
     - name: Set up .cache and apt package archives
       # v6.1.0
@@ -75,9 +75,9 @@ runs:
         path: |-
           .cache
           /var/cache/apt/archives
-        key: '${{ runner.os }}-cache-${{ steps.get-date.outputs.date }}'
+        key: '${{ runner.os }}-${{ runner.arch }}-cache-${{ steps.get-date.outputs.date }}'
         restore-keys: |
-          ${{ runner.os }}-cache-
+          ${{ runner.os }}-${{ runner.arch }}-cache-
 
     - name: Set up apt-mirror cache for ubuntu gpg keys
       # v6.1.0

@@ -23,7 +23,7 @@ Pass the same version you use with `shivammathur/setup-php` so version-specific 
 
 ## Cache keys
 
-Caches are keyed by runner OS and UTC date (`YYYYmmdd`), with restore keys that fall back to the most recent cache for that OS.
+Caches are keyed by runner OS, architecture, and UTC date (`YYYYmmdd`), with restore keys that fall back to the most recent cache for that OS and architecture.
 
 | Cache    | Paths                                            |
 | -------- | ------------------------------------------------ |
