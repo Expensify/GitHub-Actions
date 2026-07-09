@@ -21,6 +21,18 @@ describe('getIndependentEmployeeApprovers', () => {
 
         assert.deepEqual(independent, ['MonilBhavsar']);
     });
+
+    it('matches employee logins case-insensitively', () => {
+        const independent = VerifyPeerReview.getIndependentEmployeeApprovers(['monilbhavsar'], ['AndrewGable'], new Set(['MonilBhavsar']));
+
+        assert.deepEqual(independent, ['MonilBhavsar']);
+    });
+
+    it('excludes commit authors case-insensitively', () => {
+        const independent = VerifyPeerReview.getIndependentEmployeeApprovers(['andrewgable'], ['AndrewGable'], new Set(['AndrewGable']));
+
+        assert.deepEqual(independent, []);
+    });
 });
 
 describe('evaluatePeerReview', () => {

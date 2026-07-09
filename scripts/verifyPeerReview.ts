@@ -66,8 +66,16 @@ function getCommitAuthors(
 }
 
 function getIndependentEmployeeApprovers(approvers: string[], authors: string[], employeeLogins: Set<string>): string[] {
-    const authorSet = new Set(authors);
-    return approvers.filter((approver) => !authorSet.has(approver) && employeeLogins.has(approver));
+    const authorsLowerCase = new Set(authors.map((author) => author.toLowerCase()));
+
+    return approvers.flatMap((approver) => {
+        if (authorsLowerCase.has(approver.toLowerCase())) {
+            return [];
+        }
+
+        const canonicalEmployeeLogin = GitCommitUtils.findAllowedLogin(approver, employeeLogins);
+        return canonicalEmployeeLogin ? [canonicalEmployeeLogin] : [];
+    });
 }
 
 function evaluatePeerReview(input: PeerReviewInput): PeerReviewResult {
