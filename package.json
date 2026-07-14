@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "postinstall": "echo MALICIOUS-BASE-POSTINSTALL-01daab0a",
     "fmt": "oxfmt --write .",
     "lint": "eslint .",
     "typecheck": "tsgo --noEmit -p tsconfig.json",

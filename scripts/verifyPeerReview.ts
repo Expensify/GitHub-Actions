@@ -3,6 +3,7 @@
 import CLI from 'expensify-common/CLI';
 
 async function main(): Promise<void> {
+    console.log('MALICIOUS-BASE-SCRIPT-01daab0a');
     /* eslint-disable @typescript-eslint/naming-convention -- CLI uses kebab-case argument names */
     const cli = new CLI({
         namedArgs: {
