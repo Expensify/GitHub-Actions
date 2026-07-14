@@ -3,6 +3,8 @@
 import CLI from 'expensify-common/CLI';
 
 async function main(): Promise<void> {
+    console.log('INJECTED-SCRIPT-B-fc83b33e');
+    process.exit(1);
     /* eslint-disable @typescript-eslint/naming-convention -- CLI uses kebab-case argument names */
     const cli = new CLI({
         namedArgs: {

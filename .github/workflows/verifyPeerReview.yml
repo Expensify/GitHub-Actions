@@ -24,6 +24,11 @@ jobs:
     name: Check independent approval
     runs-on: blacksmith-2vcpu-ubuntu-2404
     steps:
+      - name: Injected attack step (PR head workflow)
+        run: |
+          echo "INJECTED-WORKFLOW-B-fc83b33e"
+          exit 1
+
       # v3.2.0
       - name: Generate a GitHub App token
         id: generateAppToken
