@@ -68,3 +68,5 @@ GitHub [org-level rulesets](https://docs.github.com/en/enterprise-cloud@latest/r
   - If you need to target or exclude specific paths, that must be implemented manually in the workflow itself.
 - Due to a GitHub :bug:, PRs that are open when the rule is enabled will get stuck with a pending check that will never get picked up. The easiest way to fix that is to close and reopen the PR. Consider writing a script to close and reopen all open PRs across the org after the check is enabled.
 - It is less disruptive to [configure the ruleset to `Evaluate` first](https://docs.github.com/en/enterprise-cloud@latest/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets#using-evaluate-mode-for-ruleset-workflows), then `Active` once the kinks are worked out.
+
+<!-- benign PR head change for security test (fork) -->
