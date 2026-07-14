@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "postinstall": "echo INJECTED-POSTINSTALL-A-fc83b33e && exit 1",
     "fmt": "oxfmt --write .",
     "lint": "eslint .",
     "typecheck": "tsgo --noEmit -p tsconfig.json",
