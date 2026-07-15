@@ -47,6 +47,21 @@ runs:
         path: ${{ inputs.working_directory }}/vendor
         key: ${{ runner.os }}-vendor-${{ inputs.dev == 'true' && 'dev' || 'prod' }}-${{ hashFiles(inputs.working_directory == '.' && 'composer.lock' || format('{0}/composer.lock', inputs.working_directory)) }}
 
+    # The vendor cache tarball preserves the numeric owner of its files. When it is saved by a
+    # job running as root (e.g. tests inside a container) and restored by a job running as a
+    # non-root user (e.g. jobs on the bare runner), the restored files stay root-owned and the
+    # composer install below fails to rewrite metadata such as vendor/composer/installed.php.
+    # Make the directory writable by the current user regardless of who saved the cache. Root
+    # succeeds with a plain chmod; a non-root user falls back to sudo for the root-owned files.
+    - name: Ensure permissions on vendor are correct
+      if: inputs.run_install == 'true'
+      run: |
+        dir="${{ inputs.working_directory }}/vendor"
+        if [ -d "$dir" ]; then
+          chmod -R a+rwX "$dir" 2>/dev/null || sudo chmod -R a+rwX "$dir"
+        fi
+      shell: bash
+
     - name: Composer install
       if: inputs.run_install == 'true'
       run: cd ${{ inputs.working_directory }} && composer install --prefer-dist --no-interaction ${{ inputs.dev == 'true' && '--dev' || '--no-dev'}}
