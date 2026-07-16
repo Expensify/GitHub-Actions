@@ -14,14 +14,13 @@ runs:
       run: echo "NAME=$(basename ${{ github.repository }})" >> "$GITHUB_OUTPUT"
       shell: bash
 
-    # v4.2.2
     - name: Checkout
-      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      uses: useblacksmith/checkout@1c9394c220d293645707b625ba9d79685f093a8f # v1
       with:
         path: ${{ steps.repo.outputs.NAME }}
 
     - name: Checkout Expensify/GitHub-Actions
-      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      uses: useblacksmith/checkout@1c9394c220d293645707b625ba9d79685f093a8f # v1
       with:
         repository: Expensify/GitHub-Actions
         path: GitHub-Actions
