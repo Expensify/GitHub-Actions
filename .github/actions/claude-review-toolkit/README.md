@@ -25,6 +25,14 @@ It places a set of helper scripts on `GITHUB_PATH`, exposes the canonical violat
 
 Caller repos must ship a `.claude/skills/coding-standards/rules/` directory with at least one `.md` rule file whose YAML frontmatter declares a `ruleId:` tag matching `[A-Z]+(-[A-Z]+)*-[0-9]+` (e.g. `PERF-1`, `GEN-01`, `CLEAN-REACT-PATTERNS-0`). The action's extract step builds an allowlist from those tags and fails the workflow if the directory is missing or yields no tags.
 
+## Shared rules
+
+`shared-rules/` holds rule files that are genuinely repo-agnostic and apply to every caller (currently just `GEN-04`, the comment-why rule). The action copies each of these into the caller's `.claude/skills/coding-standards/rules/` directory as `AutoLoadShared-<file>.md` before extracting the allowlist, so a caller repo's `code-inline-reviewer` picks it up the same way it picks up its own local rule files, with no per-repo copy to keep in sync. The copy is created fresh in the ephemeral workflow checkout on every run and is never committed to the caller repo.
+
+A caller's `code-inline-reviewer.md` agent definition should treat a rule file whose name starts with `AutoLoadShared-` as documented here rather than in the caller's own repo, and build its `(docs)` comment link accordingly (strip the prefix and link to `shared-rules/<file>.md` in this repo). `ruleId` still comes from the file's YAML frontmatter, so the prefix has no effect on rule identity or the allowlist.
+
+Adding a new shared rule: drop the `.md` file into `shared-rules/`, then in each caller repo delete any local copy that duplicates it (to avoid the reviewer loading the same `ruleId` twice) and verify the local rule content was actually identical across repos before deleting; a rule that has already drifted into repo-specific examples should stay local instead.
+
 ## Outputs
 
 | Name | Description |
