@@ -35,8 +35,44 @@ outputs:
 runs:
   using: composite
   steps:
+    # 1password/install-cli-action calls https://app-updates.agilebits.com/latest to resolve "latest"
+    # to a concrete version, and that endpoint has degraded before (see
+    # https://github.com/1Password/install-cli-action/issues/42). Resolve the version ourselves so we
+    # can fall back to the S3-backed changelog page on releases.1password.com when the primary
+    # resolver is down, and pass a concrete version to the install action.
+    - name: Resolve 1Password CLI version
+      id: opVersion
+      shell: bash
+      run: |
+        set -uo pipefail
+        version=""
+
+        if resp=$(curl -sSf -m 10 https://app-updates.agilebits.com/latest 2>/dev/null); then
+          version=$(echo "$resp" | jq -r '.CLI2.release.version // empty')
+        fi
+
+        if [ -z "$version" ]; then
+          echo "::warning title=1Password /latest endpoint degraded::Falling back to changelog scrape at releases.1password.com. See https://github.com/1Password/install-cli-action/issues/42"
+          # Anchor on the per-release id=1password-cli-X.Y.Z headings on the changelog page.
+          # A looser number-shaped regex over the whole page also matches SVG path coordinates
+          # (e.g. 2.85714286.0), which would then be handed to the install action and 404.
+          version=$(curl -sSf -m 10 https://releases.1password.com/developers/cli/ 2>/dev/null \
+                    | grep -oE '1password-cli-[0-9]+\.[0-9]+\.[0-9]+' \
+                    | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | sort -V -u | tail -1)
+        fi
+
+        if [ -z "$version" ]; then
+          echo "::error::Unable to determine 1Password CLI version from any source"
+          exit 1
+        fi
+
+        echo "Resolved op CLI version: $version"
+        echo "version=$version" >> "$GITHUB_OUTPUT"
+
     - name: Install 1Password CLI
       uses: 1password/install-cli-action@8d006a0d0a4fd505af7f7ce589e7f768385ff5e4 # v3
+      with:
+        version: ${{ steps.opVersion.outputs.version }}
 
     - name: Download OSBotify GPG key
       run: op read "op://${{ inputs.OP_VAULT }}/OSBotify-private-key.asc/OSBotify-private-key.asc" --force --out-file ./OSBotify-private-key.asc
