@@ -43,7 +43,33 @@ Org-level ruleset workflow that verifies pull requests have an independent emplo
 
 Configure it to run via an org [ruleset](#rulesets) that requires this workflow on `pull_request_target` events. See the Rulesets section below for caveats.
 
-**Disclaimer:** this workflow is currently a no-op that will always pass.
+The check only reads GitHub pull request metadata via the API; it does not checkout or execute code from the pull request branch. It uses `pull_request_target` so the workflow YAML and scripts always run from `main`, and only `GitHub-Actions@main` is checked out.
+
+This workflow requires a GitHub App token with read access for repository metadata, pull requests, organization members, and branch administration. It uses the Peer Review Checker app ID `3877737` and the org secret `PEER_REVIEW_CHECKER_PRIVATE_KEY` to generate that token.
+
+If branch protection cannot be read due to missing permissions, the check fails. If the target branch has no branch-protection review requirement, the check skips. If branch protection cannot be queried due to a transient API error, the script defaults to requiring one independent approval.
+
+#### Local development
+
+This script depends on the shared `CLI` utility from `expensify-common`.
+
+```bash
+cd GitHub-Actions
+nvm use
+npm ci
+npm test
+npm run verify-peer-review -- --help
+```
+
+Smoke-test against a real pull request by passing the pull request metadata as CLI arguments and setting `GITHUB_TOKEN` (or `GH_TOKEN`) to a token with the same read permissions as the Peer Review Checker app:
+
+```bash
+GITHUB_TOKEN=... npm run verify-peer-review -- \
+  --owner Expensify \
+  --repo Auth \
+  --pull-request-number 12345 \
+  --base-ref main
+```
 
 ### `setup-composer-cache`
 
@@ -68,3 +94,4 @@ GitHub [org-level rulesets](https://docs.github.com/en/enterprise-cloud@latest/r
   - If you need to target or exclude specific paths, that must be implemented manually in the workflow itself.
 - Due to a GitHub :bug:, PRs that are open when the rule is enabled will get stuck with a pending check that will never get picked up. The easiest way to fix that is to close and reopen the PR. Consider writing a script to close and reopen all open PRs across the org after the check is enabled.
 - It is less disruptive to [configure the ruleset to `Evaluate` first](https://docs.github.com/en/enterprise-cloud@latest/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets#using-evaluate-mode-for-ruleset-workflows), then `Active` once the kinks are worked out.
+- For `verifyPeerReview.yml`, start with a ruleset targeting only a test branch, then test the workflow from a GitHub-Actions branch, then from `main`, and only then enable it for the intended repositories and branches.

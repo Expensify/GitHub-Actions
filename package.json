@@ -10,6 +10,11 @@
     "test": "tsx --test tests/*.test.ts"
   },
   "dependencies": {
+    "@octokit/graphql": "^9.0.3",
+    "@octokit/plugin-paginate-rest": "^14.0.0",
+    "@octokit/plugin-throttling": "^11.0.0",
+    "@octokit/request-error": "^7.0.0",
+    "@octokit/rest": "^22.0.1",
     "expensify-common": "2.0.189"
   },
   "devDependencies": {
