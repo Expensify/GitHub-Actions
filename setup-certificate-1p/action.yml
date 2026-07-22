@@ -34,9 +34,12 @@ runs:
           # Anchor on the per-release id=1password-cli-X.Y.Z headings on the changelog page.
           # A looser number-shaped regex over the whole page also matches SVG path coordinates
           # (e.g. 2.85714286.0), which would then be handed to the install action and 404.
+          # sort -V is GNU-only; the composite action runs on macOS (BSD sort) too,
+          # so compare numerically across the three dotted fields with POSIX sort.
           version=$(curl -sSf -m 10 https://releases.1password.com/developers/cli/ 2>/dev/null \
                     | grep -oE '1password-cli-[0-9]+\.[0-9]+\.[0-9]+' \
-                    | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | sort -V -u | tail -1)
+                    | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' \
+                    | sort -u -t. -k1,1n -k2,2n -k3,3n | tail -1)
         fi
 
         if [ -z "$version" ]; then
