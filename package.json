@@ -10,7 +10,7 @@
     "test": "tsx --test tests/*.test.ts"
   },
   "dependencies": {
-    "expensify-common": "2.0.189"
+    "expensify-common": "2.0.195"
   },
   "devDependencies": {
     "@types/node": "^25.9.4",
