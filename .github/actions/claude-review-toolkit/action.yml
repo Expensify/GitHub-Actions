@@ -23,11 +23,16 @@ runs:
       shell: bash
       run: |
         RULES_DIR="$GITHUB_WORKSPACE/.claude/skills/coding-standards/rules"
-        mkdir -p "$RULES_DIR"
-        for rule_path in "$GITHUB_ACTION_PATH"/shared-rules/*.md; do
-          [[ -f "$rule_path" ]] || continue
-          cp "$rule_path" "$RULES_DIR/AutoLoadShared-$(basename "$rule_path")"
-        done
+        # Only copy into a rules directory the caller already ships. Creating
+        # it here would let extractAllowedRules.sh's missing-directory check
+        # silently pass with just the shared rules, hiding a caller repo that
+        # never set up code-inline-reviewer at all.
+        if [[ -d "$RULES_DIR" ]]; then
+          for rule_path in "$GITHUB_ACTION_PATH"/shared-rules/*.md; do
+            [[ -f "$rule_path" ]] || continue
+            cp "$rule_path" "$RULES_DIR/AutoLoadShared-$(basename "$rule_path")"
+          done
+        fi
     - name: Extract allowed rules
       shell: bash
       run: |
