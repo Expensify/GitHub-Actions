@@ -23,20 +23,36 @@ const BASE_INPUT: PeerReviewInput = {
 };
 
 describe('getIndependentEmployeeApprovers', () => {
-    it('excludes commit authors and non-employees', () => {
-        const independent = VerifyPeerReview.getIndependentEmployeeApprovers(['AndrewGable', 'MonilBhavsar', 'externalCollab'], ['AndrewGable'], new Set(['AndrewGable', 'MonilBhavsar']));
+    let originalGetEmployeeLogins: typeof GitHubUtils.getEmployeeLogins;
+
+    beforeEach(() => {
+        originalGetEmployeeLogins = GitHubUtils.getEmployeeLogins;
+    });
+
+    afterEach(() => {
+        GitHubUtils.getEmployeeLogins = originalGetEmployeeLogins;
+    });
+
+    it('excludes commit authors and non-employees', async () => {
+        GitHubUtils.getEmployeeLogins = async () => new Set(['AndrewGable', 'MonilBhavsar']);
+
+        const independent = await VerifyPeerReview.getIndependentEmployeeApprovers(['AndrewGable', 'MonilBhavsar', 'externalCollab'], ['AndrewGable']);
 
         assert.deepEqual(independent, ['MonilBhavsar']);
     });
 
-    it('matches employee logins case-insensitively', () => {
-        const independent = VerifyPeerReview.getIndependentEmployeeApprovers(['monilbhavsar'], ['AndrewGable'], new Set(['MonilBhavsar']));
+    it('matches employee logins case-insensitively', async () => {
+        GitHubUtils.getEmployeeLogins = async () => new Set(['MonilBhavsar']);
+
+        const independent = await VerifyPeerReview.getIndependentEmployeeApprovers(['monilbhavsar'], ['AndrewGable']);
 
         assert.deepEqual(independent, ['MonilBhavsar']);
     });
 
-    it('excludes commit authors case-insensitively', () => {
-        const independent = VerifyPeerReview.getIndependentEmployeeApprovers(['andrewgable'], ['AndrewGable'], new Set(['AndrewGable']));
+    it('excludes commit authors case-insensitively', async () => {
+        GitHubUtils.getEmployeeLogins = async () => new Set(['AndrewGable']);
+
+        const independent = await VerifyPeerReview.getIndependentEmployeeApprovers(['andrewgable'], ['AndrewGable']);
 
         assert.deepEqual(independent, []);
     });

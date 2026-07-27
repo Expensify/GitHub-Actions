@@ -55,7 +55,8 @@ async function getCommitAuthors({owner, repo, prNumber}: {owner: string; repo: s
     };
 }
 
-function getIndependentEmployeeApprovers(approvers: string[], authors: string[], employeeLogins: Set<string>): string[] {
+async function getIndependentEmployeeApprovers(approvers: string[], authors: string[]): Promise<string[]> {
+    const employeeLogins = await GitHubUtils.getEmployeeLogins();
     const authorsLowerCase = new Set(authors.map((author) => author.toLowerCase()));
 
     return approvers.flatMap((approver) => {
@@ -119,8 +120,7 @@ async function evaluatePeerReview(input: PeerReviewInput): Promise<PeerReviewRes
     }
 
     const approvers = await GitHubUtils.getLatestApprovers({owner, repo, number: prNumber});
-    const employeeLogins = await GitHubUtils.getEmployeeLogins();
-    const independentEmployeeApprovers = getIndependentEmployeeApprovers(approvers, authors, employeeLogins);
+    const independentEmployeeApprovers = await getIndependentEmployeeApprovers(approvers, authors);
     if (independentEmployeeApprovers.length >= requiredApprovingReviewCount) {
         return {
             status: 'pass',
