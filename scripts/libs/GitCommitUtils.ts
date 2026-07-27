@@ -59,7 +59,7 @@ function findAllowedLogin(login: string, allowedLogins: Set<string>): string | n
     return null;
 }
 
-function resolveCoAuthorToLogin(coAuthor: GitHubCoAuthor, allowedLogins?: Set<string>): string | null {
+function resolveCoAuthorToLogin(coAuthor: GitHubCoAuthor, allowedLogins: Set<string>): string | null {
     const loginFromNoreply = resolveNoreplyEmailToLogin(coAuthor.email);
     if (loginFromNoreply) {
         return loginFromNoreply;
@@ -68,10 +68,6 @@ function resolveCoAuthorToLogin(coAuthor: GitHubCoAuthor, allowedLogins?: Set<st
     const loginFromDisplayName = resolveDisplayNameToLogin(coAuthor.displayName);
     if (!loginFromDisplayName) {
         return null;
-    }
-
-    if (!allowedLogins) {
-        return loginFromDisplayName;
     }
 
     return findAllowedLogin(loginFromDisplayName, allowedLogins);

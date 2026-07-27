@@ -61,20 +61,26 @@ describe('resolveDisplayNameToLogin', () => {
 describe('resolveCoAuthorToLogin', () => {
     it('prefers noreply email resolution over display name', () => {
         assert.equal(
-            GitCommitUtils.resolveCoAuthorToLogin({
-                displayName: 'Wrong Name',
-                email: 'AndrewGable@users.noreply.github.com',
-            }),
+            GitCommitUtils.resolveCoAuthorToLogin(
+                {
+                    displayName: 'Wrong Name',
+                    email: 'AndrewGable@users.noreply.github.com',
+                },
+                new Set(),
+            ),
             'AndrewGable',
         );
     });
 
     it('falls back to display name when email cannot be resolved', () => {
         assert.equal(
-            GitCommitUtils.resolveCoAuthorToLogin({
-                displayName: 'Andrew Gable',
-                email: 'andrew@expensify.com',
-            }),
+            GitCommitUtils.resolveCoAuthorToLogin(
+                {
+                    displayName: 'Andrew Gable',
+                    email: 'andrew@expensify.com',
+                },
+                new Set(['AndrewGable']),
+            ),
             'AndrewGable',
         );
     });
