@@ -15,8 +15,6 @@ type GitHubCoAuthor = {
     email: string;
 };
 
-const GITHUB_LOGIN_PATTERN = /^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,37}[a-zA-Z0-9])?$/;
-
 function parseCoAuthors(message: string): GitHubCoAuthor[] {
     return [...message.matchAll(/^Co-authored-by:\s+(.+?)<([^>]+)>$/gim)].map((match) => ({
         displayName: match[1].trim(),
@@ -33,44 +31,8 @@ function resolveNoreplyEmailToLogin(email: string): string | null {
     return normalizedEmail.match(/^(?:\d+\+)?(.+)@users\.noreply\.github\.com$/i)?.[1] ?? null;
 }
 
-function resolveDisplayNameToLogin(displayName: string): string | null {
-    const trimmedDisplayName = displayName.trim();
-    if (!trimmedDisplayName) {
-        return null;
-    }
-
-    const candidates = [trimmedDisplayName, trimmedDisplayName.replaceAll(/\s+/g, '')];
-    for (const candidate of candidates) {
-        if (GITHUB_LOGIN_PATTERN.test(candidate)) {
-            return candidate;
-        }
-    }
-
-    return null;
-}
-
-function findAllowedLogin(login: string, allowedLogins: Set<string>): string | null {
-    for (const allowedLogin of allowedLogins) {
-        if (allowedLogin.toLowerCase() === login.toLowerCase()) {
-            return allowedLogin;
-        }
-    }
-
-    return null;
-}
-
-function resolveCoAuthorLogin(coAuthor: GitHubCoAuthor, allowedLogins: Set<string>): string | null {
-    const loginFromNoreply = resolveNoreplyEmailToLogin(coAuthor.email);
-    if (loginFromNoreply) {
-        return loginFromNoreply;
-    }
-
-    const loginFromDisplayName = resolveDisplayNameToLogin(coAuthor.displayName);
-    if (!loginFromDisplayName) {
-        return null;
-    }
-
-    return findAllowedLogin(loginFromDisplayName, allowedLogins);
+function resolveCoAuthorLogin(coAuthor: GitHubCoAuthor): string | null {
+    return resolveNoreplyEmailToLogin(coAuthor.email);
 }
 
 function getCanonicalAuthorLogin(commit: GitHubPullRequestCommit): string {
@@ -95,6 +57,5 @@ export default {
     parseCoAuthors,
     getCanonicalAuthorLogin,
     resolveCoAuthorLogin,
-    resolveDisplayNameToLogin,
     resolveNoreplyEmailToLogin,
 };

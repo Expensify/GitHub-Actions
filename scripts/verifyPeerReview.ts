@@ -24,7 +24,7 @@ async function getCommitAuthors({owner, repo, prNumber}: {owner: string; repo: s
     authors: string[];
     unresolvedCoAuthors: string[];
 }> {
-    const [commits, employeeLogins] = await Promise.all([GitHubUtils.listPullRequestCommits({owner, repo, number: prNumber}), GitHubUtils.getEmployeeLogins()]);
+    const commits = await GitHubUtils.listPullRequestCommits({owner, repo, number: prNumber});
     const authors = new Set<string>();
     const unresolvedCoAuthors = new Set<string>();
 
@@ -47,7 +47,7 @@ async function getCommitAuthors({owner, repo, prNumber}: {owner: string; repo: s
         }
 
         for (const coAuthor of GitCommitUtils.parseCoAuthors(commit.commit.message)) {
-            const login = GitCommitUtils.resolveCoAuthorLogin(coAuthor, employeeLogins);
+            const login = GitCommitUtils.resolveCoAuthorLogin(coAuthor);
             if (login) {
                 authors.add(login);
             } else {

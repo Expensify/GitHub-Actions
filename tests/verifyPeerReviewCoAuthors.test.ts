@@ -21,22 +21,17 @@ function mockCommits(commits: GitHubPullRequestCommit[]): typeof GitHubUtils.lis
     return async () => commits as unknown as Awaited<ReturnType<typeof GitHubUtils.listPullRequestCommits>>;
 }
 
-const EMPLOYEE_LOGINS = new Set(['AndrewGable', 'MelvinBot', 'rafecolton']);
 const BASE_ARGS = {owner: 'Expensify', repo: 'Auth', prNumber: 21136};
 
 describe('getCommitAuthors', () => {
     let originalListPullRequestCommits: typeof GitHubUtils.listPullRequestCommits;
-    let originalGetEmployeeLogins: typeof GitHubUtils.getEmployeeLogins;
 
     beforeEach(() => {
         originalListPullRequestCommits = GitHubUtils.listPullRequestCommits;
-        originalGetEmployeeLogins = GitHubUtils.getEmployeeLogins;
-        GitHubUtils.getEmployeeLogins = async () => EMPLOYEE_LOGINS;
     });
 
     afterEach(() => {
         GitHubUtils.listPullRequestCommits = originalListPullRequestCommits;
-        GitHubUtils.getEmployeeLogins = originalGetEmployeeLogins;
     });
 
     it('counts co-authors for bot-authored commits', async () => {
@@ -72,16 +67,7 @@ describe('getCommitAuthors', () => {
         assert.deepEqual(result.unresolvedCoAuthors, ['Andrew@Expensify.com']);
     });
 
-    it('resolves co-authors from display name when email cannot be mapped', async () => {
-        GitHubUtils.listPullRequestCommits = mockCommits([makeCommit('MelvinBot', undefined, 'Change\n\nCo-authored-by: Andrew Gable <andrew@expensify.com>')]);
-
-        const result = await VerifyPeerReview.getCommitAuthors(BASE_ARGS);
-
-        assert.deepEqual(result.authors, ['AndrewGable', 'MelvinBot']);
-        assert.deepEqual(result.unresolvedCoAuthors, []);
-    });
-
-    it('collects unresolved co-author emails when display name cannot be mapped', async () => {
+    it('collects unresolved co-author emails for non-noreply addresses', async () => {
         GitHubUtils.listPullRequestCommits = mockCommits([makeCommit('MelvinBot', undefined, 'Change\n\nCo-authored-by: John Smith <andrew@expensify.com>')]);
 
         const result = await VerifyPeerReview.getCommitAuthors(BASE_ARGS);

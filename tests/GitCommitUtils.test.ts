@@ -44,53 +44,15 @@ describe('parseCoAuthors', () => {
     });
 });
 
-describe('resolveDisplayNameToLogin', () => {
-    it('parses github usernames from display names', () => {
-        assert.equal(GitCommitUtils.resolveDisplayNameToLogin('AndrewGable'), 'AndrewGable');
-    });
-
-    it('removes spaces from display names', () => {
-        assert.equal(GitCommitUtils.resolveDisplayNameToLogin('Andrew Gable'), 'AndrewGable');
-    });
-
-    it('returns null when display name cannot map to a github username', () => {
-        assert.equal(GitCommitUtils.resolveDisplayNameToLogin("John O'Brien"), null);
-    });
-});
-
 describe('resolveCoAuthorLogin', () => {
-    it('prefers noreply email resolution over display name', () => {
-        assert.equal(
-            GitCommitUtils.resolveCoAuthorLogin(
-                {
-                    displayName: 'Wrong Name',
-                    email: 'AndrewGable@users.noreply.github.com',
-                },
-                new Set(),
-            ),
-            'AndrewGable',
-        );
+    it('resolves noreply email addresses', () => {
+        assert.equal(GitCommitUtils.resolveCoAuthorLogin({displayName: 'Wrong Name', email: 'AndrewGable@users.noreply.github.com'}), 'AndrewGable');
     });
 
-    it('falls back to display name when email cannot be resolved', () => {
-        assert.equal(
-            GitCommitUtils.resolveCoAuthorLogin(
-                {
-                    displayName: 'Andrew Gable',
-                    email: 'andrew@expensify.com',
-                },
-                new Set(['AndrewGable']),
-            ),
-            'AndrewGable',
-        );
-    });
-
-    it('rejects display names that do not match allowed logins', () => {
-        assert.equal(GitCommitUtils.resolveCoAuthorLogin({displayName: 'John Smith', email: 'andrew@expensify.com'}, new Set(['AndrewGable'])), null);
-    });
-
-    it('uses canonical allowed login casing', () => {
-        assert.equal(GitCommitUtils.resolveCoAuthorLogin({displayName: 'andrew gable', email: 'andrew@expensify.com'}, new Set(['AndrewGable'])), 'AndrewGable');
+    it('returns null for non-noreply email addresses, regardless of display name', () => {
+        // No display-name-guessing fallback: PHP's equivalent only ever resolves via the noreply
+        // pattern or an authoritative email->login whitelist we don't have access to here.
+        assert.equal(GitCommitUtils.resolveCoAuthorLogin({displayName: 'Andrew Gable', email: 'andrew@expensify.com'}), null);
     });
 });
 
