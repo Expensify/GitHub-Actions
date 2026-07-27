@@ -20,18 +20,14 @@ function formatUsers(users: string[]): string {
     return users.length > 0 ? users.join(', ') : '(none)';
 }
 
-function isExpensifyEmail(email: string): boolean {
-    return email.trim().toLowerCase().endsWith('@expensify.com');
-}
-
 async function getCommitAuthors({owner, repo, prNumber}: {owner: string; repo: string; prNumber: number}): Promise<{
     authors: string[];
-    unresolvedExpensifyCoAuthors: string[];
+    unresolvedCoAuthors: string[];
 }> {
     const [commits, employeeLogins] = await Promise.all([GitHubUtils.listPullRequestCommits({owner, repo, number: prNumber}), GitHubUtils.getEmployeeLogins()]);
 
     const authors = new Set<string>();
-    const unresolvedExpensifyCoAuthors = new Set<string>();
+    const unresolvedCoAuthors = new Set<string>();
 
     for (const commit of commits) {
         const canonicalAuthor = GitCommitUtils.getCanonicalAuthorLogin(commit);
@@ -47,15 +43,15 @@ async function getCommitAuthors({owner, repo, prNumber}: {owner: string; repo: s
             const login = GitCommitUtils.resolveCoAuthorToLogin(coAuthor, employeeLogins);
             if (login) {
                 authors.add(login);
-            } else if (isExpensifyEmail(coAuthor.email)) {
-                unresolvedExpensifyCoAuthors.add(coAuthor.email.trim());
+            } else {
+                unresolvedCoAuthors.add(coAuthor.email.trim());
             }
         }
     }
 
     return {
         authors: CollectionUtils.uniqueSorted([...authors]),
-        unresolvedExpensifyCoAuthors: CollectionUtils.uniqueSorted([...unresolvedExpensifyCoAuthors]),
+        unresolvedCoAuthors: CollectionUtils.uniqueSorted([...unresolvedCoAuthors]),
     };
 }
 
@@ -91,7 +87,7 @@ async function evaluatePeerReview(input: PeerReviewInput): Promise<PeerReviewRes
         };
     }
 
-    const {authors, unresolvedExpensifyCoAuthors} = await getCommitAuthors({owner, repo, prNumber});
+    const {authors, unresolvedCoAuthors} = await getCommitAuthors({owner, repo, prNumber});
 
     // Unlike the PHP chore, which logs a bugbot and skips when no commit authors can be determined,
     // we fail the check here so an unresolvable PR can't merge without independent review.
@@ -102,10 +98,10 @@ async function evaluatePeerReview(input: PeerReviewInput): Promise<PeerReviewRes
         };
     }
 
-    if (unresolvedExpensifyCoAuthors.length > 0) {
+    if (unresolvedCoAuthors.length > 0) {
         return {
             status: 'fail',
-            error: new Error(`Unable to resolve Expensify co-author emails to GitHub users: ${formatUsers(unresolvedExpensifyCoAuthors)}`),
+            error: new Error(`Unable to resolve co-author emails to GitHub users: ${formatUsers(unresolvedCoAuthors)}`),
         };
     }
 
@@ -151,8 +147,8 @@ function getFailureTitle(message: string): string {
     if (message.includes('does not have enough independent Expensify employee approvals')) {
         return 'Missing independent peer review';
     }
-    if (message.includes('Unable to resolve Expensify co-author emails')) {
-        return 'Unresolved Expensify co-author';
+    if (message.includes('Unable to resolve co-author emails')) {
+        return 'Unresolved co-author';
     }
     if (message.includes('Unable to resolve canonical commit author')) {
         return 'Missing commit author';

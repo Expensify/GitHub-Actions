@@ -45,7 +45,7 @@ describe('getCommitAuthors', () => {
         const result = await VerifyPeerReview.getCommitAuthors(BASE_ARGS);
 
         assert.deepEqual(result.authors, ['AndrewGable', 'MelvinBot']);
-        assert.deepEqual(result.unresolvedExpensifyCoAuthors, []);
+        assert.deepEqual(result.unresolvedCoAuthors, []);
     });
 
     it('ignores co-authors when canonical author is human', async () => {
@@ -64,29 +64,37 @@ describe('getCommitAuthors', () => {
         assert.deepEqual(result.authors, ['AndrewGable']);
     });
 
-    it('normalizes expensify email casing and whitespace for unresolved detection', async () => {
+    it('normalizes co-author email casing and whitespace for unresolved detection', async () => {
         GitHubUtils.listPullRequestCommits = mockCommits([makeCommit('MelvinBot', undefined, 'Change\n\nCo-authored-by: John Smith <  Andrew@Expensify.com  >')]);
 
         const result = await VerifyPeerReview.getCommitAuthors(BASE_ARGS);
 
-        assert.deepEqual(result.unresolvedExpensifyCoAuthors, ['Andrew@Expensify.com']);
+        assert.deepEqual(result.unresolvedCoAuthors, ['Andrew@Expensify.com']);
     });
 
-    it('resolves expensify co-authors from display name when email cannot be mapped', async () => {
+    it('resolves co-authors from display name when email cannot be mapped', async () => {
         GitHubUtils.listPullRequestCommits = mockCommits([makeCommit('MelvinBot', undefined, 'Change\n\nCo-authored-by: Andrew Gable <andrew@expensify.com>')]);
 
         const result = await VerifyPeerReview.getCommitAuthors(BASE_ARGS);
 
         assert.deepEqual(result.authors, ['AndrewGable', 'MelvinBot']);
-        assert.deepEqual(result.unresolvedExpensifyCoAuthors, []);
+        assert.deepEqual(result.unresolvedCoAuthors, []);
     });
 
-    it('collects unresolved expensify co-author emails when display name cannot be mapped', async () => {
+    it('collects unresolved co-author emails when display name cannot be mapped', async () => {
         GitHubUtils.listPullRequestCommits = mockCommits([makeCommit('MelvinBot', undefined, 'Change\n\nCo-authored-by: John Smith <andrew@expensify.com>')]);
 
         const result = await VerifyPeerReview.getCommitAuthors(BASE_ARGS);
 
-        assert.deepEqual(result.unresolvedExpensifyCoAuthors, ['andrew@expensify.com']);
+        assert.deepEqual(result.unresolvedCoAuthors, ['andrew@expensify.com']);
+    });
+
+    it('collects unresolved co-author emails regardless of email domain', async () => {
+        GitHubUtils.listPullRequestCommits = mockCommits([makeCommit('MelvinBot', undefined, 'Change\n\nCo-authored-by: Jane Doe <jane.doe@gmail.com>')]);
+
+        const result = await VerifyPeerReview.getCommitAuthors(BASE_ARGS);
+
+        assert.deepEqual(result.unresolvedCoAuthors, ['jane.doe@gmail.com']);
     });
 
     it('throws when canonical author cannot be resolved', async () => {
