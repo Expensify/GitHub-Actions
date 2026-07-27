@@ -58,10 +58,10 @@ describe('resolveDisplayNameToLogin', () => {
     });
 });
 
-describe('resolveCoAuthorToLogin', () => {
+describe('resolveCoAuthorLogin', () => {
     it('prefers noreply email resolution over display name', () => {
         assert.equal(
-            GitCommitUtils.resolveCoAuthorToLogin(
+            GitCommitUtils.resolveCoAuthorLogin(
                 {
                     displayName: 'Wrong Name',
                     email: 'AndrewGable@users.noreply.github.com',
@@ -74,7 +74,7 @@ describe('resolveCoAuthorToLogin', () => {
 
     it('falls back to display name when email cannot be resolved', () => {
         assert.equal(
-            GitCommitUtils.resolveCoAuthorToLogin(
+            GitCommitUtils.resolveCoAuthorLogin(
                 {
                     displayName: 'Andrew Gable',
                     email: 'andrew@expensify.com',
@@ -86,11 +86,11 @@ describe('resolveCoAuthorToLogin', () => {
     });
 
     it('rejects display names that do not match allowed logins', () => {
-        assert.equal(GitCommitUtils.resolveCoAuthorToLogin({displayName: 'John Smith', email: 'andrew@expensify.com'}, new Set(['AndrewGable'])), null);
+        assert.equal(GitCommitUtils.resolveCoAuthorLogin({displayName: 'John Smith', email: 'andrew@expensify.com'}, new Set(['AndrewGable'])), null);
     });
 
     it('uses canonical allowed login casing', () => {
-        assert.equal(GitCommitUtils.resolveCoAuthorToLogin({displayName: 'andrew gable', email: 'andrew@expensify.com'}, new Set(['AndrewGable'])), 'AndrewGable');
+        assert.equal(GitCommitUtils.resolveCoAuthorLogin({displayName: 'andrew gable', email: 'andrew@expensify.com'}, new Set(['AndrewGable'])), 'AndrewGable');
     });
 });
 

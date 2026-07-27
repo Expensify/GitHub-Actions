@@ -59,7 +59,7 @@ function findAllowedLogin(login: string, allowedLogins: Set<string>): string | n
     return null;
 }
 
-function resolveCoAuthorToLogin(coAuthor: GitHubCoAuthor, allowedLogins: Set<string>): string | null {
+function resolveCoAuthorLogin(coAuthor: GitHubCoAuthor, allowedLogins: Set<string>): string | null {
     const loginFromNoreply = resolveNoreplyEmailToLogin(coAuthor.email);
     if (loginFromNoreply) {
         return loginFromNoreply;
@@ -94,7 +94,7 @@ export default {
     parseCoAuthorEmails,
     parseCoAuthors,
     getCanonicalAuthorLogin,
-    resolveCoAuthorToLogin,
+    resolveCoAuthorLogin,
     resolveDisplayNameToLogin,
     resolveNoreplyEmailToLogin,
 };

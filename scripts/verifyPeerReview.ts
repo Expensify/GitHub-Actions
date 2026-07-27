@@ -47,7 +47,7 @@ async function getCommitAuthors({owner, repo, prNumber}: {owner: string; repo: s
         }
 
         for (const coAuthor of GitCommitUtils.parseCoAuthors(commit.commit.message)) {
-            const login = GitCommitUtils.resolveCoAuthorToLogin(coAuthor, employeeLogins);
+            const login = GitCommitUtils.resolveCoAuthorLogin(coAuthor, employeeLogins);
             if (login) {
                 authors.add(login);
             } else {
