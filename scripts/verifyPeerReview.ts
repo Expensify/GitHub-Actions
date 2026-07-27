@@ -3,7 +3,7 @@
 import CLI from 'expensify-common/CLI';
 
 import CollectionUtils from './libs/CollectionUtils';
-import GitCommitUtils, {type GitHubPullRequestCommit} from './libs/GitCommitUtils';
+import GitCommitUtils from './libs/GitCommitUtils';
 import GitHubUtils from './libs/GitHubUtils';
 import GitHubWorkflowUtils from './libs/GitHubWorkflowUtils';
 
@@ -24,13 +24,12 @@ function isExpensifyEmail(email: string): boolean {
     return email.trim().toLowerCase().endsWith('@expensify.com');
 }
 
-function getCommitAuthors(
-    commits: GitHubPullRequestCommit[],
-    employeeLogins?: Set<string>,
-): {
+async function getCommitAuthors({owner, repo, prNumber}: {owner: string; repo: string; prNumber: number}): Promise<{
     authors: string[];
     unresolvedExpensifyCoAuthors: string[];
-} {
+}> {
+    const [commits, employeeLogins] = await Promise.all([GitHubUtils.listPullRequestCommits({owner, repo, number: prNumber}), GitHubUtils.getEmployeeLogins()]);
+
     const authors = new Set<string>();
     const unresolvedExpensifyCoAuthors = new Set<string>();
 
@@ -92,20 +91,16 @@ async function evaluatePeerReview(input: PeerReviewInput): Promise<PeerReviewRes
         };
     }
 
-    const [approvers, commits, employeeLogins] = await Promise.all([
-        GitHubUtils.getLatestApprovers({owner, repo, number: prNumber}),
-        GitHubUtils.listPullRequestCommits({owner, repo, number: prNumber}),
-        GitHubUtils.getEmployeeLogins(),
-    ]);
+    const {authors, unresolvedExpensifyCoAuthors} = await getCommitAuthors({owner, repo, prNumber});
 
-    if (approvers.length === 0) {
+    // Unlike the PHP chore, which logs a bugbot and skips when no commit authors can be determined,
+    // we fail the check here so an unresolvable PR can't merge without independent review.
+    if (authors.length === 0) {
         return {
-            status: 'skip',
-            reason: `${prSlug} has no approving reviews from writers; regular branch protection will block merge until an approval exists.`,
+            status: 'fail',
+            error: new Error(`Unable to determine any commit authors for ${prSlug}.`),
         };
     }
-
-    const {authors, unresolvedExpensifyCoAuthors} = getCommitAuthors(commits, employeeLogins);
 
     if (unresolvedExpensifyCoAuthors.length > 0) {
         return {
@@ -121,6 +116,15 @@ async function evaluatePeerReview(input: PeerReviewInput): Promise<PeerReviewRes
         };
     }
 
+    const approvers = await GitHubUtils.getLatestApprovers({owner, repo, number: prNumber});
+    if (approvers.length === 0) {
+        return {
+            status: 'skip',
+            reason: `${prSlug} has no approving reviews from writers; regular branch protection will block merge until an approval exists.`,
+        };
+    }
+
+    const employeeLogins = await GitHubUtils.getEmployeeLogins();
     const independentEmployeeApprovers = getIndependentEmployeeApprovers(approvers, authors, employeeLogins);
     if (independentEmployeeApprovers.length < requiredApprovingReviewCount) {
         return {
@@ -152,6 +156,9 @@ function getFailureTitle(message: string): string {
     }
     if (message.includes('Unable to resolve canonical commit author')) {
         return 'Missing commit author';
+    }
+    if (message.includes('Unable to determine any commit authors')) {
+        return 'No commit authors found';
     }
     if (message.includes('has no human commit authors or co-authors')) {
         return 'No human commit author';

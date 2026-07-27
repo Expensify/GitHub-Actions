@@ -19,7 +19,17 @@ type TeamMembersResponse = {
     } | null;
 };
 
+let employeeLoginsPromise: Promise<Set<string>> | undefined;
+
 async function getEmployeeLogins(): Promise<Set<string>> {
+    if (!employeeLoginsPromise) {
+        employeeLoginsPromise = fetchEmployeeLogins();
+    }
+
+    return employeeLoginsPromise;
+}
+
+async function fetchEmployeeLogins(): Promise<Set<string>> {
     const employeeLogins = new Set<string>();
 
     async function collectPage(cursor: string | null): Promise<void> {
