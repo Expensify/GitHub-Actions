@@ -23,18 +23,18 @@ const BASE_INPUT: PeerReviewInput = {
 };
 
 describe('getIndependentEmployeeApprovers', () => {
-    let originalGetEmployeeLogins: typeof GitHubUtils.getEmployeeLogins;
+    let originalIsExpensifyEmployee: typeof GitHubUtils.isExpensifyEmployee;
 
     beforeEach(() => {
-        originalGetEmployeeLogins = GitHubUtils.getEmployeeLogins;
+        originalIsExpensifyEmployee = GitHubUtils.isExpensifyEmployee;
     });
 
     afterEach(() => {
-        GitHubUtils.getEmployeeLogins = originalGetEmployeeLogins;
+        GitHubUtils.isExpensifyEmployee = originalIsExpensifyEmployee;
     });
 
     it('excludes commit authors and non-employees', async () => {
-        GitHubUtils.getEmployeeLogins = async () => new Set(['AndrewGable', 'MonilBhavsar']);
+        GitHubUtils.isExpensifyEmployee = async (login) => new Set(['AndrewGable', 'MonilBhavsar']).has(login);
 
         const independent = await VerifyPeerReview.getIndependentEmployeeApprovers(['AndrewGable', 'MonilBhavsar', 'externalCollab'], ['AndrewGable']);
 
@@ -44,7 +44,7 @@ describe('getIndependentEmployeeApprovers', () => {
     it('does not match employee logins with different casing', async () => {
         // GitHub logins are case-sensitive, and both approvers and employee logins come directly from
         // GitHub's API, so a real match is never case-mismatched. Folding case here would be incorrect.
-        GitHubUtils.getEmployeeLogins = async () => new Set(['MonilBhavsar']);
+        GitHubUtils.isExpensifyEmployee = async (login) => new Set(['MonilBhavsar']).has(login);
 
         const independent = await VerifyPeerReview.getIndependentEmployeeApprovers(['monilbhavsar'], ['AndrewGable']);
 
@@ -54,7 +54,7 @@ describe('getIndependentEmployeeApprovers', () => {
     it('does not treat an approver as a commit-author match when casing differs', async () => {
         // Same reasoning as above: a real commit author and a real approver are never the same
         // account with different casing, so this must not be a case-insensitive comparison.
-        GitHubUtils.getEmployeeLogins = async () => new Set(['andrewgable']);
+        GitHubUtils.isExpensifyEmployee = async (login) => new Set(['andrewgable']).has(login);
 
         const independent = await VerifyPeerReview.getIndependentEmployeeApprovers(['andrewgable'], ['AndrewGable']);
 
@@ -66,25 +66,25 @@ describe('evaluatePeerReview', () => {
     let originalGetRequiredApprovingReviewCount: typeof GitHubUtils.getRequiredApprovingReviewCount;
     let originalGetLatestApprovers: typeof GitHubUtils.getLatestApprovers;
     let originalListPullRequestCommits: typeof GitHubUtils.listPullRequestCommits;
-    let originalGetEmployeeLogins: typeof GitHubUtils.getEmployeeLogins;
+    let originalIsExpensifyEmployee: typeof GitHubUtils.isExpensifyEmployee;
 
     beforeEach(() => {
         originalGetRequiredApprovingReviewCount = GitHubUtils.getRequiredApprovingReviewCount;
         originalGetLatestApprovers = GitHubUtils.getLatestApprovers;
         originalListPullRequestCommits = GitHubUtils.listPullRequestCommits;
-        originalGetEmployeeLogins = GitHubUtils.getEmployeeLogins;
+        originalIsExpensifyEmployee = GitHubUtils.isExpensifyEmployee;
 
         GitHubUtils.getRequiredApprovingReviewCount = async () => 1;
         GitHubUtils.getLatestApprovers = async () => [];
         GitHubUtils.listPullRequestCommits = async () => [];
-        GitHubUtils.getEmployeeLogins = async () => new Set(['MonilBhavsar', 'AndrewGable', 'rafecolton']);
+        GitHubUtils.isExpensifyEmployee = async (login) => new Set(['MonilBhavsar', 'AndrewGable', 'rafecolton']).has(login);
     });
 
     afterEach(() => {
         GitHubUtils.getRequiredApprovingReviewCount = originalGetRequiredApprovingReviewCount;
         GitHubUtils.getLatestApprovers = originalGetLatestApprovers;
         GitHubUtils.listPullRequestCommits = originalListPullRequestCommits;
-        GitHubUtils.getEmployeeLogins = originalGetEmployeeLogins;
+        GitHubUtils.isExpensifyEmployee = originalIsExpensifyEmployee;
     });
 
     it('skips when branch requires no approving reviews', async () => {
