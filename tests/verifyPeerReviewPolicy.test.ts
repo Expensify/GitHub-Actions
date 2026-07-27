@@ -41,12 +41,14 @@ describe('getIndependentEmployeeApprovers', () => {
         assert.deepEqual(independent, ['MonilBhavsar']);
     });
 
-    it('matches employee logins case-insensitively', async () => {
+    it('does not match employee logins with different casing', async () => {
+        // GitHub logins are case-sensitive, and both approvers and employee logins come directly from
+        // GitHub's API, so a real match is never case-mismatched. Folding case here would be incorrect.
         GitHubUtils.getEmployeeLogins = async () => new Set(['MonilBhavsar']);
 
         const independent = await VerifyPeerReview.getIndependentEmployeeApprovers(['monilbhavsar'], ['AndrewGable']);
 
-        assert.deepEqual(independent, ['MonilBhavsar']);
+        assert.deepEqual(independent, []);
     });
 
     it('excludes commit authors case-insensitively', async () => {

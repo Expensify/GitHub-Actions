@@ -50,6 +50,30 @@ describe('getRequiredApprovingReviewCount', () => {
     });
 });
 
+describe('isExpensifyEmployee', () => {
+    afterEach(() => {
+        GitHubAPIClient.internalOctokit = undefined;
+        GitHubAPIClient.graphqlClient = undefined;
+    });
+
+    it('checks membership in the fetched employee login set', async () => {
+        GitHubAPIClient.graphqlClient = async () => ({
+            organization: {
+                team: {
+                    members: {
+                        pageInfo: {hasNextPage: false, endCursor: null},
+                        nodes: [{login: 'AndrewGable'}],
+                    },
+                },
+            },
+        });
+
+        // GitHub logins are case-sensitive, so this is a direct set lookup, not a case-insensitive match.
+        assert.equal(await GitHubUtils.isExpensifyEmployee('AndrewGable'), true);
+        assert.equal(await GitHubUtils.isExpensifyEmployee('andrewgable'), false);
+    });
+});
+
 describe('isBotUser', () => {
     it('returns true for GitHub App bot accounts', () => {
         assert.equal(GitHubUtils.isBotUser('dependabot[bot]'), true);

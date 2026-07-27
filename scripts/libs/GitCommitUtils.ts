@@ -97,5 +97,4 @@ export default {
     resolveCoAuthorToLogin,
     resolveDisplayNameToLogin,
     resolveNoreplyEmailToLogin,
-    findAllowedLogin,
 };

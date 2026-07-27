@@ -56,17 +56,12 @@ async function getCommitAuthors({owner, repo, prNumber}: {owner: string; repo: s
 }
 
 async function getIndependentEmployeeApprovers(approvers: string[], authors: string[]): Promise<string[]> {
-    const employeeLogins = await GitHubUtils.getEmployeeLogins();
     const authorsLowerCase = new Set(authors.map((author) => author.toLowerCase()));
+    const independentApprovers = approvers.filter((approver) => !authorsLowerCase.has(approver.toLowerCase()));
 
-    return approvers.flatMap((approver) => {
-        if (authorsLowerCase.has(approver.toLowerCase())) {
-            return [];
-        }
+    const independentEmployeeApprovers = await Promise.all(independentApprovers.map(async (approver) => ((await GitHubUtils.isExpensifyEmployee(approver)) ? approver : null)));
 
-        const canonicalEmployeeLogin = GitCommitUtils.findAllowedLogin(approver, employeeLogins);
-        return canonicalEmployeeLogin ? [canonicalEmployeeLogin] : [];
-    });
+    return independentEmployeeApprovers.filter((approver): approver is string => approver !== null);
 }
 
 async function evaluatePeerReview(input: PeerReviewInput): Promise<PeerReviewResult> {
