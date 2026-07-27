@@ -51,12 +51,14 @@ describe('getIndependentEmployeeApprovers', () => {
         assert.deepEqual(independent, []);
     });
 
-    it('excludes commit authors case-insensitively', async () => {
-        GitHubUtils.getEmployeeLogins = async () => new Set(['AndrewGable']);
+    it('does not treat an approver as a commit-author match when casing differs', async () => {
+        // Same reasoning as above: a real commit author and a real approver are never the same
+        // account with different casing, so this must not be a case-insensitive comparison.
+        GitHubUtils.getEmployeeLogins = async () => new Set(['andrewgable']);
 
         const independent = await VerifyPeerReview.getIndependentEmployeeApprovers(['andrewgable'], ['AndrewGable']);
 
-        assert.deepEqual(independent, []);
+        assert.deepEqual(independent, ['andrewgable']);
     });
 });
 

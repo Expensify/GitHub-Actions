@@ -56,8 +56,8 @@ async function getCommitAuthors({owner, repo, prNumber}: {owner: string; repo: s
 }
 
 async function getIndependentEmployeeApprovers(approvers: string[], authors: string[]): Promise<string[]> {
-    const authorsLowerCase = new Set(authors.map((author) => author.toLowerCase()));
-    const independentApprovers = approvers.filter((approver) => !authorsLowerCase.has(approver.toLowerCase()));
+    const authorsSet = new Set(authors);
+    const independentApprovers = approvers.filter((approver) => !authorsSet.has(approver));
 
     const independentEmployeeApprovers = await Promise.all(independentApprovers.map(async (approver) => ((await GitHubUtils.isExpensifyEmployee(approver)) ? approver : null)));
 
