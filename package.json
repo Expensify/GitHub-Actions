@@ -15,7 +15,7 @@
     "@octokit/plugin-throttling": "^11.0.0",
     "@octokit/request-error": "^7.0.0",
     "@octokit/rest": "^22.0.1",
-    "expensify-common": "2.0.189"
+    "expensify-common": "2.0.195"
   },
   "devDependencies": {
     "@types/node": "^25.9.4",
