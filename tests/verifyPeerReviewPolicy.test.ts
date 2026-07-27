@@ -86,12 +86,15 @@ describe('evaluatePeerReview', () => {
         }
     });
 
-    it('skips when there are no approving reviews yet', async () => {
+    it('fails when there are no approving reviews yet', async () => {
         GitHubUtils.listPullRequestCommits = mockCommits([makeCommit('MelvinBot'), makeCommit('AndrewGable')]);
 
         const result = await VerifyPeerReview.evaluatePeerReview(BASE_INPUT);
 
-        assert.equal(result.status, 'skip');
+        assert.equal(result.status, 'fail');
+        if (result.status === 'fail') {
+            assert.match(result.error.message, /does not have enough independent Expensify employee approvals/);
+        }
     });
 
     it('fails on self-review from commit co-author', async () => {

@@ -119,13 +119,6 @@ async function evaluatePeerReview(input: PeerReviewInput): Promise<PeerReviewRes
     }
 
     const approvers = await GitHubUtils.getLatestApprovers({owner, repo, number: prNumber});
-    if (approvers.length === 0) {
-        return {
-            status: 'skip',
-            reason: `${prSlug} has no approving reviews from writers; regular branch protection will block merge until an approval exists.`,
-        };
-    }
-
     const employeeLogins = await GitHubUtils.getEmployeeLogins();
     const independentEmployeeApprovers = getIndependentEmployeeApprovers(approvers, authors, employeeLogins);
     if (independentEmployeeApprovers.length >= requiredApprovingReviewCount) {
