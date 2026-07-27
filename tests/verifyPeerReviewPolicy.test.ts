@@ -19,7 +19,7 @@ const BASE_INPUT: PeerReviewInput = {
     owner: 'Expensify',
     repo: 'Auth',
     number: 21136,
-    baseRef: 'main',
+    targetBranch: 'main',
 };
 
 describe('getIndependentEmployeeApprovers', () => {

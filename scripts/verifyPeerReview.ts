@@ -11,7 +11,7 @@ type PeerReviewInput = {
     owner: string;
     repo: string;
     number: number;
-    baseRef: string;
+    targetBranch: string;
 };
 
 type PeerReviewResult = {status: 'pass'; reason: string} | {status: 'skip'; reason: string} | {status: 'fail'; error: Error};
@@ -74,21 +74,21 @@ function getIndependentEmployeeApprovers(approvers: string[], authors: string[],
 }
 
 async function evaluatePeerReview(input: PeerReviewInput): Promise<PeerReviewResult> {
-    const {owner, repo, number, baseRef} = input;
+    const {owner, repo, number, targetBranch} = input;
     const prSlug = `${owner}/${repo}#${number}`;
 
     console.log('Evaluating PR', {
         repo,
         pullRequestNumber: number,
-        baseRef,
+        targetBranch,
         htmlURL: `https://github.com/${owner}/${repo}/pull/${number}`,
     });
 
-    const requiredApprovingReviewCount = await GitHubUtils.getRequiredApprovingReviewCount({owner, repo, baseRef});
+    const requiredApprovingReviewCount = await GitHubUtils.getRequiredApprovingReviewCount({owner, repo, baseRef: targetBranch});
     if (requiredApprovingReviewCount === 0) {
         return {
             status: 'skip',
-            reason: `${prSlug} targets ${baseRef}, which does not require approving reviews.`,
+            reason: `${prSlug} targets ${targetBranch}, which does not require approving reviews.`,
         };
     }
 
@@ -182,7 +182,7 @@ async function main(): Promise<void> {
                     return number;
                 },
             },
-            'base-ref': {
+            'target-branch': {
                 description: 'Target branch ref for the pull request',
             },
         },
@@ -192,13 +192,13 @@ async function main(): Promise<void> {
     const owner = cli.namedArgs.owner;
     const repo = cli.namedArgs.repo;
     const pullRequestNumber = cli.namedArgs['pull-request-number'];
-    const baseRef = cli.namedArgs['base-ref'];
+    const targetBranch = cli.namedArgs['target-branch'];
 
     const result = await evaluatePeerReview({
         owner,
         repo,
         number: pullRequestNumber,
-        baseRef,
+        targetBranch,
     });
 
     if (result.status === 'skip' || result.status === 'pass') {
