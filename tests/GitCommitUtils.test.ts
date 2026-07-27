@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
-import {describe, it} from 'node:test';
+import {afterEach, beforeEach, describe, it} from 'node:test';
 
 import GitCommitUtils, {type GitHubPullRequestCommit} from '../scripts/libs/GitCommitUtils';
+import GitHubUtils from '../scripts/libs/GitHubUtils';
 
 function makeCommit(authorLogin: string | undefined, authorName: string | undefined, message: string): GitHubPullRequestCommit {
     return {
@@ -59,38 +60,57 @@ describe('resolveDisplayNameToLogin', () => {
 });
 
 describe('resolveCoAuthorLogin', () => {
-    it('prefers noreply email resolution over display name', () => {
-        assert.equal(
-            GitCommitUtils.resolveCoAuthorLogin(
-                {
-                    displayName: 'Wrong Name',
-                    email: 'AndrewGable@users.noreply.github.com',
-                },
-                new Set(),
-            ),
-            'AndrewGable',
-        );
+    let originalIsExpensifyEmployee: typeof GitHubUtils.isExpensifyEmployee;
+
+    beforeEach(() => {
+        originalIsExpensifyEmployee = GitHubUtils.isExpensifyEmployee;
     });
 
-    it('falls back to display name when email cannot be resolved', () => {
-        assert.equal(
-            GitCommitUtils.resolveCoAuthorLogin(
-                {
-                    displayName: 'Andrew Gable',
-                    email: 'andrew@expensify.com',
-                },
-                new Set(['AndrewGable']),
-            ),
-            'AndrewGable',
-        );
+    afterEach(() => {
+        GitHubUtils.isExpensifyEmployee = originalIsExpensifyEmployee;
     });
 
-    it('rejects display names that do not match allowed logins', () => {
-        assert.equal(GitCommitUtils.resolveCoAuthorLogin({displayName: 'John Smith', email: 'andrew@expensify.com'}, new Set(['AndrewGable'])), null);
+    it('prefers noreply email resolution over display name', async () => {
+        GitHubUtils.isExpensifyEmployee = async () => {
+            throw new Error('should not be called when a noreply email resolves the login');
+        };
+
+        const login = await GitCommitUtils.resolveCoAuthorLogin({
+            displayName: 'Wrong Name',
+            email: 'AndrewGable@users.noreply.github.com',
+        });
+
+        assert.equal(login, 'AndrewGable');
     });
 
-    it('uses canonical allowed login casing', () => {
-        assert.equal(GitCommitUtils.resolveCoAuthorLogin({displayName: 'andrew gable', email: 'andrew@expensify.com'}, new Set(['AndrewGable'])), 'AndrewGable');
+    it('falls back to display name when the guessed login is a known employee', async () => {
+        GitHubUtils.isExpensifyEmployee = async (login) => login === 'AndrewGable';
+
+        const login = await GitCommitUtils.resolveCoAuthorLogin({
+            displayName: 'Andrew Gable',
+            email: 'andrew@expensify.com',
+        });
+
+        assert.equal(login, 'AndrewGable');
+    });
+
+    it('rejects display names that are not known employees', async () => {
+        GitHubUtils.isExpensifyEmployee = async () => false;
+
+        const login = await GitCommitUtils.resolveCoAuthorLogin({displayName: 'John Smith', email: 'andrew@expensify.com'});
+
+        assert.equal(login, null);
+    });
+
+    it('does not correct for a guessed login with different casing', async () => {
+        // GitHub logins are case-sensitive. A guessed login that differs in case from the real
+        // one is a resolution failure to fix at the source (the commit's co-author trailer),
+        // not something for us to correct for.
+        GitHubUtils.isExpensifyEmployee = async (login) => login === 'AndrewGable';
+
+        const login = await GitCommitUtils.resolveCoAuthorLogin({displayName: 'andrew gable', email: 'andrew@expensify.com'});
+
+        assert.equal(login, null);
     });
 });
 

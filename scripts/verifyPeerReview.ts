@@ -3,7 +3,7 @@
 import CLI from 'expensify-common/CLI';
 
 import CollectionUtils from './libs/CollectionUtils';
-import GitCommitUtils from './libs/GitCommitUtils';
+import GitCommitUtils, {type GitHubCoAuthor} from './libs/GitCommitUtils';
 import GitHubUtils from './libs/GitHubUtils';
 import GitHubWorkflowUtils from './libs/GitHubWorkflowUtils';
 
@@ -24,13 +24,15 @@ async function getCommitAuthors({owner, repo, prNumber}: {owner: string; repo: s
     authors: string[];
     unresolvedCoAuthors: string[];
 }> {
-    const [commits, employeeLogins] = await Promise.all([GitHubUtils.listPullRequestCommits({owner, repo, number: prNumber}), GitHubUtils.getEmployeeLogins()]);
+    const commits = await GitHubUtils.listPullRequestCommits({owner, repo, number: prNumber});
     const authors = new Set<string>();
     const unresolvedCoAuthors = new Set<string>();
 
     console.log('Checking commit authors', {
         commitCount: commits.length,
     });
+
+    const coAuthorsToResolve: GitHubCoAuthor[] = [];
 
     for (const commit of commits) {
         const canonicalAuthor = GitCommitUtils.getCanonicalAuthorLogin(commit);
@@ -46,15 +48,19 @@ async function getCommitAuthors({owner, repo, prNumber}: {owner: string; repo: s
             continue;
         }
 
-        for (const coAuthor of GitCommitUtils.parseCoAuthors(commit.commit.message)) {
-            const login = GitCommitUtils.resolveCoAuthorLogin(coAuthor, employeeLogins);
+        coAuthorsToResolve.push(...GitCommitUtils.parseCoAuthors(commit.commit.message));
+    }
+
+    await Promise.all(
+        coAuthorsToResolve.map(async (coAuthor) => {
+            const login = await GitCommitUtils.resolveCoAuthorLogin(coAuthor);
             if (login) {
                 authors.add(login);
             } else {
                 unresolvedCoAuthors.add(coAuthor.email.trim());
             }
-        }
-    }
+        }),
+    );
 
     return {
         authors: CollectionUtils.uniqueSorted([...authors]),

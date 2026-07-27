@@ -1,3 +1,5 @@
+import GitHubUtils from './GitHubUtils';
+
 type GitHubPullRequestCommit = {
     author: {
         login?: string;
@@ -49,17 +51,7 @@ function resolveDisplayNameToLogin(displayName: string): string | null {
     return null;
 }
 
-function findAllowedLogin(login: string, allowedLogins: Set<string>): string | null {
-    for (const allowedLogin of allowedLogins) {
-        if (allowedLogin.toLowerCase() === login.toLowerCase()) {
-            return allowedLogin;
-        }
-    }
-
-    return null;
-}
-
-function resolveCoAuthorLogin(coAuthor: GitHubCoAuthor, allowedLogins: Set<string>): string | null {
+async function resolveCoAuthorLogin(coAuthor: GitHubCoAuthor): Promise<string | null> {
     const loginFromNoreply = resolveNoreplyEmailToLogin(coAuthor.email);
     if (loginFromNoreply) {
         return loginFromNoreply;
@@ -70,7 +62,7 @@ function resolveCoAuthorLogin(coAuthor: GitHubCoAuthor, allowedLogins: Set<strin
         return null;
     }
 
-    return findAllowedLogin(loginFromDisplayName, allowedLogins);
+    return (await GitHubUtils.isExpensifyEmployee(loginFromDisplayName)) ? loginFromDisplayName : null;
 }
 
 function getCanonicalAuthorLogin(commit: GitHubPullRequestCommit): string {
