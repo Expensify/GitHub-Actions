@@ -12,11 +12,6 @@ type PeerReviewInput = {
     repo: string;
     number: number;
     baseRef: string;
-    requiredApprovingReviewCount: number;
-    approvers: string[];
-    authors: string[];
-    unresolvedExpensifyCoAuthors: string[];
-    employeeLogins: Set<string>;
 };
 
 type PeerReviewResult = {status: 'pass'; reason: string} | {status: 'skip'; reason: string} | {status: 'fail'; error: Error};
@@ -78,10 +73,11 @@ function getIndependentEmployeeApprovers(approvers: string[], authors: string[],
     });
 }
 
-function evaluatePeerReview(input: PeerReviewInput): PeerReviewResult {
-    const {owner, repo, number, baseRef, requiredApprovingReviewCount, approvers, authors, unresolvedExpensifyCoAuthors, employeeLogins} = input;
+async function evaluatePeerReview(input: PeerReviewInput): Promise<PeerReviewResult> {
+    const {owner, repo, number, baseRef} = input;
     const prSlug = `${owner}/${repo}#${number}`;
 
+    const requiredApprovingReviewCount = await GitHubUtils.getRequiredApprovingReviewCount({owner, repo, baseRef});
     if (requiredApprovingReviewCount === 0) {
         return {
             status: 'skip',
@@ -89,12 +85,20 @@ function evaluatePeerReview(input: PeerReviewInput): PeerReviewResult {
         };
     }
 
+    const [approvers, commits, employeeLogins] = await Promise.all([
+        GitHubUtils.getLatestApprovers({owner, repo, number}),
+        GitHubUtils.listPullRequestCommits({owner, repo, number}),
+        GitHubUtils.getEmployeeLogins(),
+    ]);
+
     if (approvers.length === 0) {
         return {
             status: 'skip',
             reason: `${prSlug} has no approving reviews from writers; regular branch protection will block merge until an approval exists.`,
         };
     }
+
+    const {authors, unresolvedExpensifyCoAuthors} = getCommitAuthors(commits, employeeLogins);
 
     if (unresolvedExpensifyCoAuthors.length > 0) {
         return {
@@ -183,29 +187,18 @@ async function main(): Promise<void> {
     const pullRequestNumber = cli.namedArgs['pull-request-number'];
     const baseRef = cli.namedArgs['base-ref'];
 
-    const [requiredApprovingReviewCount, approvers, commits] = await Promise.all([
-        GitHubUtils.getRequiredApprovingReviewCount({owner, repo, baseRef}),
-        GitHubUtils.getLatestApprovers({owner, repo, number: pullRequestNumber}),
-        GitHubUtils.listPullRequestCommits({
-            owner,
-            repo,
-            number: pullRequestNumber,
-        }),
-    ]);
+    console.log('Evaluating PR', {
+        repo,
+        pullRequestNumber,
+        baseRef,
+        htmlURL: `https://github.com/${owner}/${repo}/pull/${pullRequestNumber}`,
+    });
 
-    const employeeLogins = requiredApprovingReviewCount > 0 ? await GitHubUtils.getEmployeeLogins() : new Set<string>();
-    const {authors, unresolvedExpensifyCoAuthors} = getCommitAuthors(commits, employeeLogins);
-
-    const result = evaluatePeerReview({
+    const result = await evaluatePeerReview({
         owner,
         repo,
         number: pullRequestNumber,
         baseRef,
-        requiredApprovingReviewCount,
-        approvers,
-        authors,
-        unresolvedExpensifyCoAuthors,
-        employeeLogins,
     });
 
     if (result.status === 'skip' || result.status === 'pass') {

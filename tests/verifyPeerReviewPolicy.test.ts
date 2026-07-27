@@ -1,18 +1,25 @@
 import assert from 'node:assert/strict';
-import {describe, it} from 'node:test';
+import {afterEach, beforeEach, describe, it} from 'node:test';
 
+import type {GitHubPullRequestCommit} from '../scripts/libs/GitCommitUtils';
+import GitHubUtils from '../scripts/libs/GitHubUtils';
 import VerifyPeerReview, {type PeerReviewInput} from '../scripts/verifyPeerReview';
 
-const baseInput: PeerReviewInput = {
+function makeCommit(login: string, message = ''): GitHubPullRequestCommit {
+    return {author: {login}, commit: {message}};
+}
+
+function mockCommits(commits: GitHubPullRequestCommit[]): typeof GitHubUtils.listPullRequestCommits {
+    // Tests only need the GitHubPullRequestCommit fields consumed by getCommitAuthors, not the full Octokit response shape.
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- narrow test fixture standing in for the full Octokit commit type
+    return async () => commits as unknown as Awaited<ReturnType<typeof GitHubUtils.listPullRequestCommits>>;
+}
+
+const BASE_INPUT: PeerReviewInput = {
     owner: 'Expensify',
     repo: 'Auth',
     number: 21136,
     baseRef: 'main',
-    requiredApprovingReviewCount: 1,
-    approvers: [],
-    authors: [],
-    unresolvedExpensifyCoAuthors: [],
-    employeeLogins: new Set(['MonilBhavsar', 'AndrewGable', 'rafecolton']),
 };
 
 describe('getIndependentEmployeeApprovers', () => {
@@ -36,33 +43,51 @@ describe('getIndependentEmployeeApprovers', () => {
 });
 
 describe('evaluatePeerReview', () => {
-    it('skips when branch requires no approving reviews', () => {
-        const result = VerifyPeerReview.evaluatePeerReview({
-            ...baseInput,
-            requiredApprovingReviewCount: 0,
-            approvers: ['AndrewGable'],
-            authors: ['AndrewGable'],
-        });
+    let originalGetRequiredApprovingReviewCount: typeof GitHubUtils.getRequiredApprovingReviewCount;
+    let originalGetLatestApprovers: typeof GitHubUtils.getLatestApprovers;
+    let originalListPullRequestCommits: typeof GitHubUtils.listPullRequestCommits;
+    let originalGetEmployeeLogins: typeof GitHubUtils.getEmployeeLogins;
+
+    beforeEach(() => {
+        originalGetRequiredApprovingReviewCount = GitHubUtils.getRequiredApprovingReviewCount;
+        originalGetLatestApprovers = GitHubUtils.getLatestApprovers;
+        originalListPullRequestCommits = GitHubUtils.listPullRequestCommits;
+        originalGetEmployeeLogins = GitHubUtils.getEmployeeLogins;
+
+        GitHubUtils.getRequiredApprovingReviewCount = async () => 1;
+        GitHubUtils.getLatestApprovers = async () => [];
+        GitHubUtils.listPullRequestCommits = async () => [];
+        GitHubUtils.getEmployeeLogins = async () => new Set(['MonilBhavsar', 'AndrewGable', 'rafecolton']);
+    });
+
+    afterEach(() => {
+        GitHubUtils.getRequiredApprovingReviewCount = originalGetRequiredApprovingReviewCount;
+        GitHubUtils.getLatestApprovers = originalGetLatestApprovers;
+        GitHubUtils.listPullRequestCommits = originalListPullRequestCommits;
+        GitHubUtils.getEmployeeLogins = originalGetEmployeeLogins;
+    });
+
+    it('skips when branch requires no approving reviews', async () => {
+        GitHubUtils.getRequiredApprovingReviewCount = async () => 0;
+
+        const result = await VerifyPeerReview.evaluatePeerReview(BASE_INPUT);
 
         assert.equal(result.status, 'skip');
     });
 
-    it('skips when there are no approving reviews yet', () => {
-        const result = VerifyPeerReview.evaluatePeerReview({
-            ...baseInput,
-            approvers: [],
-            authors: ['MelvinBot', 'AndrewGable'],
-        });
+    it('skips when there are no approving reviews yet', async () => {
+        GitHubUtils.listPullRequestCommits = mockCommits([makeCommit('MelvinBot'), makeCommit('AndrewGable')]);
+
+        const result = await VerifyPeerReview.evaluatePeerReview(BASE_INPUT);
 
         assert.equal(result.status, 'skip');
     });
 
-    it('fails on self-review from commit co-author', () => {
-        const result = VerifyPeerReview.evaluatePeerReview({
-            ...baseInput,
-            approvers: ['AndrewGable'],
-            authors: ['MelvinBot', 'AndrewGable'],
-        });
+    it('fails on self-review from commit co-author', async () => {
+        GitHubUtils.getLatestApprovers = async () => ['AndrewGable'];
+        GitHubUtils.listPullRequestCommits = mockCommits([makeCommit('MelvinBot'), makeCommit('AndrewGable')]);
+
+        const result = await VerifyPeerReview.evaluatePeerReview(BASE_INPUT);
 
         assert.equal(result.status, 'fail');
         if (result.status === 'fail') {
@@ -70,44 +95,40 @@ describe('evaluatePeerReview', () => {
         }
     });
 
-    it('passes when an independent employee approves', () => {
-        const result = VerifyPeerReview.evaluatePeerReview({
-            ...baseInput,
-            approvers: ['MonilBhavsar', 'AndrewGable'],
-            authors: ['MelvinBot', 'AndrewGable'],
-        });
+    it('passes when an independent employee approves', async () => {
+        GitHubUtils.getLatestApprovers = async () => ['MonilBhavsar', 'AndrewGable'];
+        GitHubUtils.listPullRequestCommits = mockCommits([makeCommit('MelvinBot'), makeCommit('AndrewGable')]);
+
+        const result = await VerifyPeerReview.evaluatePeerReview(BASE_INPUT);
 
         assert.equal(result.status, 'pass');
     });
 
-    it('fails when independent approver count is below required', () => {
-        const result = VerifyPeerReview.evaluatePeerReview({
-            ...baseInput,
-            requiredApprovingReviewCount: 2,
-            approvers: ['MonilBhavsar', 'AndrewGable'],
-            authors: ['MelvinBot', 'AndrewGable'],
-        });
+    it('fails when independent approver count is below required', async () => {
+        GitHubUtils.getRequiredApprovingReviewCount = async () => 2;
+        GitHubUtils.getLatestApprovers = async () => ['MonilBhavsar', 'AndrewGable'];
+        GitHubUtils.listPullRequestCommits = mockCommits([makeCommit('MelvinBot'), makeCommit('AndrewGable')]);
+
+        const result = await VerifyPeerReview.evaluatePeerReview(BASE_INPUT);
 
         assert.equal(result.status, 'fail');
     });
 
-    it('passes when independent approver count meets required', () => {
-        const result = VerifyPeerReview.evaluatePeerReview({
-            ...baseInput,
-            requiredApprovingReviewCount: 2,
-            approvers: ['MonilBhavsar', 'rafecolton'],
-            authors: ['MelvinBot', 'AndrewGable'],
-        });
+    it('passes when independent approver count meets required', async () => {
+        GitHubUtils.getRequiredApprovingReviewCount = async () => 2;
+        GitHubUtils.getLatestApprovers = async () => ['MonilBhavsar', 'rafecolton'];
+        GitHubUtils.listPullRequestCommits = mockCommits([makeCommit('MelvinBot'), makeCommit('AndrewGable')]);
+
+        const result = await VerifyPeerReview.evaluatePeerReview(BASE_INPUT);
 
         assert.equal(result.status, 'pass');
     });
 
-    it('fails when all authors are bots', () => {
-        const result = VerifyPeerReview.evaluatePeerReview({
-            ...baseInput,
-            approvers: ['AndrewGable'],
-            authors: ['MelvinBot'],
-        });
+    it('fails when all authors are bots', async () => {
+        GitHubUtils.getLatestApprovers = async () => ['AndrewGable'];
+        GitHubUtils.listPullRequestCommits = mockCommits([makeCommit('MelvinBot')]);
+
+        const result = await VerifyPeerReview.evaluatePeerReview(BASE_INPUT);
 
         assert.equal(result.status, 'fail');
         if (result.status === 'fail') {
@@ -115,13 +136,11 @@ describe('evaluatePeerReview', () => {
         }
     });
 
-    it('fails on unresolved expensify co-author emails', () => {
-        const result = VerifyPeerReview.evaluatePeerReview({
-            ...baseInput,
-            approvers: ['AndrewGable'],
-            authors: ['MelvinBot'],
-            unresolvedExpensifyCoAuthors: ['andrew@expensify.com'],
-        });
+    it('fails on unresolved expensify co-author emails', async () => {
+        GitHubUtils.getLatestApprovers = async () => ['AndrewGable'];
+        GitHubUtils.listPullRequestCommits = mockCommits([makeCommit('MelvinBot', 'Change\n\nCo-authored-by: John Smith <andrew@expensify.com>')]);
+
+        const result = await VerifyPeerReview.evaluatePeerReview(BASE_INPUT);
 
         assert.equal(result.status, 'fail');
         if (result.status === 'fail') {
