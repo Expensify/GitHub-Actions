@@ -58,7 +58,7 @@ async function getCommitAuthors({owner, repo, prNumber}: {owner: string; repo: s
 async function getIndependentEmployeeApprovers(approvers: string[], authors: string[]): Promise<string[]> {
     const authorsSet = new Set(authors);
     const independentApprovers = approvers.filter((approver) => !authorsSet.has(approver));
-    return CollectionUtils.asyncFilter(independentApprovers, (approver) => GitHubUtils.isExpensifyEmployee(approver));
+    return CollectionUtils.filterAsync(independentApprovers, (approver) => GitHubUtils.isExpensifyEmployee(approver));
 }
 
 async function evaluatePeerReview(input: PeerReviewInput): Promise<PeerReviewResult> {
