@@ -25,9 +25,12 @@ async function getCommitAuthors({owner, repo, prNumber}: {owner: string; repo: s
     unresolvedCoAuthors: string[];
 }> {
     const [commits, employeeLogins] = await Promise.all([GitHubUtils.listPullRequestCommits({owner, repo, number: prNumber}), GitHubUtils.getEmployeeLogins()]);
-
     const authors = new Set<string>();
     const unresolvedCoAuthors = new Set<string>();
+
+    console.log('Checking commit authors', {
+        commitCount: commits.length,
+    });
 
     for (const commit of commits) {
         const canonicalAuthor = GitCommitUtils.getCanonicalAuthorLogin(commit);
@@ -36,6 +39,10 @@ async function getCommitAuthors({owner, repo, prNumber}: {owner: string; repo: s
         // Co-authorship between two humans from making and accepting a suggestion does not violate peer review.
         // Only parse co-authors when the canonical commit author is a bot.
         if (!GitHubUtils.isBotUser(canonicalAuthor)) {
+            console.log('Not considering co-author an author since canonical author is human', {
+                commitSHA: commit.sha,
+                canonicalAuthor,
+            });
             continue;
         }
 
