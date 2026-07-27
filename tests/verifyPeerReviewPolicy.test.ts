@@ -18,7 +18,7 @@ function mockCommits(commits: GitHubPullRequestCommit[]): typeof GitHubUtils.lis
 const BASE_INPUT: PeerReviewInput = {
     owner: 'Expensify',
     repo: 'Auth',
-    number: 21136,
+    prNumber: 21136,
     targetBranch: 'main',
 };
 

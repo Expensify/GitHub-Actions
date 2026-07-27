@@ -10,7 +10,7 @@ import GitHubWorkflowUtils from './libs/GitHubWorkflowUtils';
 type PeerReviewInput = {
     owner: string;
     repo: string;
-    number: number;
+    prNumber: number;
     targetBranch: string;
 };
 
@@ -74,14 +74,14 @@ function getIndependentEmployeeApprovers(approvers: string[], authors: string[],
 }
 
 async function evaluatePeerReview(input: PeerReviewInput): Promise<PeerReviewResult> {
-    const {owner, repo, number, targetBranch} = input;
-    const prSlug = `${owner}/${repo}#${number}`;
+    const {owner, repo, prNumber, targetBranch} = input;
+    const prSlug = `${owner}/${repo}#${prNumber}`;
 
     console.log('Evaluating PR', {
         repo,
-        pullRequestNumber: number,
+        prNumber,
         targetBranch,
-        htmlURL: `https://github.com/${owner}/${repo}/pull/${number}`,
+        htmlURL: `https://github.com/${owner}/${repo}/pull/${prNumber}`,
     });
 
     const requiredApprovingReviewCount = await GitHubUtils.getRequiredApprovingReviewCount({owner, repo, baseRef: targetBranch});
@@ -93,8 +93,8 @@ async function evaluatePeerReview(input: PeerReviewInput): Promise<PeerReviewRes
     }
 
     const [approvers, commits, employeeLogins] = await Promise.all([
-        GitHubUtils.getLatestApprovers({owner, repo, number}),
-        GitHubUtils.listPullRequestCommits({owner, repo, number}),
+        GitHubUtils.getLatestApprovers({owner, repo, number: prNumber}),
+        GitHubUtils.listPullRequestCommits({owner, repo, number: prNumber}),
         GitHubUtils.getEmployeeLogins(),
     ]);
 
@@ -197,7 +197,7 @@ async function main(): Promise<void> {
     const result = await evaluatePeerReview({
         owner,
         repo,
-        number: pullRequestNumber,
+        prNumber: pullRequestNumber,
         targetBranch,
     });
 
