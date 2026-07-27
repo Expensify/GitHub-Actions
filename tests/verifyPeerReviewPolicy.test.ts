@@ -143,7 +143,7 @@ describe('evaluatePeerReview', () => {
 
         assert.equal(result.status, 'fail');
         if (result.status === 'fail') {
-            assert.match(result.error.message, /no human commit authors or co-authors/);
+            assert.match(result.error.message, /All commit authors are bots/);
         }
     });
 
@@ -177,6 +177,7 @@ describe('getFailureTitle', () => {
         assert.equal(VerifyPeerReview.getFailureTitle('Unable to resolve canonical commit author: missing GitHub author login and commit author name.'), 'Missing commit author');
         assert.equal(VerifyPeerReview.getFailureTitle('Unable to determine any commit authors for Expensify/Auth#1.'), 'No commit authors found');
         assert.equal(VerifyPeerReview.getFailureTitle('Unable to resolve co-author emails to GitHub users: jane.doe@gmail.com'), 'Unresolved co-author');
+        assert.equal(VerifyPeerReview.getFailureTitle('All commit authors are bots'), 'No human commit author');
         assert.equal(VerifyPeerReview.getFailureTitle('Expensify/Auth#1 does not have enough independent Expensify employee approvals.'), 'Missing independent peer review');
         assert.equal(VerifyPeerReview.getFailureTitle('Unable to read branch protection rules for Expensify/Auth@main.'), 'Branch protection lookup failed');
     });

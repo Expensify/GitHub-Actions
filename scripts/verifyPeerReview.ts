@@ -98,6 +98,8 @@ async function evaluatePeerReview(input: PeerReviewInput): Promise<PeerReviewRes
         };
     }
 
+    // If we can't determine who co-authored a commit,
+    // then it's possible they're the same person who approved; block merge
     if (unresolvedCoAuthors.length > 0) {
         return {
             status: 'fail',
@@ -106,9 +108,13 @@ async function evaluatePeerReview(input: PeerReviewInput): Promise<PeerReviewRes
     }
 
     if (authors.every((author) => GitHubUtils.isBotUser(author))) {
+        console.error('All commit authors are bots', {
+            authors,
+            requiredApprovingReviewCount,
+        });
         return {
             status: 'fail',
-            error: new Error(`Unable to verify independent peer review because ${prSlug} has no human commit authors or co-authors.`),
+            error: new Error('All commit authors are bots'),
         };
     }
 
@@ -122,24 +128,22 @@ async function evaluatePeerReview(input: PeerReviewInput): Promise<PeerReviewRes
 
     const employeeLogins = await GitHubUtils.getEmployeeLogins();
     const independentEmployeeApprovers = getIndependentEmployeeApprovers(approvers, authors, employeeLogins);
-    if (independentEmployeeApprovers.length < requiredApprovingReviewCount) {
+    if (independentEmployeeApprovers.length >= requiredApprovingReviewCount) {
         return {
-            status: 'fail',
-            error: new Error(
-                [
-                    `${prSlug} does not have enough independent Expensify employee approvals.`,
-                    `Required independent approvals: ${requiredApprovingReviewCount}`,
-                    `Commit authors/co-authors: ${formatUsers(authors)}`,
-                    `Approvers: ${formatUsers(approvers)}`,
-                    `Independent employee approvers: ${formatUsers(independentEmployeeApprovers)}`,
-                ].join('\n'),
-            ),
+            status: 'pass',
+            reason: `${prSlug} has ${independentEmployeeApprovers.length} independent Expensify employee approval(s).`,
         };
     }
 
+    console.error('Insufficient independent peer review', {
+        commitAuthors: authors,
+        approvers,
+        independentApprovers: independentEmployeeApprovers,
+        required: requiredApprovingReviewCount,
+    });
     return {
-        status: 'pass',
-        reason: `${prSlug} has ${independentEmployeeApprovers.length} independent Expensify employee approval(s).`,
+        status: 'fail',
+        error: new Error(`${prSlug} does not have enough independent Expensify employee approvals.`),
     };
 }
 
@@ -156,7 +160,7 @@ function getFailureTitle(message: string): string {
     if (message.includes('Unable to determine any commit authors')) {
         return 'No commit authors found';
     }
-    if (message.includes('has no human commit authors or co-authors')) {
+    if (message.includes('All commit authors are bots')) {
         return 'No human commit author';
     }
     if (message.includes('Unable to read branch protection rules')) {
