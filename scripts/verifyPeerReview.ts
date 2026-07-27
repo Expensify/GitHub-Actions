@@ -77,6 +77,13 @@ async function evaluatePeerReview(input: PeerReviewInput): Promise<PeerReviewRes
     const {owner, repo, number, baseRef} = input;
     const prSlug = `${owner}/${repo}#${number}`;
 
+    console.log('Evaluating PR', {
+        repo,
+        pullRequestNumber: number,
+        baseRef,
+        htmlURL: `https://github.com/${owner}/${repo}/pull/${number}`,
+    });
+
     const requiredApprovingReviewCount = await GitHubUtils.getRequiredApprovingReviewCount({owner, repo, baseRef});
     if (requiredApprovingReviewCount === 0) {
         return {
@@ -186,13 +193,6 @@ async function main(): Promise<void> {
     const repo = cli.namedArgs.repo;
     const pullRequestNumber = cli.namedArgs['pull-request-number'];
     const baseRef = cli.namedArgs['base-ref'];
-
-    console.log('Evaluating PR', {
-        repo,
-        pullRequestNumber,
-        baseRef,
-        htmlURL: `https://github.com/${owner}/${repo}/pull/${pullRequestNumber}`,
-    });
 
     const result = await evaluatePeerReview({
         owner,
