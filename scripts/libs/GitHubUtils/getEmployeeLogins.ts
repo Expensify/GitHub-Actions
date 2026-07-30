@@ -27,6 +27,7 @@ let employeeLoginsPromise: Promise<Set<string>> | undefined;
  * which is meant to include all Expensify employees: https://github.com/orgs/Expensify/teams/expensify-expensify
  */
 async function getEmployeeLogins(): Promise<Set<string>> {
+    // Memoize the employee fetch list so that it happens at most once
     if (!employeeLoginsPromise) {
         employeeLoginsPromise = fetchEmployeeLogins();
     }
