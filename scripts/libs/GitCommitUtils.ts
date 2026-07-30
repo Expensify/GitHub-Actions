@@ -47,7 +47,7 @@ function getCanonicalAuthorLogin(commit: GitHubPullRequestCommit): string {
         return authorName;
     }
 
-    throw new Error('Unable to resolve canonical commit author: missing GitHub author login and commit author name.');
+    throw new Error(`Unable to resolve canonical commit author: missing GitHub author login and commit author name. ${JSON.stringify(commit)}`);
 }
 
 export type {GitHubCoAuthor, GitHubPullRequestCommit};
