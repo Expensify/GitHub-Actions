@@ -13,39 +13,41 @@ function makeCommit(authorLogin: string | undefined, authorName: string | undefi
     };
 }
 
-describe('resolveNoreplyEmailToLogin', () => {
-    it('parses standard noreply addresses', () => {
-        assert.equal(GitCommitUtils.resolveNoreplyEmailToLogin('AndrewGable@users.noreply.github.com'), 'AndrewGable');
+describe('GitCommitUtils', () => {
+    describe('resolveNoreplyEmailToLogin', () => {
+        it('parses standard noreply addresses', () => {
+            assert.equal(GitCommitUtils.resolveNoreplyEmailToLogin('AndrewGable@users.noreply.github.com'), 'AndrewGable');
+        });
+
+        it('parses numeric noreply prefixes', () => {
+            assert.equal(GitCommitUtils.resolveNoreplyEmailToLogin('2838819+AndrewGable@users.noreply.github.com'), 'AndrewGable');
+        });
     });
 
-    it('parses numeric noreply prefixes', () => {
-        assert.equal(GitCommitUtils.resolveNoreplyEmailToLogin('2838819+AndrewGable@users.noreply.github.com'), 'AndrewGable');
-    });
-});
+    describe('parseCoAuthorEmails', () => {
+        it('extracts multiple co-author emails', () => {
+            const message = [
+                'Some change',
+                '',
+                'Co-authored-by: Andrew Gable <AndrewGable@users.noreply.github.com>',
+                'Co-authored-by: Monil Bhavsar <MonilBhavsar@users.noreply.github.com>',
+            ].join('\n');
 
-describe('parseCoAuthorEmails', () => {
-    it('extracts multiple co-author emails', () => {
-        const message = [
-            'Some change',
-            '',
-            'Co-authored-by: Andrew Gable <AndrewGable@users.noreply.github.com>',
-            'Co-authored-by: Monil Bhavsar <MonilBhavsar@users.noreply.github.com>',
-        ].join('\n');
-
-        assert.deepEqual(GitCommitUtils.parseCoAuthorEmails(message), ['AndrewGable@users.noreply.github.com', 'MonilBhavsar@users.noreply.github.com']);
-    });
-});
-
-describe('getCanonicalAuthorLogin', () => {
-    it('returns github author login when present', () => {
-        assert.equal(GitCommitUtils.getCanonicalAuthorLogin(makeCommit('AndrewGable', undefined, 'Change')), 'AndrewGable');
+            assert.deepEqual(GitCommitUtils.parseCoAuthorEmails(message), ['AndrewGable@users.noreply.github.com', 'MonilBhavsar@users.noreply.github.com']);
+        });
     });
 
-    it('falls back to commit author name when github login is missing', () => {
-        assert.equal(GitCommitUtils.getCanonicalAuthorLogin(makeCommit(undefined, 'AndrewGable', 'Change')), 'AndrewGable');
-    });
+    describe('getCanonicalAuthorLogin', () => {
+        it('returns github author login when present', () => {
+            assert.equal(GitCommitUtils.getCanonicalAuthorLogin(makeCommit('AndrewGable', undefined, 'Change')), 'AndrewGable');
+        });
 
-    it('throws when canonical author cannot be resolved', () => {
-        assert.throws(() => GitCommitUtils.getCanonicalAuthorLogin(makeCommit(undefined, undefined, 'Change')), /Unable to resolve canonical commit author/);
+        it('falls back to commit author name when github login is missing', () => {
+            assert.equal(GitCommitUtils.getCanonicalAuthorLogin(makeCommit(undefined, 'AndrewGable', 'Change')), 'AndrewGable');
+        });
+
+        it('throws when canonical author cannot be resolved', () => {
+            assert.throws(() => GitCommitUtils.getCanonicalAuthorLogin(makeCommit(undefined, undefined, 'Change')), /Unable to resolve canonical commit author/);
+        });
     });
 });
