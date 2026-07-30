@@ -16,17 +16,9 @@ type PeerReviewInput = {
 
 type PeerReviewResult = {status: 'pass'; reason: string} | {status: 'skip'; reason: string} | {status: 'fail'; error: Error};
 
-function formatUsers(users: string[]): string {
-    return users.length > 0 ? users.join(', ') : '(none)';
-}
-
-async function getCommitAuthors({owner, repo, prNumber}: {owner: string; repo: string; prNumber: number}): Promise<{
-    authors: string[];
-    unresolvedCoAuthors: string[];
-}> {
+async function getCommitAuthors({owner, repo, prNumber}: {owner: string; repo: string; prNumber: number}): Promise<string[]> {
     const commits = await GitHubUtils.listPullRequestCommits({owner, repo, number: prNumber});
     const authors = new Set<string>();
-    const unresolvedCoAuthors = new Set<string>();
 
     console.log('Checking commit authors', {
         commitCount: commits.length,
@@ -51,15 +43,12 @@ async function getCommitAuthors({owner, repo, prNumber}: {owner: string; repo: s
             if (login) {
                 authors.add(login);
             } else {
-                unresolvedCoAuthors.add(coAuthorEmail);
+                throw new Error(`Unable to resolve co-author email to GitHub user: ${coAuthorEmail}`);
             }
         }
     }
 
-    return {
-        authors: CollectionUtils.uniqueSorted([...authors]),
-        unresolvedCoAuthors: CollectionUtils.uniqueSorted([...unresolvedCoAuthors]),
-    };
+    return CollectionUtils.uniqueSorted([...authors]);
 }
 
 async function getIndependentEmployeeApprovers(approvers: string[], authors: string[]): Promise<string[]> {
@@ -87,7 +76,7 @@ async function evaluatePeerReview(input: PeerReviewInput): Promise<PeerReviewRes
         };
     }
 
-    const {authors, unresolvedCoAuthors} = await getCommitAuthors({owner, repo, prNumber});
+    const authors = await getCommitAuthors({owner, repo, prNumber});
 
     // Unlike the PHP chore, which logs a bugbot and skips when no commit authors can be determined,
     // we fail the check here so an unresolvable PR can't merge without independent review.
@@ -95,15 +84,6 @@ async function evaluatePeerReview(input: PeerReviewInput): Promise<PeerReviewRes
         return {
             status: 'fail',
             error: new Error(`Unable to determine any commit authors for ${prSlug}.`),
-        };
-    }
-
-    // If we can't determine who co-authored a commit,
-    // then it's possible they're the same person who approved; block merge
-    if (unresolvedCoAuthors.length > 0) {
-        return {
-            status: 'fail',
-            error: new Error(`Unable to resolve co-author emails to GitHub users: ${formatUsers(unresolvedCoAuthors)}`),
         };
     }
 

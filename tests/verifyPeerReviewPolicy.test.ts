@@ -175,24 +175,14 @@ describe('verifyPeerReview', () => {
             GitHubUtils.getLatestApprovers = async () => ['AndrewGable'];
             GitHubUtils.listPullRequestCommits = mockCommits([makeCommit('MelvinBot', 'Change\n\nCo-authored-by: John Smith <andrew@expensify.com>')]);
 
-            const result = await VerifyPeerReview.evaluatePeerReview(BASE_INPUT);
-
-            assert.equal(result.status, 'fail');
-            if (result.status === 'fail') {
-                assert.match(result.error.message, /Unable to resolve co-author emails/);
-            }
+            await assert.rejects(() => VerifyPeerReview.evaluatePeerReview(BASE_INPUT), /Unable to resolve co-author email/);
         });
 
         it('fails on unresolved co-author emails regardless of domain', async () => {
             GitHubUtils.getLatestApprovers = async () => ['AndrewGable'];
             GitHubUtils.listPullRequestCommits = mockCommits([makeCommit('MelvinBot', 'Change\n\nCo-authored-by: Jane Doe <jane.doe@gmail.com>')]);
 
-            const result = await VerifyPeerReview.evaluatePeerReview(BASE_INPUT);
-
-            assert.equal(result.status, 'fail');
-            if (result.status === 'fail') {
-                assert.match(result.error.message, /Unable to resolve co-author emails/);
-            }
+            await assert.rejects(() => VerifyPeerReview.evaluatePeerReview(BASE_INPUT), /Unable to resolve co-author email/);
         });
     });
 

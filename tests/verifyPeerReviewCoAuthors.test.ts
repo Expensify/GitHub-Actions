@@ -15,8 +15,13 @@ function makeCommit(authorLogin: string | undefined, authorName: string | undefi
     };
 }
 
-function mockCommits(commits: GitHubPullRequestCommit[]): typeof GitHubUtils.listPullRequestCommits {
-    // Tests only need the GitHubPullRequestCommit fields consumed by getCommitAuthors, not the full Octokit response shape.
+type MockCommit = {
+    author: {login: string} | null;
+    commit: {message: string; author: {name: string} | Record<string, never>};
+    sha?: string;
+};
+
+function mockCommits(commits: MockCommit[]): typeof GitHubUtils.listPullRequestCommits {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- narrow test fixture standing in for the full Octokit commit type
     return async () => commits as unknown as Awaited<ReturnType<typeof GitHubUtils.listPullRequestCommits>>;
 }
@@ -39,8 +44,8 @@ describe('getCommitAuthors', () => {
 
         const result = await VerifyPeerReview.getCommitAuthors(BASE_ARGS);
 
-        assert.deepEqual(result.authors, ['AndrewGable', 'MelvinBot']);
-        assert.deepEqual(result.unresolvedCoAuthors, []);
+        assert.deepEqual(result.at(0), 'AndrewGable');
+        assert.ok(result.includes('MelvinBot'));
     });
 
     it('ignores co-authors when canonical author is human', async () => {
@@ -48,7 +53,7 @@ describe('getCommitAuthors', () => {
 
         const result = await VerifyPeerReview.getCommitAuthors(BASE_ARGS);
 
-        assert.deepEqual(result.authors, ['rafecolton']);
+        assert.deepEqual(result.at(0), 'rafecolton');
     });
 
     it('falls back to commit author name when github login is missing', async () => {
@@ -56,31 +61,25 @@ describe('getCommitAuthors', () => {
 
         const result = await VerifyPeerReview.getCommitAuthors(BASE_ARGS);
 
-        assert.deepEqual(result.authors, ['AndrewGable']);
+        assert.deepEqual(result.at(0), 'AndrewGable');
     });
 
-    it('normalizes co-author email casing and whitespace for unresolved detection', async () => {
+    it('throws when co-author email cannot be resolved (unresolved detection)', async () => {
         GitHubUtils.listPullRequestCommits = mockCommits([makeCommit('MelvinBot', undefined, 'Change\n\nCo-authored-by: John Smith <  Andrew@Expensify.com  >')]);
 
-        const result = await VerifyPeerReview.getCommitAuthors(BASE_ARGS);
-
-        assert.deepEqual(result.unresolvedCoAuthors, ['Andrew@Expensify.com']);
+        await assert.rejects(() => VerifyPeerReview.getCommitAuthors(BASE_ARGS), /Unable to resolve co-author email/);
     });
 
-    it('collects unresolved co-author emails for non-noreply addresses', async () => {
+    it('throws when resolving non-noreply co-author addresses', async () => {
         GitHubUtils.listPullRequestCommits = mockCommits([makeCommit('MelvinBot', undefined, 'Change\n\nCo-authored-by: John Smith <andrew@expensify.com>')]);
 
-        const result = await VerifyPeerReview.getCommitAuthors(BASE_ARGS);
-
-        assert.deepEqual(result.unresolvedCoAuthors, ['andrew@expensify.com']);
+        await assert.rejects(() => VerifyPeerReview.getCommitAuthors(BASE_ARGS), /Unable to resolve co-author email/);
     });
 
-    it('collects unresolved co-author emails regardless of email domain', async () => {
+    it('throws when resolving any unresolvable co-author domain', async () => {
         GitHubUtils.listPullRequestCommits = mockCommits([makeCommit('MelvinBot', undefined, 'Change\n\nCo-authored-by: Jane Doe <jane.doe@gmail.com>')]);
 
-        const result = await VerifyPeerReview.getCommitAuthors(BASE_ARGS);
-
-        assert.deepEqual(result.unresolvedCoAuthors, ['jane.doe@gmail.com']);
+        await assert.rejects(() => VerifyPeerReview.getCommitAuthors(BASE_ARGS), /Unable to resolve co-author email/);
     });
 
     it('throws when canonical author cannot be resolved', async () => {
