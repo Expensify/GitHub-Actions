@@ -87,20 +87,16 @@ async function evaluatePeerReview(input: PeerReviewInput): Promise<PeerReviewRes
         };
     }
 
-    if (authors.every((author) => GitHubUtils.isBotUser(author))) {
-        console.error('All commit authors are bots', {
-            authors,
-            requiredApprovingReviewCount,
-        });
-        return {
-            status: 'fail',
-            error: new Error('All commit authors are bots'),
-        };
-    }
+    // A bot-only author list can't be trusted the way a human author list can: a human could have
+    // asked the bot to omit them as a co-author to dodge peer review. We don't block these PRs
+    // outright, since some (e.g. Snyk upgrades) are never co-authored by a human, but we require
+    // two independent reviewers instead of one so a single reviewer can't rubber-stamp the bypass.
+    const areAllAuthorsBots = authors.every((author) => GitHubUtils.isBotUser(author));
+    const effectiveRequiredApprovingReviewCount = areAllAuthorsBots ? Math.max(requiredApprovingReviewCount, 2) : requiredApprovingReviewCount;
 
     const approvers = await GitHubUtils.getLatestApprovers({owner, repo, number: prNumber});
     const independentEmployeeApprovers = await getIndependentEmployeeApprovers(approvers, authors);
-    if (independentEmployeeApprovers.length >= requiredApprovingReviewCount) {
+    if (independentEmployeeApprovers.length >= effectiveRequiredApprovingReviewCount) {
         return {
             status: 'pass',
             reason: `${prSlug} has ${independentEmployeeApprovers.length} independent Expensify employee approval(s).`,
@@ -109,13 +105,18 @@ async function evaluatePeerReview(input: PeerReviewInput): Promise<PeerReviewRes
 
     console.error('Insufficient independent peer review', {
         commitAuthors: authors,
+        allAuthorsAreBots: areAllAuthorsBots,
         approvers,
         independentApprovers: independentEmployeeApprovers,
-        required: requiredApprovingReviewCount,
+        required: effectiveRequiredApprovingReviewCount,
     });
+    const botOnlyNote =
+        effectiveRequiredApprovingReviewCount > requiredApprovingReviewCount
+            ? ` Pull requests authored solely by bots require a minimum of ${effectiveRequiredApprovingReviewCount} independent Expensify employee approvals.`
+            : '';
     return {
         status: 'fail',
-        error: new Error(`${prSlug} does not have enough independent Expensify employee approvals.`),
+        error: new Error(`${prSlug} does not have enough independent Expensify employee approvals.${botOnlyNote}`),
     };
 }
 
@@ -131,9 +132,6 @@ function getFailureTitle(message: string): string {
     }
     if (message.includes('Unable to determine any commit authors')) {
         return 'No commit authors found';
-    }
-    if (message.includes('All commit authors are bots')) {
-        return 'No human commit author';
     }
     if (message.includes('Unable to read branch protection rules')) {
         return 'Branch protection lookup failed';

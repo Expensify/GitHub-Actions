@@ -159,7 +159,9 @@ describe('verifyPeerReview', () => {
             assert.equal(result.status, 'pass');
         });
 
-        it('fails when all authors are bots', async () => {
+        it('fails when all authors are bots and only one independent approver exists', async () => {
+            // requiredApprovingReviewCount is 1 (mocked in beforeEach), but a bot-only author list
+            // requires two independent approvers so a single reviewer can't rubber-stamp a bypass.
             GitHubUtils.getLatestApprovers = async () => ['AndrewGable'];
             GitHubUtils.listPullRequestCommits = mockCommits([makeCommit('MelvinBot')]);
 
@@ -167,8 +169,20 @@ describe('verifyPeerReview', () => {
 
             assert.equal(result.status, 'fail');
             if (result.status === 'fail') {
-                assert.match(result.error.message, /All commit authors are bots/);
+                assert.match(
+                    result.error.message,
+                    /does not have enough independent Expensify employee approvals\. Pull requests authored solely by bots require a minimum of 2 independent Expensify employee approvals\./,
+                );
             }
+        });
+
+        it('passes when all authors are bots and two independent approvers exist', async () => {
+            GitHubUtils.getLatestApprovers = async () => ['AndrewGable', 'MonilBhavsar'];
+            GitHubUtils.listPullRequestCommits = mockCommits([makeCommit('MelvinBot')]);
+
+            const result = await VerifyPeerReview.evaluatePeerReview(BASE_INPUT);
+
+            assert.equal(result.status, 'pass');
         });
 
         it('fails on unresolved co-author emails', async () => {
@@ -191,7 +205,6 @@ describe('verifyPeerReview', () => {
             assert.equal(VerifyPeerReview.getFailureTitle('Unable to resolve canonical commit author: missing GitHub author login and commit author name.'), 'Missing commit author');
             assert.equal(VerifyPeerReview.getFailureTitle('Unable to determine any commit authors for Expensify/Auth#1.'), 'No commit authors found');
             assert.equal(VerifyPeerReview.getFailureTitle('Unable to resolve co-author emails to GitHub users: jane.doe@gmail.com'), 'Unresolved co-author');
-            assert.equal(VerifyPeerReview.getFailureTitle('All commit authors are bots'), 'No human commit author');
             assert.equal(VerifyPeerReview.getFailureTitle('Expensify/Auth#1 does not have enough independent Expensify employee approvals.'), 'Missing independent peer review');
             assert.equal(VerifyPeerReview.getFailureTitle('Unable to read branch protection rules for Expensify/Auth@main.'), 'Branch protection lookup failed');
         });
