@@ -81,4 +81,10 @@ async function fetchEmployeeLogins(): Promise<Set<string>> {
     return employeeLogins;
 }
 
+async function isExpensifyEmployee(login: string): Promise<boolean> {
+    const employeeLogins = await getEmployeeLogins();
+    return employeeLogins.has(login);
+}
+
 export default getEmployeeLogins;
+export {isExpensifyEmployee};
