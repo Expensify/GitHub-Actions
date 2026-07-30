@@ -21,6 +21,11 @@ type TeamMembersResponse = {
 
 let employeeLoginsPromise: Promise<Set<string>> | undefined;
 
+/**
+ * This exists largely to replace Web-Expensify's Whitelist lookup, which we can't directly replace in open source.
+ * So our authoritative source for "is this an Expensify employee" is this GitHub Team
+ * which is meant to include all Expensify employees: https://github.com/orgs/Expensify/teams/expensify-expensify
+ */
 async function getEmployeeLogins(): Promise<Set<string>> {
     if (!employeeLoginsPromise) {
         employeeLoginsPromise = fetchEmployeeLogins();
