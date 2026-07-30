@@ -67,6 +67,7 @@ jobs:
           --repo '${{ github.event.pull_request.base.repo.name }}'
           --pull-request-number '${{ github.event.pull_request.number }}'
           --target-branch '${{ github.event.pull_request.base.ref }}'
+          --actor-type '${{ github.event.sender.type }}'
         working-directory: GitHub-Actions
         env:
           GITHUB_TOKEN: ${{ steps.generateAppToken.outputs.token }}
