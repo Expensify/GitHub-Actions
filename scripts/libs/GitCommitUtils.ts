@@ -10,29 +10,13 @@ type GitHubPullRequestCommit = {
     };
 };
 
-type GitHubCoAuthor = {
-    displayName: string;
-    email: string;
-};
-
-function parseCoAuthors(message: string): GitHubCoAuthor[] {
-    return [...message.matchAll(/^Co-authored-by:\s+(.+?)<([^>]+)>$/gim)].map((match) => ({
-        displayName: match[1].trim(),
-        email: match[2].trim(),
-    }));
-}
-
 function parseCoAuthorEmails(message: string): string[] {
-    return parseCoAuthors(message).map((coAuthor) => coAuthor.email);
+    return [...message.matchAll(/^Co-authored-by:\s+.+?<([^>]+)>$/gim)].map((match) => match[1].trim());
 }
 
 function resolveNoreplyEmailToLogin(email: string): string | null {
     const normalizedEmail = email.trim();
     return normalizedEmail.match(/^(?:\d+\+)?(.+)@users\.noreply\.github\.com$/i)?.[1] ?? null;
-}
-
-function resolveCoAuthorLogin(coAuthor: GitHubCoAuthor): string | null {
-    return resolveNoreplyEmailToLogin(coAuthor.email);
 }
 
 function getCanonicalAuthorLogin(commit: GitHubPullRequestCommit): string {
@@ -50,12 +34,10 @@ function getCanonicalAuthorLogin(commit: GitHubPullRequestCommit): string {
     throw new Error(`Unable to resolve canonical commit author: missing GitHub author login and commit author name. ${JSON.stringify(commit)}`);
 }
 
-export type {GitHubCoAuthor, GitHubPullRequestCommit};
+export type {GitHubPullRequestCommit};
 
 export default {
     parseCoAuthorEmails,
-    parseCoAuthors,
     getCanonicalAuthorLogin,
-    resolveCoAuthorLogin,
     resolveNoreplyEmailToLogin,
 };

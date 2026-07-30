@@ -46,12 +46,12 @@ async function getCommitAuthors({owner, repo, prNumber}: {owner: string; repo: s
             continue;
         }
 
-        for (const coAuthor of GitCommitUtils.parseCoAuthors(commit.commit.message)) {
-            const login = GitCommitUtils.resolveCoAuthorLogin(coAuthor);
+        for (const coAuthorEmail of GitCommitUtils.parseCoAuthorEmails(commit.commit.message)) {
+            const login = GitCommitUtils.resolveNoreplyEmailToLogin(coAuthorEmail);
             if (login) {
                 authors.add(login);
             } else {
-                unresolvedCoAuthors.add(coAuthor.email.trim());
+                unresolvedCoAuthors.add(coAuthorEmail);
             }
         }
     }

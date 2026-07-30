@@ -36,26 +36,6 @@ describe('parseCoAuthorEmails', () => {
     });
 });
 
-describe('parseCoAuthors', () => {
-    it('extracts display names and emails', () => {
-        const message = 'Change\n\nCo-authored-by: Andrew Gable <andrew@expensify.com>';
-
-        assert.deepEqual(GitCommitUtils.parseCoAuthors(message), [{displayName: 'Andrew Gable', email: 'andrew@expensify.com'}]);
-    });
-});
-
-describe('resolveCoAuthorLogin', () => {
-    it('resolves noreply email addresses', () => {
-        assert.equal(GitCommitUtils.resolveCoAuthorLogin({displayName: 'Wrong Name', email: 'AndrewGable@users.noreply.github.com'}), 'AndrewGable');
-    });
-
-    it('returns null for non-noreply email addresses, regardless of display name', () => {
-        // No display-name-guessing fallback: PHP's equivalent only ever resolves via the noreply
-        // pattern or an authoritative email->login whitelist we don't have access to here.
-        assert.equal(GitCommitUtils.resolveCoAuthorLogin({displayName: 'Andrew Gable', email: 'andrew@expensify.com'}), null);
-    });
-});
-
 describe('getCanonicalAuthorLogin', () => {
     it('returns github author login when present', () => {
         assert.equal(GitCommitUtils.getCanonicalAuthorLogin(makeCommit('AndrewGable', undefined, 'Change')), 'AndrewGable');
