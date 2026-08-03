@@ -19,6 +19,32 @@ runs:
       run: |
         echo "schema_path=$GITHUB_ACTION_PATH/schemas/code-review-output.json" >> "$GITHUB_OUTPUT"
         echo "schema_json=$(jq -c . "$GITHUB_ACTION_PATH/schemas/code-review-output.json")" >> "$GITHUB_OUTPUT"
+    - name: Copy shared coding-standards rules
+      shell: bash
+      run: |
+        RULES_DIR="$GITHUB_WORKSPACE/.claude/skills/coding-standards/rules"
+        # Only copy in when the caller already has at least one valid local
+        # rule (a ruleId: tag matching extractAllowedRules.sh's own format).
+        # Copying into a missing, empty, or malformed caller directory would
+        # let a shared rule alone satisfy extractAllowedRules.sh's check, so
+        # a caller that never set up code-inline-reviewer at all would pass
+        # instead of failing.
+        has_valid_local_rule=false
+        if [[ -d "$RULES_DIR" ]]; then
+          for rule_path in "$RULES_DIR"/[!_]*.md; do
+            [[ -f "$rule_path" ]] || continue
+            if grep -m1 '^ruleId:' "$rule_path" | grep -qE '[A-Z]+(-[A-Z]+)*-[0-9]+'; then
+              has_valid_local_rule=true
+              break
+            fi
+          done
+        fi
+        if [[ "$has_valid_local_rule" == true ]]; then
+          for rule_path in "$GITHUB_ACTION_PATH"/shared-rules/*.md; do
+            [[ -f "$rule_path" ]] || continue
+            cp "$rule_path" "$RULES_DIR/AutoLoadShared-$(basename "$rule_path")"
+          done
+        fi
     - name: Extract allowed rules
       shell: bash
       run: |
