@@ -38,7 +38,11 @@ async function getEmployeeLogins(): Promise<Set<string>> {
 async function fetchEmployeeLogins(): Promise<Set<string>> {
     const employeeLogins = new Set<string>();
 
-    async function collectPage(cursor: string | null): Promise<void> {
+    let cursor: string | null = null;
+    let hasNextPage = true;
+
+    while (hasNextPage) {
+        // eslint-disable-next-line no-await-in-loop
         const response: TeamMembersResponse = await GitHubAPIClient.graphql<TeamMembersResponse>(
             `
             query TeamMembers($organization: String!, $teamSlug: String!, $cursor: String) {
@@ -73,12 +77,10 @@ async function fetchEmployeeLogins(): Promise<Set<string>> {
             employeeLogins.add(member.login);
         }
 
-        if (members.pageInfo.hasNextPage) {
-            await collectPage(members.pageInfo.endCursor);
-        }
+        hasNextPage = members.pageInfo.hasNextPage;
+        cursor = members.pageInfo.endCursor;
     }
 
-    await collectPage(null);
     return employeeLogins;
 }
 
