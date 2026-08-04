@@ -144,7 +144,7 @@ async function main(gitHubUtilsOverride?: GitHubUtils): Promise<void> {
                 },
             },
             'target-branch': {
-                description: 'Target branch ref for the pull request',
+                description: 'Ref for the branch into which the pull request is being merged e.g. "refs/heads/main"',
             },
             'actor-type': {
                 description: 'GitHub actor type of the user who triggered the event (Bot or User)',
