@@ -35,7 +35,7 @@ describe('main CLI parsing', () => {
     });
 
     it('parses required pull request CLI arguments', async () => {
-        process.argv.push('--owner', 'Expensify', '--repo', 'Auth', '--pull-request-number', '21136', '--target-branch', 'main');
+        process.argv.push('--owner', 'Expensify', '--repo', 'Auth', '--pull-request-number', '21136', '--target-branch', 'main', '--actor-type', 'User');
 
         await assert.doesNotReject(() => VerifyPeerReview.main());
     });
