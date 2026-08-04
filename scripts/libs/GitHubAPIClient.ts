@@ -12,6 +12,13 @@ type InternalOctokit = InstanceType<typeof OctokitWithPlugins>;
 
 const OctokitWithPlugins = Octokit.plugin(throttling, paginateRest);
 
+/**
+ * This GitHub API client:
+ *   - Exposes utils for octokit (rest), graphql, and pagination.
+ *   - Implements the singleton pattern; initialization happens automatically, exactly once, when the API client is first used.
+ *   - Automatically handles retries with exponential backoff for rate-limiting errors (plugin-throttling)
+ *   - Implements pagination via plugin-paginate-rest
+ */
 class GitHubAPIClient {
     static internalOctokit: InternalOctokit | undefined;
 
