@@ -82,7 +82,7 @@ async function evaluatePeerReview(gitHubUtils: GitHubUtils, input: PeerReviewInp
     const authors = await getCommitAuthors(gitHubUtils, {owner, repo, prNumber, actorType});
 
     // Unlike the PHP chore, which logs a bugbot and skips when no commit authors can be determined,
-    // we fail the check here so an unresolvable PR can't merge without independent review.
+    // we fail the check here so an unresolvable PR can't be merged without independent review.
     if (authors.length === 0) {
         return {
             status: 'fail',
