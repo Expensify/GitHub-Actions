@@ -47,29 +47,9 @@ The check only reads GitHub pull request metadata via the API; it does not check
 
 This workflow requires a GitHub App token with read access for repository metadata, pull requests, organization members, and branch administration. It uses the Peer Review Checker app ID `3877737` and the org secret `PEER_REVIEW_CHECKER_PRIVATE_KEY` to generate that token.
 
-If branch protection cannot be read due to missing permissions, the check fails. If the target branch has no branch-protection review requirement, the check skips. If branch protection cannot be queried due to a transient API error, the script defaults to requiring one independent approval.
-
-#### Local development
-
-This script depends on the shared `CLI` utility from `expensify-common`.
-
-```bash
-cd GitHub-Actions
-nvm use
-npm ci
-npm test
-npm run verify-peer-review -- --help
-```
-
-Smoke-test against a real pull request by passing the pull request metadata as CLI arguments and setting `GITHUB_TOKEN` (or `GH_TOKEN`) to a token with the same read permissions as the Peer Review Checker app:
-
-```bash
-GITHUB_TOKEN=... npm run verify-peer-review -- \
-  --owner Expensify \
-  --repo Auth \
-  --pull-request-number 12345 \
-  --base-ref main
-```
+- If branch protection cannot be read due to missing permissions, the check fails.
+- If the target branch has no branch-protection review requirement, the check passes.
+- If branch protection cannot be queried due to a transient API error, the script defaults to requiring one independent approval.
 
 ### `setup-composer-cache`
 
