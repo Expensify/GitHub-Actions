@@ -1,4 +1,4 @@
-import GitHubAPIClient from '../GitHubAPIClient';
+import type GitHubAPIClient from '../GitHubAPIClient';
 
 const EXPENSIFY_ORG = 'Expensify';
 const EXPENSIFY_EMPLOYEE_TEAM_SLUG = 'expensify-expensify';
@@ -19,23 +19,25 @@ type TeamMembersResponse = {
     } | null;
 };
 
-let employeeLoginsPromise: Promise<Set<string>> | undefined;
+// Memoize the employee fetch list per client so that it happens at most once per client.
+const employeeLoginsPromisesByClient = new WeakMap<GitHubAPIClient, Promise<Set<string>>>();
 
 /**
  * This exists largely to replace Web-Expensify's Whitelist lookup, which we can't directly replace in open source.
  * So our authoritative source for "is this an Expensify employee" is this GitHub Team
  * which is meant to include all Expensify employees: https://github.com/orgs/Expensify/teams/expensify-expensify
  */
-async function getEmployeeLogins(): Promise<Set<string>> {
-    // Memoize the employee fetch list so that it happens at most once
+async function getEmployeeLogins(client: GitHubAPIClient): Promise<Set<string>> {
+    let employeeLoginsPromise = employeeLoginsPromisesByClient.get(client);
     if (!employeeLoginsPromise) {
-        employeeLoginsPromise = fetchEmployeeLogins();
+        employeeLoginsPromise = fetchEmployeeLogins(client);
+        employeeLoginsPromisesByClient.set(client, employeeLoginsPromise);
     }
 
     return employeeLoginsPromise;
 }
 
-async function fetchEmployeeLogins(): Promise<Set<string>> {
+async function fetchEmployeeLogins(client: GitHubAPIClient): Promise<Set<string>> {
     const employeeLogins = new Set<string>();
 
     let cursor: string | null = null;
@@ -45,7 +47,7 @@ async function fetchEmployeeLogins(): Promise<Set<string>> {
         // await-in-loop is necessary and appropriate for polling a paginated endpoint;
         // each request is dependent upon the response of the previous.
         // eslint-disable-next-line no-await-in-loop
-        const response: TeamMembersResponse = await GitHubAPIClient.graphql<TeamMembersResponse>(
+        const response: TeamMembersResponse = await client.graphql<TeamMembersResponse>(
             `
             query TeamMembers($organization: String!, $teamSlug: String!, $cursor: String) {
                 organization(login: $organization) {
@@ -86,8 +88,8 @@ async function fetchEmployeeLogins(): Promise<Set<string>> {
     return employeeLogins;
 }
 
-async function isExpensifyEmployee(login: string): Promise<boolean> {
-    const employeeLogins = await getEmployeeLogins();
+async function isExpensifyEmployee(client: GitHubAPIClient, login: string): Promise<boolean> {
+    const employeeLogins = await getEmployeeLogins(client);
     return employeeLogins.has(login);
 }
 

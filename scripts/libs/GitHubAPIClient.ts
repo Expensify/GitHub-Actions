@@ -11,14 +11,13 @@ const OctokitWithPlugins = Octokit.plugin(throttling, paginateRest);
 /**
  * This GitHub API client:
  *   - Exposes utils for octokit (rest), graphql, and pagination.
- *   - Implements the singleton pattern; initialization happens automatically, exactly once, when the API client is first used.
  *   - Automatically handles retries with exponential backoff for rate-limiting errors (plugin-throttling), for both REST and GraphQL requests.
  *   - Implements pagination via plugin-paginate-rest
  */
 class GitHubAPIClient {
-    private static internalOctokit: InternalOctokit | undefined;
+    private internalOctokit: InternalOctokit;
 
-    private static initWithToken(token: string): void {
+    constructor(token: string) {
         this.internalOctokit = new OctokitWithPlugins({
             auth: token,
             throttle: {
@@ -40,39 +39,30 @@ class GitHubAPIClient {
         });
     }
 
-    private static init(): void {
+    /**
+     * Builds a client from the GITHUB_TOKEN or GH_TOKEN environment variable, as set by actions/checkout or the GitHub CLI.
+     */
+    static fromEnv(): GitHubAPIClient {
         const token = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN;
         if (!token) {
             throw new Error('GITHUB_TOKEN or GH_TOKEN is required');
         }
 
-        this.initWithToken(token);
+        return new GitHubAPIClient(token);
     }
 
-    private static ensureOctokit(): InternalOctokit {
-        if (!this.internalOctokit) {
-            this.init();
-        }
-
-        if (!this.internalOctokit) {
-            throw new Error('Failed to initialize GitHub API client');
-        }
-
-        return this.internalOctokit;
+    get octokit(): InternalOctokit['rest'] {
+        return this.internalOctokit.rest;
     }
 
-    static get octokit(): InternalOctokit['rest'] {
-        return this.ensureOctokit().rest;
-    }
-
-    static get graphql(): graphql {
+    get graphql(): graphql {
         // octokit's built-in graphql client shares the same request/hook pipeline as its REST client,
         // so it goes through the throttling plugin's retry-on-rate-limit handling automatically.
-        return this.ensureOctokit().graphql;
+        return this.internalOctokit.graphql;
     }
 
-    static get paginate(): PaginateInterface {
-        return this.ensureOctokit().paginate;
+    get paginate(): PaginateInterface {
+        return this.internalOctokit.paginate;
     }
 }
 

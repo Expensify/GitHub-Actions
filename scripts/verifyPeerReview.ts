@@ -4,8 +4,9 @@ import CLI from 'expensify-common/CLI';
 
 import CollectionUtils from './libs/CollectionUtils';
 import GitCommitUtils from './libs/GitCommitUtils';
-import GitHubUtils from './libs/GitHubUtils';
-import type {ActorType} from './libs/GitHubUtils';
+import GitHubAPIClient from './libs/GitHubAPIClient';
+import createGitHubUtils from './libs/GitHubUtils';
+import type {ActorType, GitHubUtils} from './libs/GitHubUtils';
 import GitHubWorkflowUtils, {WorkflowError} from './libs/GitHubWorkflowUtils';
 
 type PeerReviewInput = {
@@ -18,8 +19,8 @@ type PeerReviewInput = {
 
 type PeerReviewResult = {status: 'pass'; reason: string} | {status: 'skip'; reason: string} | {status: 'fail'; error: Error};
 
-async function getCommitAuthors({owner, repo, prNumber, actorType}: {owner: string; repo: string; prNumber: number; actorType: ActorType}): Promise<string[]> {
-    const commits = await GitHubUtils.listPullRequestCommits({owner, repo, number: prNumber});
+async function getCommitAuthors(gitHubUtils: GitHubUtils, {owner, repo, prNumber, actorType}: {owner: string; repo: string; prNumber: number; actorType: ActorType}): Promise<string[]> {
+    const commits = await gitHubUtils.listPullRequestCommits({owner, repo, number: prNumber});
     const authors = new Set<string>();
 
     console.log('Checking commit authors', {
@@ -32,7 +33,7 @@ async function getCommitAuthors({owner, repo, prNumber, actorType}: {owner: stri
 
         // Co-authorship between two humans from making and accepting a suggestion does not violate peer review.
         // Only parse co-authors when the canonical commit author is a bot.
-        if (!GitHubUtils.isBotUser(canonicalAuthor, actorType)) {
+        if (!gitHubUtils.isBotUser(canonicalAuthor, actorType)) {
             console.log('Not considering co-author an author since canonical author is human', {
                 commitSHA: commit.sha,
                 canonicalAuthor,
@@ -53,13 +54,13 @@ async function getCommitAuthors({owner, repo, prNumber, actorType}: {owner: stri
     return CollectionUtils.uniqueSorted([...authors]);
 }
 
-async function getIndependentEmployeeApprovers(approvers: string[], authors: string[]): Promise<string[]> {
+async function getIndependentEmployeeApprovers(gitHubUtils: GitHubUtils, approvers: string[], authors: string[]): Promise<string[]> {
     const authorsSet = new Set(authors);
     const independentApprovers = approvers.filter((approver) => !authorsSet.has(approver));
-    return CollectionUtils.filterAsync(independentApprovers, (approver) => GitHubUtils.isExpensifyEmployee(approver));
+    return CollectionUtils.filterAsync(independentApprovers, (approver) => gitHubUtils.isExpensifyEmployee(approver));
 }
 
-async function evaluatePeerReview(input: PeerReviewInput): Promise<PeerReviewResult> {
+async function evaluatePeerReview(gitHubUtils: GitHubUtils, input: PeerReviewInput): Promise<PeerReviewResult> {
     const {owner, repo, prNumber, targetBranch, actorType} = input;
     const prSlug = `${owner}/${repo}#${prNumber}`;
 
@@ -70,7 +71,7 @@ async function evaluatePeerReview(input: PeerReviewInput): Promise<PeerReviewRes
         htmlURL: `https://github.com/${owner}/${repo}/pull/${prNumber}`,
     });
 
-    const requiredApprovingReviewCount = await GitHubUtils.getRequiredApprovingReviewCount({owner, repo, baseRef: targetBranch});
+    const requiredApprovingReviewCount = await gitHubUtils.getRequiredApprovingReviewCount({owner, repo, baseRef: targetBranch});
     if (requiredApprovingReviewCount === 0) {
         return {
             status: 'skip',
@@ -78,7 +79,7 @@ async function evaluatePeerReview(input: PeerReviewInput): Promise<PeerReviewRes
         };
     }
 
-    const authors = await getCommitAuthors({owner, repo, prNumber, actorType});
+    const authors = await getCommitAuthors(gitHubUtils, {owner, repo, prNumber, actorType});
 
     // Unlike the PHP chore, which logs a bugbot and skips when no commit authors can be determined,
     // we fail the check here so an unresolvable PR can't merge without independent review.
@@ -93,11 +94,11 @@ async function evaluatePeerReview(input: PeerReviewInput): Promise<PeerReviewRes
     // asked the bot to omit them as a co-author to dodge peer review. We don't block these PRs
     // outright, since some (e.g. Snyk upgrades) are never co-authored by a human, but we require
     // two independent reviewers instead of one so a single reviewer can't rubber-stamp the bypass.
-    const areAllAuthorsBots = authors.every((author) => GitHubUtils.isBotUser(author, actorType));
+    const areAllAuthorsBots = authors.every((author) => gitHubUtils.isBotUser(author, actorType));
     const effectiveRequiredApprovingReviewCount = areAllAuthorsBots ? Math.max(requiredApprovingReviewCount, 2) : requiredApprovingReviewCount;
 
-    const approvers = await GitHubUtils.getLatestApprovers({owner, repo, number: prNumber});
-    const independentEmployeeApprovers = await getIndependentEmployeeApprovers(approvers, authors);
+    const approvers = await gitHubUtils.getLatestApprovers({owner, repo, number: prNumber});
+    const independentEmployeeApprovers = await getIndependentEmployeeApprovers(gitHubUtils, approvers, authors);
     if (independentEmployeeApprovers.length >= effectiveRequiredApprovingReviewCount) {
         return {
             status: 'pass',
@@ -122,7 +123,7 @@ async function evaluatePeerReview(input: PeerReviewInput): Promise<PeerReviewRes
     };
 }
 
-async function main(): Promise<void> {
+async function main(gitHubUtilsOverride?: GitHubUtils): Promise<void> {
     /* eslint-disable @typescript-eslint/naming-convention -- CLI uses kebab-case argument names */
     const cli = new CLI({
         namedArgs: {
@@ -164,7 +165,8 @@ async function main(): Promise<void> {
     const targetBranch = cli.namedArgs['target-branch'];
     const actorType = cli.namedArgs['actor-type'];
 
-    const result = await evaluatePeerReview({
+    const gitHubUtils = gitHubUtilsOverride ?? createGitHubUtils(GitHubAPIClient.fromEnv());
+    const result = await evaluatePeerReview(gitHubUtils, {
         owner,
         repo,
         prNumber: pullRequestNumber,

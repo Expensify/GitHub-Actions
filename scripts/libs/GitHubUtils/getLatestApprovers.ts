@@ -1,5 +1,5 @@
 import CollectionUtils from '../CollectionUtils';
-import GitHubAPIClient from '../GitHubAPIClient';
+import type GitHubAPIClient from '../GitHubAPIClient';
 
 type OpinionatedReviewNode = {
     state: string;
@@ -18,8 +18,8 @@ type LatestOpinionatedReviewsResponse = {
     } | null;
 };
 
-async function getLatestApprovers({owner, repo, number}: {owner: string; repo: string; number: number}): Promise<string[]> {
-    const response = await GitHubAPIClient.graphql<LatestOpinionatedReviewsResponse>(
+async function getLatestApprovers(client: GitHubAPIClient, {owner, repo, number}: {owner: string; repo: string; number: number}): Promise<string[]> {
+    const response = await client.graphql<LatestOpinionatedReviewsResponse>(
         `
         query LatestOpinionatedReviews($owner: String!, $repo: String!, $prNumber: Int!) {
             repository(owner: $owner, name: $repo) {

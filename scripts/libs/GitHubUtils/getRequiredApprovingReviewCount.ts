@@ -1,4 +1,4 @@
-import GitHubAPIClient from '../GitHubAPIClient';
+import type GitHubAPIClient from '../GitHubAPIClient';
 import {WorkflowError} from '../GitHubWorkflowUtils';
 import isPermissionError from './isPermissionError';
 
@@ -14,9 +14,9 @@ type BranchProtectionResponse = {
     } | null;
 };
 
-async function getRequiredApprovingReviewCount({owner, repo, baseRef}: {owner: string; repo: string; baseRef: string}): Promise<number> {
+async function getRequiredApprovingReviewCount(client: GitHubAPIClient, {owner, repo, baseRef}: {owner: string; repo: string; baseRef: string}): Promise<number> {
     try {
-        const response = await GitHubAPIClient.graphql<BranchProtectionResponse>(
+        const response = await client.graphql<BranchProtectionResponse>(
             `
             query RequiredApprovingReviewCount($owner: String!, $repo: String!, $branchRef: String!) {
                 repository(owner: $owner, name: $repo) {
