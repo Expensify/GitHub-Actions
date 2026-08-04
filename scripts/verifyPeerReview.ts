@@ -92,8 +92,8 @@ async function evaluatePeerReview(gitHubUtils: GitHubUtils, input: PeerReviewInp
 
     // A bot-only author list can't be trusted the way a human author list can: a human could have
     // asked the bot to omit them as a co-author to dodge peer review. We don't block these PRs
-    // outright, since some (e.g. Snyk upgrades) are never co-authored by a human, but we require
-    // two independent reviewers instead of one so a single reviewer can't rubber-stamp the bypass.
+    // outright, since some (e.g. Snyk upgrades, HelpDot changes) are never co-authored by a human.
+    // In those cases, we require at least two independent reviewers in case the first reviewer was actually a secret co-author.
     const areAllAuthorsBots = authors.every((author) => gitHubUtils.isBotUser(author, actorType));
     const effectiveRequiredApprovingReviewCount = areAllAuthorsBots ? Math.max(requiredApprovingReviewCount, 2) : requiredApprovingReviewCount;
 
