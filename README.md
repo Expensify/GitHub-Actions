@@ -47,9 +47,8 @@ The check only reads GitHub pull request metadata via the API; it does not check
 
 This workflow requires a GitHub App token with read access for repository metadata, pull requests, organization members, and branch administration. It uses the Peer Review Checker app ID `3877737` and the org secret `PEER_REVIEW_CHECKER_PRIVATE_KEY` to generate that token.
 
-- If branch protection cannot be read due to missing permissions, the check fails.
-- If the target branch has no branch-protection review requirement, the check passes.
-- If branch protection cannot be queried due to a transient API error, the script defaults to requiring one independent approval.
+- If the target branch has no branch-protection rule, or has one that requires zero approving reviews, the check passes.
+- If branch protection cannot be read — missing permissions, an API error, an unknown branch, or a response the script can't interpret — the check fails rather than assuming a review count.
 
 ### `setup-composer-cache`
 

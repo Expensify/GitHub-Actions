@@ -24,7 +24,23 @@ function createMockClient(graphqlClient: (query: string, variables?: Record<stri
 
 describe('GitHubUtils', () => {
     describe('getRequiredApprovingReviewCount', () => {
-        it('returns 0 when branch protection rule is missing', async () => {
+        it('returns the count from the branch protection rule', async () => {
+            const gitHubUtils = createGitHubUtils(
+                createMockClient(async () => ({
+                    repository: {
+                        ref: {
+                            branchProtectionRule: {
+                                requiredApprovingReviewCount: 2,
+                            },
+                        },
+                    },
+                })),
+            );
+
+            assert.equal(await gitHubUtils.getRequiredApprovingReviewCount(context), 2);
+        });
+
+        it('returns 0 when the branch has no branch protection rule', async () => {
             const gitHubUtils = createGitHubUtils(
                 createMockClient(async () => ({
                     repository: {
@@ -40,6 +56,106 @@ describe('GitHubUtils', () => {
                 baseRef: 'staging',
             });
             assert.equal(count, 0);
+        });
+
+        it('returns 0 when the branch protection rule requires no approving reviews', async () => {
+            const gitHubUtils = createGitHubUtils(
+                createMockClient(async () => ({
+                    repository: {
+                        ref: {
+                            branchProtectionRule: {
+                                requiredApprovingReviewCount: 0,
+                            },
+                        },
+                    },
+                })),
+            );
+
+            assert.equal(await gitHubUtils.getRequiredApprovingReviewCount(context), 0);
+        });
+
+        it('throws when the repository is missing', async () => {
+            const gitHubUtils = createGitHubUtils(createMockClient(async () => ({repository: null})));
+
+            await assert.rejects(
+                () => gitHubUtils.getRequiredApprovingReviewCount(context),
+                (error: unknown) => {
+                    assert.ok(error instanceof WorkflowError);
+                    assert.equal(error.title, 'Unexpected branch protection response');
+                    assert.match(error.message, /returned no repository/);
+                    return true;
+                },
+            );
+        });
+
+        it('throws when the branch does not exist', async () => {
+            const gitHubUtils = createGitHubUtils(createMockClient(async () => ({repository: {ref: null}})));
+
+            await assert.rejects(
+                () => gitHubUtils.getRequiredApprovingReviewCount(context),
+                (error: unknown) => {
+                    assert.ok(error instanceof WorkflowError);
+                    assert.equal(error.title, 'Unknown branch');
+                    assert.match(error.message, /has no branch named main/);
+                    return true;
+                },
+            );
+        });
+
+        it('throws when the ref has no branchProtectionRule key', async () => {
+            const gitHubUtils = createGitHubUtils(createMockClient(async () => ({repository: {ref: {}}})));
+
+            await assert.rejects(
+                () => gitHubUtils.getRequiredApprovingReviewCount(context),
+                (error: unknown) => {
+                    assert.ok(error instanceof WorkflowError);
+                    assert.equal(error.title, 'Unexpected branch protection response');
+                    assert.match(error.message, /without a branchProtectionRule key/);
+                    return true;
+                },
+            );
+        });
+
+        it('throws when requiredApprovingReviewCount is not a number', async () => {
+            const gitHubUtils = createGitHubUtils(
+                createMockClient(async () => ({
+                    repository: {
+                        ref: {
+                            branchProtectionRule: {
+                                requiredApprovingReviewCount: null,
+                            },
+                        },
+                    },
+                })),
+            );
+
+            await assert.rejects(
+                () => gitHubUtils.getRequiredApprovingReviewCount(context),
+                (error: unknown) => {
+                    assert.ok(error instanceof WorkflowError);
+                    assert.equal(error.title, 'Unexpected branch protection response');
+                    assert.match(error.message, /non-numeric requiredApprovingReviewCount/);
+                    return true;
+                },
+            );
+        });
+
+        it('throws on other API errors instead of assuming a review count', async () => {
+            const gitHubUtils = createGitHubUtils(
+                createMockClient(async () => {
+                    throw new Error('502 Bad Gateway');
+                }),
+            );
+
+            await assert.rejects(
+                () => gitHubUtils.getRequiredApprovingReviewCount(context),
+                (error: unknown) => {
+                    assert.ok(error instanceof WorkflowError);
+                    assert.equal(error.title, 'Branch protection lookup failed');
+                    assert.match(error.message, /502 Bad Gateway/);
+                    return true;
+                },
+            );
         });
 
         it('throws on permission errors', async () => {
