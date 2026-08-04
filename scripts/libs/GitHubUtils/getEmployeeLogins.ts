@@ -42,6 +42,8 @@ async function fetchEmployeeLogins(): Promise<Set<string>> {
     let hasNextPage = true;
 
     while (hasNextPage) {
+        // await-in-loop is necessary and appropriate for polling a paginated endpoint;
+        // each request is dependent upon the response of the previous.
         // eslint-disable-next-line no-await-in-loop
         const response: TeamMembersResponse = await GitHubAPIClient.graphql<TeamMembersResponse>(
             `
