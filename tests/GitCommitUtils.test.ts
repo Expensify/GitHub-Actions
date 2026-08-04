@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {describe, it} from 'node:test';
 
 import GitCommitUtils, {type GitHubPullRequestCommit} from '../scripts/libs/GitCommitUtils';
+import {WorkflowError} from '../scripts/libs/GitHubWorkflowUtils';
 
 function makeCommit(authorLogin: string | undefined, authorName: string | undefined, message: string): GitHubPullRequestCommit {
     return {
@@ -47,7 +48,15 @@ describe('GitCommitUtils', () => {
         });
 
         it('throws when canonical author cannot be resolved', () => {
-            assert.throws(() => GitCommitUtils.getCanonicalAuthorLogin(makeCommit(undefined, undefined, 'Change')), /Unable to resolve canonical commit author/);
+            assert.throws(
+                () => GitCommitUtils.getCanonicalAuthorLogin(makeCommit(undefined, undefined, 'Change')),
+                (error: unknown) => {
+                    assert.ok(error instanceof WorkflowError);
+                    assert.match(error.message, /Unable to resolve canonical commit author/);
+                    assert.equal(error.title, 'Missing commit author');
+                    return true;
+                },
+            );
         });
     });
 });

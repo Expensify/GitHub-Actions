@@ -5,6 +5,7 @@ import {RequestError} from '@octokit/request-error';
 
 import GitHubAPIClient from '../scripts/libs/GitHubAPIClient';
 import GitHubUtils from '../scripts/libs/GitHubUtils';
+import {WorkflowError} from '../scripts/libs/GitHubWorkflowUtils';
 
 const context = {
     owner: 'Expensify',
@@ -47,7 +48,15 @@ describe('GitHubUtils', () => {
                 });
             };
 
-            await assert.rejects(() => GitHubUtils.getRequiredApprovingReviewCount(context), /Unable to read branch protection rules/);
+            await assert.rejects(
+                () => GitHubUtils.getRequiredApprovingReviewCount(context),
+                (error: unknown) => {
+                    assert.ok(error instanceof WorkflowError);
+                    assert.match(error.message, /Unable to read branch protection rules/);
+                    assert.equal(error.title, 'Branch protection lookup failed');
+                    return true;
+                },
+            );
         });
     });
 

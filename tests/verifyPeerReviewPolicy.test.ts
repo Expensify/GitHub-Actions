@@ -3,6 +3,7 @@ import {afterEach, beforeEach, describe, it} from 'node:test';
 
 import type {GitHubPullRequestCommit} from '../scripts/libs/GitCommitUtils';
 import GitHubUtils from '../scripts/libs/GitHubUtils';
+import {WorkflowError} from '../scripts/libs/GitHubWorkflowUtils';
 import VerifyPeerReview, {type PeerReviewInput} from '../scripts/verifyPeerReview';
 
 function makeCommit(login: string, message = ''): GitHubPullRequestCommit {
@@ -105,6 +106,8 @@ describe('verifyPeerReview', () => {
             assert.equal(result.status, 'fail');
             if (result.status === 'fail') {
                 assert.match(result.error.message, /Unable to determine any commit authors/);
+                assert.ok(result.error instanceof WorkflowError);
+                assert.equal(result.error.title, 'No commit authors found');
             }
         });
 
@@ -116,6 +119,8 @@ describe('verifyPeerReview', () => {
             assert.equal(result.status, 'fail');
             if (result.status === 'fail') {
                 assert.match(result.error.message, /does not have enough independent Expensify employee approvals/);
+                assert.ok(result.error instanceof WorkflowError);
+                assert.equal(result.error.title, 'Missing independent peer review');
             }
         });
 
@@ -190,7 +195,15 @@ describe('verifyPeerReview', () => {
             GitHubUtils.getLatestApprovers = async () => ['AndrewGable'];
             GitHubUtils.listPullRequestCommits = mockCommits([makeCommit('MelvinBot', 'Change\n\nCo-authored-by: John Smith <andrew@expensify.com>')]);
 
-            await assert.rejects(() => VerifyPeerReview.evaluatePeerReview(BASE_INPUT), /Unable to resolve co-author email/);
+            await assert.rejects(
+                () => VerifyPeerReview.evaluatePeerReview(BASE_INPUT),
+                (error: unknown) => {
+                    assert.ok(error instanceof WorkflowError);
+                    assert.match(error.message, /Unable to resolve co-author email/);
+                    assert.equal(error.title, 'Unresolved co-author');
+                    return true;
+                },
+            );
         });
 
         it('fails on unresolved co-author emails regardless of domain', async () => {
@@ -198,16 +211,6 @@ describe('verifyPeerReview', () => {
             GitHubUtils.listPullRequestCommits = mockCommits([makeCommit('MelvinBot', 'Change\n\nCo-authored-by: Jane Doe <jane.doe@gmail.com>')]);
 
             await assert.rejects(() => VerifyPeerReview.evaluatePeerReview(BASE_INPUT), /Unable to resolve co-author email/);
-        });
-    });
-
-    describe('getFailureTitle', () => {
-        it('maps failure titles for known messages', () => {
-            assert.equal(VerifyPeerReview.getFailureTitle('Unable to resolve canonical commit author: missing GitHub author login and commit author name.'), 'Missing commit author');
-            assert.equal(VerifyPeerReview.getFailureTitle('Unable to determine any commit authors for Expensify/Auth#1.'), 'No commit authors found');
-            assert.equal(VerifyPeerReview.getFailureTitle('Unable to resolve co-author emails to GitHub users: jane.doe@gmail.com'), 'Unresolved co-author');
-            assert.equal(VerifyPeerReview.getFailureTitle('Expensify/Auth#1 does not have enough independent Expensify employee approvals.'), 'Missing independent peer review');
-            assert.equal(VerifyPeerReview.getFailureTitle('Unable to read branch protection rules for Expensify/Auth@main.'), 'Branch protection lookup failed');
         });
     });
 });

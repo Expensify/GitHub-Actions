@@ -6,7 +6,7 @@ import CollectionUtils from './libs/CollectionUtils';
 import GitCommitUtils from './libs/GitCommitUtils';
 import GitHubUtils from './libs/GitHubUtils';
 import type {ActorType} from './libs/GitHubUtils';
-import GitHubWorkflowUtils from './libs/GitHubWorkflowUtils';
+import GitHubWorkflowUtils, {WorkflowError} from './libs/GitHubWorkflowUtils';
 
 type PeerReviewInput = {
     owner: string;
@@ -45,7 +45,7 @@ async function getCommitAuthors({owner, repo, prNumber, actorType}: {owner: stri
             if (login) {
                 authors.add(login);
             } else {
-                throw new Error(`Unable to resolve co-author email to GitHub user: ${coAuthorEmail}`);
+                throw new WorkflowError({title: 'Unresolved co-author', message: `Unable to resolve co-author email to GitHub user: ${coAuthorEmail}`});
             }
         }
     }
@@ -85,7 +85,7 @@ async function evaluatePeerReview(input: PeerReviewInput): Promise<PeerReviewRes
     if (authors.length === 0) {
         return {
             status: 'fail',
-            error: new Error(`Unable to determine any commit authors for ${prSlug}.`),
+            error: new WorkflowError({title: 'No commit authors found', message: `Unable to determine any commit authors for ${prSlug}.`}),
         };
     }
 
@@ -118,27 +118,8 @@ async function evaluatePeerReview(input: PeerReviewInput): Promise<PeerReviewRes
             : '';
     return {
         status: 'fail',
-        error: new Error(`${prSlug} does not have enough independent Expensify employee approvals.${botOnlyNote}`),
+        error: new WorkflowError({title: 'Missing independent peer review', message: `${prSlug} does not have enough independent Expensify employee approvals.${botOnlyNote}`}),
     };
-}
-
-function getFailureTitle(message: string): string {
-    if (message.includes('does not have enough independent Expensify employee approvals')) {
-        return 'Missing independent peer review';
-    }
-    if (message.includes('Unable to resolve co-author emails')) {
-        return 'Unresolved co-author';
-    }
-    if (message.includes('Unable to resolve canonical commit author')) {
-        return 'Missing commit author';
-    }
-    if (message.includes('Unable to determine any commit authors')) {
-        return 'No commit authors found';
-    }
-    if (message.includes('Unable to read branch protection rules')) {
-        return 'Branch protection lookup failed';
-    }
-    return 'Peer review verification failed';
 }
 
 async function main(): Promise<void> {
@@ -206,12 +187,10 @@ export default {
     evaluatePeerReview,
     getIndependentEmployeeApprovers,
     getCommitAuthors,
-    getFailureTitle,
 };
 
 if (import.meta.main) {
     main().catch((error) => {
-        const message = error instanceof Error ? error.message : String(error);
-        GitHubWorkflowUtils.emitFailure(error, getFailureTitle(message));
+        GitHubWorkflowUtils.emitFailure(error, 'Peer review verification failed');
     });
 }

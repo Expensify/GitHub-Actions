@@ -1,3 +1,5 @@
+import {WorkflowError} from './GitHubWorkflowUtils';
+
 type GitHubPullRequestCommit = {
     author: {
         login?: string;
@@ -31,7 +33,10 @@ function getCanonicalAuthorLogin(commit: GitHubPullRequestCommit): string {
         return authorName;
     }
 
-    throw new Error(`Unable to resolve canonical commit author: missing GitHub author login and commit author name. ${JSON.stringify(commit)}`);
+    throw new WorkflowError({
+        title: 'Missing commit author',
+        message: `Unable to resolve canonical commit author: missing GitHub author login and commit author name. ${JSON.stringify(commit)}`,
+    });
 }
 
 export type {GitHubPullRequestCommit};

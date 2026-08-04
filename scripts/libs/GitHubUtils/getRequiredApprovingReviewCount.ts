@@ -1,4 +1,5 @@
 import GitHubAPIClient from '../GitHubAPIClient';
+import {WorkflowError} from '../GitHubWorkflowUtils';
 import isPermissionError from './isPermissionError';
 
 const DEFAULT_REQUIRED_APPROVING_REVIEW_COUNT = 1;
@@ -37,7 +38,10 @@ async function getRequiredApprovingReviewCount({owner, repo, baseRef}: {owner: s
         return response.repository?.ref?.branchProtectionRule?.requiredApprovingReviewCount ?? 0;
     } catch (error: unknown) {
         if (isPermissionError(error)) {
-            throw new Error(`Unable to read branch protection rules for ${owner}/${repo}@${baseRef}. Ensure the GitHub App has administration:read permission.`);
+            throw new WorkflowError({
+                title: 'Branch protection lookup failed',
+                message: `Unable to read branch protection rules for ${owner}/${repo}@${baseRef}. Ensure the GitHub App has administration:read permission.`,
+            });
         }
 
         const message = error instanceof Error ? error.message : String(error);
