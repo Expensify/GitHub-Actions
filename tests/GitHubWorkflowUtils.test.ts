@@ -1,14 +1,13 @@
 import assert from 'node:assert/strict';
 import {describe, it} from 'node:test';
 
-import GitHubWorkflowUtils from '../scripts/libs/GitHubWorkflowUtils';
+import {WorkflowError} from '../scripts/libs/GitHubWorkflowUtils';
 
-describe('GitHubWorkflowUtils helpers', () => {
-    it('escapes workflow command values', () => {
-        assert.equal(GitHubWorkflowUtils.escapeWorkflowCommandValue('a\nb%'), 'a%0Ab%25');
-    });
-
-    it('escapes workflow command properties', () => {
-        assert.equal(GitHubWorkflowUtils.escapeWorkflowCommandProperty('title:one,two'), 'title%3Aone%2Ctwo');
+describe('WorkflowError', () => {
+    it('carries the annotation title alongside the error message', () => {
+        const error = new WorkflowError({title: 'Some title', message: 'Some message'});
+        assert.equal(error.title, 'Some title');
+        assert.equal(error.message, 'Some message');
+        assert.ok(error instanceof Error);
     });
 });
