@@ -26,7 +26,7 @@ function mockCommits(commits: MockCommit[]): typeof GitHubUtils.listPullRequestC
     return async () => commits as unknown as Awaited<ReturnType<typeof GitHubUtils.listPullRequestCommits>>;
 }
 
-const BASE_ARGS = {owner: 'Expensify', repo: 'Auth', prNumber: 21136};
+const BASE_ARGS = {owner: 'Expensify', repo: 'Auth', prNumber: 21136, actorType: 'User' as const};
 
 describe('getCommitAuthors', () => {
     let originalListPullRequestCommits: typeof GitHubUtils.listPullRequestCommits;

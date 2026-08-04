@@ -77,15 +77,19 @@ describe('GitHubUtils', () => {
 
     describe('isBotUser', () => {
         it('returns true for GitHub App bot accounts', () => {
-            assert.equal(GitHubUtils.isBotUser('dependabot[bot]'), true);
+            assert.equal(GitHubUtils.isBotUser('dependabot[bot]', 'Bot'), true);
         });
 
         it('returns true for known Expensify bot accounts', () => {
-            assert.equal(GitHubUtils.isBotUser('MelvinBot'), true);
+            assert.equal(GitHubUtils.isBotUser('MelvinBot', 'User'), true);
         });
 
         it('returns false for human accounts', () => {
-            assert.equal(GitHubUtils.isBotUser('AndrewGable'), false);
+            assert.equal(GitHubUtils.isBotUser('AndrewGable', 'User'), false);
+        });
+
+        it('returns true when the actor type is Bot, regardless of login', () => {
+            assert.equal(GitHubUtils.isBotUser('AndrewGable', 'Bot'), true);
         });
     });
 });

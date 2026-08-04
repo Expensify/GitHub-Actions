@@ -20,6 +20,7 @@ const BASE_INPUT: PeerReviewInput = {
     repo: 'Auth',
     prNumber: 21136,
     targetBranch: 'main',
+    actorType: 'User',
 };
 
 describe('verifyPeerReview', () => {

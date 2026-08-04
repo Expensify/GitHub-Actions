@@ -5,6 +5,7 @@ import CLI from 'expensify-common/CLI';
 import CollectionUtils from './libs/CollectionUtils';
 import GitCommitUtils from './libs/GitCommitUtils';
 import GitHubUtils from './libs/GitHubUtils';
+import type {ActorType} from './libs/GitHubUtils';
 import GitHubWorkflowUtils from './libs/GitHubWorkflowUtils';
 
 type PeerReviewInput = {
@@ -12,11 +13,12 @@ type PeerReviewInput = {
     repo: string;
     prNumber: number;
     targetBranch: string;
+    actorType: ActorType;
 };
 
 type PeerReviewResult = {status: 'pass'; reason: string} | {status: 'skip'; reason: string} | {status: 'fail'; error: Error};
 
-async function getCommitAuthors({owner, repo, prNumber}: {owner: string; repo: string; prNumber: number}): Promise<string[]> {
+async function getCommitAuthors({owner, repo, prNumber, actorType}: {owner: string; repo: string; prNumber: number; actorType: ActorType}): Promise<string[]> {
     const commits = await GitHubUtils.listPullRequestCommits({owner, repo, number: prNumber});
     const authors = new Set<string>();
 
@@ -30,7 +32,7 @@ async function getCommitAuthors({owner, repo, prNumber}: {owner: string; repo: s
 
         // Co-authorship between two humans from making and accepting a suggestion does not violate peer review.
         // Only parse co-authors when the canonical commit author is a bot.
-        if (!GitHubUtils.isBotUser(canonicalAuthor)) {
+        if (!GitHubUtils.isBotUser(canonicalAuthor, actorType)) {
             console.log('Not considering co-author an author since canonical author is human', {
                 commitSHA: commit.sha,
                 canonicalAuthor,
@@ -58,7 +60,7 @@ async function getIndependentEmployeeApprovers(approvers: string[], authors: str
 }
 
 async function evaluatePeerReview(input: PeerReviewInput): Promise<PeerReviewResult> {
-    const {owner, repo, prNumber, targetBranch} = input;
+    const {owner, repo, prNumber, targetBranch, actorType} = input;
     const prSlug = `${owner}/${repo}#${prNumber}`;
 
     console.log('Evaluating PR', {
@@ -76,7 +78,7 @@ async function evaluatePeerReview(input: PeerReviewInput): Promise<PeerReviewRes
         };
     }
 
-    const authors = await getCommitAuthors({owner, repo, prNumber});
+    const authors = await getCommitAuthors({owner, repo, prNumber, actorType});
 
     // Unlike the PHP chore, which logs a bugbot and skips when no commit authors can be determined,
     // we fail the check here so an unresolvable PR can't merge without independent review.
@@ -91,7 +93,7 @@ async function evaluatePeerReview(input: PeerReviewInput): Promise<PeerReviewRes
     // asked the bot to omit them as a co-author to dodge peer review. We don't block these PRs
     // outright, since some (e.g. Snyk upgrades) are never co-authored by a human, but we require
     // two independent reviewers instead of one so a single reviewer can't rubber-stamp the bypass.
-    const areAllAuthorsBots = authors.every((author) => GitHubUtils.isBotUser(author));
+    const areAllAuthorsBots = authors.every((author) => GitHubUtils.isBotUser(author, actorType));
     const effectiveRequiredApprovingReviewCount = areAllAuthorsBots ? Math.max(requiredApprovingReviewCount, 2) : requiredApprovingReviewCount;
 
     const approvers = await GitHubUtils.getLatestApprovers({owner, repo, number: prNumber});
@@ -162,6 +164,15 @@ async function main(): Promise<void> {
             'target-branch': {
                 description: 'Target branch ref for the pull request',
             },
+            'actor-type': {
+                description: 'GitHub actor type of the user who triggered the event (Bot or User)',
+                parse: (value: string): ActorType => {
+                    if (value !== 'Bot' && value !== 'User') {
+                        throw new Error('Must be "Bot" or "User"');
+                    }
+                    return value;
+                },
+            },
         },
     });
     /* eslint-enable @typescript-eslint/naming-convention */
@@ -170,12 +181,14 @@ async function main(): Promise<void> {
     const repo = cli.namedArgs.repo;
     const pullRequestNumber = cli.namedArgs['pull-request-number'];
     const targetBranch = cli.namedArgs['target-branch'];
+    const actorType = cli.namedArgs['actor-type'];
 
     const result = await evaluatePeerReview({
         owner,
         repo,
         prNumber: pullRequestNumber,
         targetBranch,
+        actorType,
     });
 
     if (result.status === 'skip' || result.status === 'pass') {
