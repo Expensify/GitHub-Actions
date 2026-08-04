@@ -67,12 +67,12 @@ describe('verifyPeerReview', () => {
             });
         }
 
-        it('skips when branch requires no approving reviews', async () => {
+        it('passes when branch requires no approving reviews', async () => {
             const gitHubUtils = createBaseFakeGitHubUtils({getRequiredApprovingReviewCount: async () => 0});
 
             const result = await VerifyPeerReview.evaluatePeerReview(gitHubUtils, BASE_INPUT);
 
-            assert.equal(result.status, 'skip');
+            assert.equal(result.status, 'pass');
         });
 
         it('fails when no commit authors can be determined', async () => {

@@ -17,7 +17,7 @@ type PeerReviewInput = {
     actorType: ActorType;
 };
 
-type PeerReviewResult = {status: 'pass'; reason: string} | {status: 'skip'; reason: string} | {status: 'fail'; error: Error};
+type PeerReviewResult = {status: 'pass'; reason: string} | {status: 'fail'; error: Error};
 
 async function getCommitAuthors(gitHubUtils: GitHubUtils, {owner, repo, prNumber, actorType}: {owner: string; repo: string; prNumber: number; actorType: ActorType}): Promise<string[]> {
     const commits = await gitHubUtils.listPullRequestCommits({owner, repo, number: prNumber});
@@ -74,7 +74,7 @@ async function evaluatePeerReview(gitHubUtils: GitHubUtils, input: PeerReviewInp
     const requiredApprovingReviewCount = await gitHubUtils.getRequiredApprovingReviewCount({owner, repo, baseRef: targetBranch});
     if (requiredApprovingReviewCount === 0) {
         return {
-            status: 'skip',
+            status: 'pass',
             reason: `${prSlug} targets ${targetBranch}, which does not require approving reviews.`,
         };
     }
@@ -174,7 +174,7 @@ async function main(gitHubUtilsOverride?: GitHubUtils): Promise<void> {
         actorType,
     });
 
-    if (result.status === 'skip' || result.status === 'pass') {
+    if (result.status === 'pass') {
         console.log(result.reason);
         return;
     }
