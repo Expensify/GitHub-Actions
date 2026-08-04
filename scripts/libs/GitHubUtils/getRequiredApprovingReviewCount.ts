@@ -3,7 +3,7 @@ import {WorkflowError} from '../GitHubWorkflowUtils';
 import isPermissionError from './isPermissionError';
 
 type BranchProtectionResponse = {
-    repository?: {
+    repository: {
         ref?: {
             branchProtectionRule?: {
                 requiredApprovingReviewCount?: number | null;
@@ -61,7 +61,7 @@ async function getRequiredApprovingReviewCount(client: GitHubAPIClient, {owner, 
         });
     }
 
-    const repository = response?.repository;
+    const repository = response.repository;
     if (!repository) {
         throw new WorkflowError({
             title: 'Unexpected branch protection response',
