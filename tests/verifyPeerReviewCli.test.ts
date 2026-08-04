@@ -2,11 +2,13 @@ import assert from 'node:assert/strict';
 import {afterEach, beforeEach, describe, it} from 'node:test';
 
 import VerifyPeerReview from '../scripts/verifyPeerReview';
+import createFakeGitHubUtils from './createFakeGitHubUtils';
 
 const ORIGINAL_ARGV = process.argv;
 
 describe('main CLI parsing', () => {
     let originalExit: typeof process.exit;
+    const fakeGitHubUtils = createFakeGitHubUtils({getRequiredApprovingReviewCount: async () => 0});
 
     beforeEach(() => {
         process.argv = ['tsx', 'scripts/verifyPeerReview.ts'];
@@ -22,12 +24,12 @@ describe('main CLI parsing', () => {
     });
 
     it('parses required pull request CLI arguments', async () => {
-        process.argv.push('--owner', 'Expensify', '--repo', 'Auth', '--pull-request-number', '21136', '--base-ref', 'main');
+        process.argv.push('--owner', 'Expensify', '--repo', 'Auth', '--pull-request-number', '21136', '--target-branch', 'main', '--actor-type', 'User');
 
-        await assert.doesNotReject(() => VerifyPeerReview.main());
+        await assert.doesNotReject(() => VerifyPeerReview.main(fakeGitHubUtils));
     });
 
     it('fails when required arguments are missing', async () => {
-        await assert.rejects(() => VerifyPeerReview.main(), /exit 1/);
+        await assert.rejects(() => VerifyPeerReview.main(fakeGitHubUtils), /exit 1/);
     });
 });
