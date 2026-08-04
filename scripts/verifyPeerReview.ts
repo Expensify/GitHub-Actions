@@ -101,7 +101,7 @@ async function evaluatePeerReview(input: PeerReviewInput): Promise<PeerReviewRes
     if (independentEmployeeApprovers.length >= effectiveRequiredApprovingReviewCount) {
         return {
             status: 'pass',
-            reason: `${prSlug} has ${independentEmployeeApprovers.length} independent Expensify employee approval(s).`,
+            reason: `${prSlug} has ${independentEmployeeApprovers.length}/${effectiveRequiredApprovingReviewCount} independent Expensify employee approval(s).`,
         };
     }
 
