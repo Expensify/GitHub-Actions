@@ -15,13 +15,7 @@ function makeCommit(authorLogin: string | undefined, authorName: string | undefi
     };
 }
 
-type MockCommit = {
-    author: {login: string} | null;
-    commit: {message: string; author: {name: string} | Record<string, never>};
-    sha?: string;
-};
-
-function mockCommits(commits: MockCommit[]): typeof GitHubUtils.listPullRequestCommits {
+function mockCommits(commits: GitHubPullRequestCommit[]): typeof GitHubUtils.listPullRequestCommits {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- narrow test fixture standing in for the full Octokit commit type
     return async () => commits as unknown as Awaited<ReturnType<typeof GitHubUtils.listPullRequestCommits>>;
 }
