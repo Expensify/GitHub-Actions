@@ -19,6 +19,10 @@ type PeerReviewInput = {
 
 type PeerReviewResult = {status: 'pass'; reason: string} | {status: 'fail'; error: Error};
 
+// GitHub's List commits on a pull request endpoint never returns more than 250 commits, no matter how it's paginated,
+// so commit authorship can't be reliably determined above this count.
+const MAX_VERIFIABLE_COMMITS = 250;
+
 async function getCommitAuthors(gitHubUtils: GitHubUtils, {owner, repo, prNumber, actorType}: {owner: string; repo: string; prNumber: number; actorType: ActorType}): Promise<string[]> {
     const commits = await gitHubUtils.listPullRequestCommits({owner, repo, number: prNumber});
     const authors = new Set<string>();
@@ -76,6 +80,17 @@ async function evaluatePeerReview(gitHubUtils: GitHubUtils, input: PeerReviewInp
         return {
             status: 'pass',
             reason: `${prSlug} targets ${targetBranch}, which does not require approving reviews.`,
+        };
+    }
+
+    const commitCount = await gitHubUtils.getPullRequestCommitCount({owner, repo, number: prNumber});
+    if (commitCount > MAX_VERIFIABLE_COMMITS) {
+        return {
+            status: 'fail',
+            error: new WorkflowError({
+                title: 'Too many commits to verify',
+                message: `${prSlug} has ${commitCount} commits, which exceeds the ${MAX_VERIFIABLE_COMMITS}-commit limit of GitHub's commit-listing API. Commit authorship can't be reliably verified above this limit, so please split this PR into smaller pieces.`,
+            }),
         };
     }
 
