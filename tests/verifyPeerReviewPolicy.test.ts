@@ -75,6 +75,31 @@ describe('verifyPeerReview', () => {
             assert.equal(result.status, 'pass');
         });
 
+        it('fails when the pull request has more than 250 commits', async () => {
+            const gitHubUtils = createBaseFakeGitHubUtils({getPullRequestCommitCount: async () => 251});
+
+            const result = await VerifyPeerReview.evaluatePeerReview(gitHubUtils, BASE_INPUT);
+
+            assert.equal(result.status, 'fail');
+            if (result.status === 'fail') {
+                assert.match(result.error.message, /has 251 commits, which exceeds the 250-commit limit/);
+                assert.ok(result.error instanceof WorkflowError);
+                assert.equal(result.error.title, 'Too many commits to verify');
+            }
+        });
+
+        it('passes with exactly 250 commits when otherwise eligible', async () => {
+            const gitHubUtils = createBaseFakeGitHubUtils({
+                getPullRequestCommitCount: async () => 250,
+                getLatestApprovers: async () => ['MonilBhavsar'],
+                listPullRequestCommits: mockCommits([makeCommit('AndrewGable')]),
+            });
+
+            const result = await VerifyPeerReview.evaluatePeerReview(gitHubUtils, BASE_INPUT);
+
+            assert.equal(result.status, 'pass');
+        });
+
         it('fails when no commit authors can be determined', async () => {
             const gitHubUtils = createBaseFakeGitHubUtils({listPullRequestCommits: mockCommits([])});
 

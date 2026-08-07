@@ -1,6 +1,7 @@
 import type GitHubAPIClient from '../GitHubAPIClient';
 import getEmployeeLogins, {isExpensifyEmployee} from './getEmployeeLogins';
 import getLatestApprovers from './getLatestApprovers';
+import getPullRequestCommitCount from './getPullRequestCommitCount';
 import getRequiredApprovingReviewCount from './getRequiredApprovingReviewCount';
 import isBotUser from './isBotUser';
 import type {ActorType} from './isBotUser';
@@ -15,6 +16,7 @@ function createGitHubUtils(client: GitHubAPIClient) {
     return {
         getEmployeeLogins: () => getEmployeeLogins(client),
         getLatestApprovers: (args: {owner: string; repo: string; number: number}) => getLatestApprovers(client, args),
+        getPullRequestCommitCount: (args: {owner: string; repo: string; number: number}) => getPullRequestCommitCount(client, args),
         getRequiredApprovingReviewCount: (args: {owner: string; repo: string; baseRef: string}) => getRequiredApprovingReviewCount(client, args),
         isBotUser,
         isExpensifyEmployee: (login: string) => isExpensifyEmployee(client, login),
