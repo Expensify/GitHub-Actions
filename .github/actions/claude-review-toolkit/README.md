@@ -46,6 +46,39 @@ Caller repos must ship a `.claude/skills/coding-standards/rules/` directory with
 | `createInlineComment.sh` | `<PR_NUMBER> <path> <body> <line>` | Posts an inline review comment. Requires `GITHUB_REPOSITORY`, `GH_TOKEN`, and `ALLOWED_RULES_FILE` in env. The body must reference a rule tag matching `[A-Z]+(-[A-Z]+)*-[0-9]+` (e.g. `PERF-1`) that is present in the allowlist; otherwise the comment is rejected. |
 | `postCodeReviewResults.sh` | `<PR_NUMBER>` | Posts the result of a Claude code review. With no violations, adds a `+1` reaction to the PR; with violations, posts one inline comment per violation. Reads the JSON output from env `STRUCTURED_OUTPUT`. Requires `GH_TOKEN`, `GITHUB_REPOSITORY`, `ALLOWED_RULES_FILE`, and `STRUCTURED_OUTPUT` in env. Individual comment failures are swallowed so one rejected comment does not kill the loop. |
 | `extractAllowedRules.sh` | `<rules-dir> <output-file>` | Walks `<rules-dir>` for `.md` rule files and writes their `ruleId:` tags to `<output-file>`. Invoked automatically by the action; rarely called directly. |
+| `shouldSkipReview.sh` | `<PR_NUMBER> <CONTEXT>` | Resolves the PR's head SHA and writes `head_sha` plus `skip=true\|false` to `$GITHUB_OUTPUT`. `skip` is `true` when a `success` commit status with `<CONTEXT>` already exists on that SHA. Requires `GH_TOKEN` and `GITHUB_REPOSITORY`. |
+| `recordReviewComplete.sh` | `<HEAD_SHA> <CONTEXT> [DESCRIPTION]` | Sets a `success` commit status with `<CONTEXT>` on `<HEAD_SHA>`, linking back to the workflow run. Requires `GH_TOKEN`, `GITHUB_REPOSITORY`, `statuses: write`. |
+
+## Skipping duplicate reviews
+
+A PR marked ready for review after being reviewed as a draft would otherwise be reviewed twice on the same commit. To avoid that, gate the review on `shouldSkipReview.sh` and record completion with `recordReviewComplete.sh`:
+
+```yaml
+permissions:
+  statuses: write
+
+steps:
+  - name: Check for an existing review of this commit
+    id: skip
+    env:
+      GH_TOKEN: ${{ github.token }}
+    run: shouldSkipReview.sh "$PR_NUMBER" "ai-review/claude"
+
+  - name: Run Claude Code
+    if: steps.skip.outputs.skip != 'true'
+    # ...
+
+  - name: Record review completion
+    if: steps.skip.outputs.skip != 'true' && steps.code-review.outcome == 'success'
+    env:
+      GH_TOKEN: ${{ github.token }}
+      HEAD_SHA: ${{ steps.skip.outputs.head_sha }}
+    run: recordReviewComplete.sh "$HEAD_SHA" "ai-review/claude" "Reviewed at this commit"
+```
+
+Record against `steps.skip.outputs.head_sha` — the SHA captured before the review started — rather than re-resolving it at the end. If the author pushed while the review was running, the status lands on the commit that was actually reviewed and the next event correctly triggers a fresh review.
+
+The status is recorded whether or not the review found anything, so re-running on an unchanged commit never reposts the same findings. A comment trigger (`@claude review`, `/codex-review`) bypasses the gate and is the way to force a re-review.
 
 ## Schema extension
 
