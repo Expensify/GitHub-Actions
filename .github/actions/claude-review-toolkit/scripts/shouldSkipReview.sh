@@ -4,6 +4,10 @@
 # Writes "head_sha=<sha>" and "skip=true|false" to $GITHUB_OUTPUT.
 # Usage: shouldSkipReview.sh <PR_NUMBER> <CONTEXT>
 # Env: GH_TOKEN, GITHUB_REPOSITORY, GITHUB_OUTPUT
+#
+# CONTEXT names the reviewer, one per reviewer per repo (e.g. "ai-review/claude",
+# "ai-review/codex"). It must match the value recordReviewComplete.sh was given, since
+# that is the commit status this looks for.
 set -eu
 
 if [[ $# -lt 2 ]]; then
