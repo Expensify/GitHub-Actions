@@ -1,6 +1,7 @@
 #!/bin/bash
 
-# Decide whether an AI review already completed for the PR's current head commit.
+# Decide whether an AI review already completed for the PR's current head commit. Useful when a PR author manually requests a review while the PR is still a draft,
+# and then marks it ready for review once the AI review passes. In that case, this skips running the AI review again, since it already completed successfully for the same commit.
 # Writes "head_sha=<sha>" and "skip=true|false" to $GITHUB_OUTPUT.
 # Usage: shouldSkipReview.sh <PR_NUMBER> <CONTEXT>
 # Env: GH_TOKEN, GITHUB_REPOSITORY, GITHUB_OUTPUT
