@@ -62,7 +62,7 @@ steps:
     id: skip
     env:
       GH_TOKEN: ${{ github.token }}
-    run: shouldSkipReview.sh "$PR_NUMBER" "ai-review/claude"
+    run: shouldSkipReview.sh "$PR_NUMBER" "ai-review-completed/claude"
 
   - name: Run Claude Code
     if: steps.skip.outputs.skip != 'true'
@@ -73,12 +73,14 @@ steps:
     env:
       GH_TOKEN: ${{ github.token }}
       HEAD_SHA: ${{ steps.skip.outputs.head_sha }}
-    run: recordReviewComplete.sh "$HEAD_SHA" "ai-review/claude" "Reviewed at this commit"
+    run: recordReviewComplete.sh "$HEAD_SHA" "ai-review-completed/claude" "Reviewed at this commit"
 ```
 
 Record against `steps.skip.outputs.head_sha` — the SHA captured before the review started — rather than re-resolving it at the end. If the author pushed while the review was running, the status lands on the commit that was actually reviewed and the next event correctly triggers a fresh review.
 
 The status is recorded whether or not the review found anything, so re-running on an unchanged commit never reposts the same findings. A comment trigger (`@claude review`, `/codex-review`) bypasses the gate and is the way to force a re-review.
+
+Name the context so it does not read as a second review result. The review job itself already appears in the PR's checks list, and a neighbouring green row called `ai-review/claude` looks like a duplicate verdict — `ai-review-completed/claude` reads as the record of a past run, which is what it is.
 
 ## Schema extension
 
