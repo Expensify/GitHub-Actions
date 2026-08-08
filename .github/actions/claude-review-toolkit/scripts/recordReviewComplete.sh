@@ -5,12 +5,12 @@
 # Usage: recordReviewComplete.sh <HEAD_SHA> <CONTEXT> [DESCRIPTION]
 # Env: GH_TOKEN, GITHUB_REPOSITORY, GITHUB_SERVER_URL, GITHUB_RUN_ID
 #
-# CONTEXT names the reviewer, one per reviewer per repo (e.g. "ai-review-completed/claude",
-# "ai-review-completed/codex"). GitHub allows one status per context per commit, so a second
-# status with the same context replaces the first rather than stacking up. It is also
-# the key shouldSkipReview.sh looks for, so both scripts must be passed the same value
-# or the review will never be recognised as already done. It shows up as the status's
-# label in the PR's checks list.
+# CONTEXT is the key shouldSkipReview.sh looks for, so pass that step's "context" output rather
+# than rebuilding the string here - it names the reviewer and the PR (e.g.
+# "ai-review-completed/claude/pr-97"), and a mismatch means the review is never recognised as
+# already done. GitHub allows one status per context per commit, so a second status with the same
+# context replaces the first rather than stacking up. It shows up as the status's label in the
+# PR's checks list.
 set -eu
 
 if [[ $# -lt 2 ]]; then
