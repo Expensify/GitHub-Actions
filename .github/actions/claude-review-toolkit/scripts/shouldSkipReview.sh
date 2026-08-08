@@ -4,7 +4,11 @@
 # and then marks it ready for review once the AI review passes. In that case, this skips running the AI review again, since it already completed successfully for the same commit.
 # Writes "head_sha=<sha>", "context=<status context>" and "skip=true|false" to $GITHUB_OUTPUT.
 # Usage: shouldSkipReview.sh <PR_NUMBER> <CONTEXT>
-# Env: GH_TOKEN, GITHUB_REPOSITORY, GITHUB_OUTPUT
+# Env: GH_TOKEN, GITHUB_REPOSITORY, GITHUB_OUTPUT, GITHUB_EVENT_NAME
+#
+# An issue_comment run never skips. That event is how someone asks for a review by hand
+# ("@claude review", "/codex-review"), so it is a deliberate request to review a commit that has
+# most likely already been reviewed - the one case where repeating the review is the point.
 #
 # CONTEXT names the reviewer (e.g. "ai-review-completed/claude", "ai-review-completed/codex").
 # Commit statuses belong to a repository commit rather than to a PR, and two PRs can share a head
@@ -49,7 +53,10 @@ readonly STATE
 echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
 echo "context=$STATUS_CONTEXT" >> "$GITHUB_OUTPUT"
 
-if [[ "$STATE" == "success" ]]; then
+if [[ "${GITHUB_EVENT_NAME:-}" == "issue_comment" ]]; then
+    echo "Review requested by comment, running it even if $STATUS_CONTEXT already completed for $HEAD_SHA" >&2
+    echo "skip=false" >> "$GITHUB_OUTPUT"
+elif [[ "$STATE" == "success" ]]; then
     echo "$STATUS_CONTEXT already completed for $HEAD_SHA, skipping review" >&2
     echo "skip=true" >> "$GITHUB_OUTPUT"
 else
