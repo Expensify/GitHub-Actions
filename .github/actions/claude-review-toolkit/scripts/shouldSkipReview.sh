@@ -7,7 +7,7 @@
 # Env: GH_TOKEN, GITHUB_REPOSITORY, GITHUB_OUTPUT, GITHUB_EVENT_NAME
 #
 # An issue_comment run never skips. That event is how someone asks for a review by hand
-# ("@claude review", "/codex-review"), so it is a deliberate request to review a commit that has
+# ("@claude review", "@codex review"), so it is a deliberate request to review a commit that has
 # most likely already been reviewed - the one case where repeating the review is the point.
 #
 # CONTEXT names the reviewer (e.g. "ai-review-completed/claude", "ai-review-completed/codex").
