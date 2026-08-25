@@ -2,6 +2,10 @@
   "name": "@expensify/github-actions",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": "26.5.0",
+    "npm": "11.17.0"
+  },
   "scripts": {
     "fmt": "oxfmt --write .",
     "lint": "eslint .",
