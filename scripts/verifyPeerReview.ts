@@ -60,7 +60,7 @@ async function getCommitAuthors(gitHubUtils: GitHubUtils, {owner, repo, prNumber
     return CollectionUtils.uniqueSorted([...authors]);
 }
 
-async function getIndependentEmployeeApprovers(gitHubUtils: GitHubUtils, approvers: string[], authors: string[], owner: string, repo: string): Promise<string[]> {
+async function getIndependentApprovers(gitHubUtils: GitHubUtils, approvers: string[], authors: string[], owner: string, repo: string): Promise<string[]> {
     const authorsSet = new Set(authors);
     const independentApprovers = approvers.filter((approver) => !authorsSet.has(approver));
     return CollectionUtils.filterAsync(
@@ -118,11 +118,11 @@ async function evaluatePeerReview(gitHubUtils: GitHubUtils, input: PeerReviewInp
     const effectiveRequiredApprovingReviewCount = areAllAuthorsBots ? Math.max(requiredApprovingReviewCount, 2) : requiredApprovingReviewCount;
 
     const approvers = await gitHubUtils.getLatestApprovers({owner, repo, number: prNumber});
-    const independentEmployeeApprovers = await getIndependentEmployeeApprovers(gitHubUtils, approvers, authors, owner, repo);
-    if (independentEmployeeApprovers.length >= effectiveRequiredApprovingReviewCount) {
+    const independentApprovers = await getIndependentApprovers(gitHubUtils, approvers, authors, owner, repo);
+    if (independentApprovers.length >= effectiveRequiredApprovingReviewCount) {
         return {
             status: 'pass',
-            reason: `${prSlug} has ${independentEmployeeApprovers.length}/${effectiveRequiredApprovingReviewCount} independent Expensify employee approval(s).`,
+            reason: `${prSlug} has ${independentApprovers.length}/${effectiveRequiredApprovingReviewCount} independent eligible reviewer approval(s).`,
         };
     }
 
@@ -130,16 +130,16 @@ async function evaluatePeerReview(gitHubUtils: GitHubUtils, input: PeerReviewInp
         commitAuthors: authors,
         allAuthorsAreBots: areAllAuthorsBots,
         approvers,
-        independentApprovers: independentEmployeeApprovers,
+        independentApprovers,
         required: effectiveRequiredApprovingReviewCount,
     });
     const botOnlyNote =
         effectiveRequiredApprovingReviewCount > requiredApprovingReviewCount
-            ? ` Pull requests authored solely by bots require a minimum of ${effectiveRequiredApprovingReviewCount} independent Expensify employee approvals.`
+            ? ` Pull requests authored solely by bots require a minimum of ${effectiveRequiredApprovingReviewCount} independent eligible reviewer approvals.`
             : '';
     return {
         status: 'fail',
-        error: new WorkflowError({title: 'Missing independent peer review', message: `${prSlug} does not have enough independent Expensify employee approvals.${botOnlyNote}`}),
+        error: new WorkflowError({title: 'Missing independent peer review', message: `${prSlug} does not have enough independent eligible reviewer approvals.${botOnlyNote}`}),
     };
 }
 
@@ -207,7 +207,7 @@ export type {PeerReviewInput, PeerReviewResult};
 export default {
     main,
     evaluatePeerReview,
-    getIndependentEmployeeApprovers,
+    getIndependentApprovers,
     getCommitAuthors,
 };
 

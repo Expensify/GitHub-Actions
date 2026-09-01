@@ -26,11 +26,11 @@ const BASE_INPUT: PeerReviewInput = {
 };
 
 describe('verifyPeerReview', () => {
-    describe('getIndependentEmployeeApprovers', () => {
+    describe('getIndependentApprovers', () => {
         it('excludes commit authors and non-employees', async () => {
             const gitHubUtils = createFakeGitHubUtils({isExpensifyEmployee: async (login) => new Set(['AndrewGable', 'MonilBhavsar']).has(login)});
 
-            const independent = await VerifyPeerReview.getIndependentEmployeeApprovers(gitHubUtils, ['AndrewGable', 'MonilBhavsar'], ['AndrewGable'], 'Expensify', 'Auth');
+            const independent = await VerifyPeerReview.getIndependentApprovers(gitHubUtils, ['AndrewGable', 'MonilBhavsar'], ['AndrewGable'], 'Expensify', 'Auth');
 
             assert.deepEqual(independent, ['MonilBhavsar']);
         });
@@ -40,7 +40,7 @@ describe('verifyPeerReview', () => {
             // GitHub's API, so a real match is never case-mismatched. Folding case here would be incorrect.
             const gitHubUtils = createFakeGitHubUtils({isExpensifyEmployee: async (login) => new Set(['MonilBhavsar']).has(login)});
 
-            const independent = await VerifyPeerReview.getIndependentEmployeeApprovers(gitHubUtils, ['monilbhavsar'], ['AndrewGable'], 'Expensify', 'Auth');
+            const independent = await VerifyPeerReview.getIndependentApprovers(gitHubUtils, ['monilbhavsar'], ['AndrewGable'], 'Expensify', 'Auth');
 
             assert.deepEqual(independent, []);
         });
@@ -50,7 +50,7 @@ describe('verifyPeerReview', () => {
             // account with different casing, so this must not be a case-insensitive comparison.
             const gitHubUtils = createFakeGitHubUtils({isExpensifyEmployee: async (login) => new Set(['andrewgable']).has(login)});
 
-            const independent = await VerifyPeerReview.getIndependentEmployeeApprovers(gitHubUtils, ['andrewgable'], ['AndrewGable'], 'Expensify', 'Auth');
+            const independent = await VerifyPeerReview.getIndependentApprovers(gitHubUtils, ['andrewgable'], ['AndrewGable'], 'Expensify', 'Auth');
 
             assert.deepEqual(independent, ['andrewgable']);
         });
@@ -120,7 +120,7 @@ describe('verifyPeerReview', () => {
 
             assert.equal(result.status, 'fail');
             if (result.status === 'fail') {
-                assert.match(result.error.message, /does not have enough independent Expensify employee approvals/);
+                assert.match(result.error.message, /does not have enough independent eligible reviewer approvals/);
                 assert.ok(result.error instanceof WorkflowError);
                 assert.equal(result.error.title, 'Missing independent peer review');
             }
@@ -136,7 +136,7 @@ describe('verifyPeerReview', () => {
 
             assert.equal(result.status, 'fail');
             if (result.status === 'fail') {
-                assert.match(result.error.message, /does not have enough independent Expensify employee approvals/);
+                assert.match(result.error.message, /does not have enough independent eligible reviewer approvals/);
             }
         });
 
@@ -211,7 +211,7 @@ describe('verifyPeerReview', () => {
             if (result.status === 'fail') {
                 assert.match(
                     result.error.message,
-                    /does not have enough independent Expensify employee approvals\. Pull requests authored solely by bots require a minimum of 2 independent Expensify employee approvals\./,
+                    /does not have enough independent eligible reviewer approvals\. Pull requests authored solely by bots require a minimum of 2 independent eligible reviewer approvals\./,
                 );
             }
         });
