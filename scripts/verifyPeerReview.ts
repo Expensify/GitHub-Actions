@@ -22,6 +22,8 @@ type PeerReviewResult = {status: 'pass'; reason: string} | {status: 'fail'; erro
 // GitHub's List commits on a pull request endpoint never returns more than 250 commits, no matter how it's paginated,
 // so commit authorship can't be reliably determined above this count.
 const MAX_VERIFIABLE_COMMITS = 250;
+const SOFTWARE_MANSION_REPOSITORIES = new Set(['Expensify/react-native-wallet', 'Expensify/react-native-live-markdown']);
+const SOFTWARE_MANSION_REVIEWERS = new Set(['JakubKorytko', 'Skalakid', 'WoLewicki', 'brunovjk', 'j-piasecki', 'jmusial', 'staszekscp', 'tomekzaw', 'war-in', 'zfurtak']);
 
 async function getCommitAuthors(gitHubUtils: GitHubUtils, {owner, repo, prNumber, actorType}: {owner: string; repo: string; prNumber: number; actorType: ActorType}): Promise<string[]> {
     const commits = await gitHubUtils.listPullRequestCommits({owner, repo, number: prNumber});
@@ -58,10 +60,13 @@ async function getCommitAuthors(gitHubUtils: GitHubUtils, {owner, repo, prNumber
     return CollectionUtils.uniqueSorted([...authors]);
 }
 
-async function getIndependentEmployeeApprovers(gitHubUtils: GitHubUtils, approvers: string[], authors: string[]): Promise<string[]> {
+async function getIndependentEmployeeApprovers(gitHubUtils: GitHubUtils, approvers: string[], authors: string[], owner: string, repo: string): Promise<string[]> {
     const authorsSet = new Set(authors);
     const independentApprovers = approvers.filter((approver) => !authorsSet.has(approver));
-    return CollectionUtils.filterAsync(independentApprovers, (approver) => gitHubUtils.isExpensifyEmployee(approver));
+    return CollectionUtils.filterAsync(
+        independentApprovers,
+        async (approver) => (SOFTWARE_MANSION_REPOSITORIES.has(`${owner}/${repo}`) && SOFTWARE_MANSION_REVIEWERS.has(approver)) || (await gitHubUtils.isExpensifyEmployee(approver)),
+    );
 }
 
 async function evaluatePeerReview(gitHubUtils: GitHubUtils, input: PeerReviewInput): Promise<PeerReviewResult> {
@@ -113,7 +118,7 @@ async function evaluatePeerReview(gitHubUtils: GitHubUtils, input: PeerReviewInp
     const effectiveRequiredApprovingReviewCount = areAllAuthorsBots ? Math.max(requiredApprovingReviewCount, 2) : requiredApprovingReviewCount;
 
     const approvers = await gitHubUtils.getLatestApprovers({owner, repo, number: prNumber});
-    const independentEmployeeApprovers = await getIndependentEmployeeApprovers(gitHubUtils, approvers, authors);
+    const independentEmployeeApprovers = await getIndependentEmployeeApprovers(gitHubUtils, approvers, authors, owner, repo);
     if (independentEmployeeApprovers.length >= effectiveRequiredApprovingReviewCount) {
         return {
             status: 'pass',

@@ -30,7 +30,7 @@ describe('verifyPeerReview', () => {
         it('excludes commit authors and non-employees', async () => {
             const gitHubUtils = createFakeGitHubUtils({isExpensifyEmployee: async (login) => new Set(['AndrewGable', 'MonilBhavsar']).has(login)});
 
-            const independent = await VerifyPeerReview.getIndependentEmployeeApprovers(gitHubUtils, ['AndrewGable', 'MonilBhavsar'], ['AndrewGable']);
+            const independent = await VerifyPeerReview.getIndependentEmployeeApprovers(gitHubUtils, ['AndrewGable', 'MonilBhavsar'], ['AndrewGable'], 'Expensify', 'Auth');
 
             assert.deepEqual(independent, ['MonilBhavsar']);
         });
@@ -40,7 +40,7 @@ describe('verifyPeerReview', () => {
             // GitHub's API, so a real match is never case-mismatched. Folding case here would be incorrect.
             const gitHubUtils = createFakeGitHubUtils({isExpensifyEmployee: async (login) => new Set(['MonilBhavsar']).has(login)});
 
-            const independent = await VerifyPeerReview.getIndependentEmployeeApprovers(gitHubUtils, ['monilbhavsar'], ['AndrewGable']);
+            const independent = await VerifyPeerReview.getIndependentEmployeeApprovers(gitHubUtils, ['monilbhavsar'], ['AndrewGable'], 'Expensify', 'Auth');
 
             assert.deepEqual(independent, []);
         });
@@ -50,7 +50,7 @@ describe('verifyPeerReview', () => {
             // account with different casing, so this must not be a case-insensitive comparison.
             const gitHubUtils = createFakeGitHubUtils({isExpensifyEmployee: async (login) => new Set(['andrewgable']).has(login)});
 
-            const independent = await VerifyPeerReview.getIndependentEmployeeApprovers(gitHubUtils, ['andrewgable'], ['AndrewGable']);
+            const independent = await VerifyPeerReview.getIndependentEmployeeApprovers(gitHubUtils, ['andrewgable'], ['AndrewGable'], 'Expensify', 'Auth');
 
             assert.deepEqual(independent, ['andrewgable']);
         });
@@ -149,6 +149,28 @@ describe('verifyPeerReview', () => {
             const result = await VerifyPeerReview.evaluatePeerReview(gitHubUtils, BASE_INPUT);
 
             assert.equal(result.status, 'pass');
+        });
+
+        it('passes when a Software Mansion maintainer approves a supported repository', async () => {
+            const gitHubUtils = createBaseFakeGitHubUtils({
+                getLatestApprovers: async () => ['JakubKorytko'],
+                listPullRequestCommits: mockCommits([makeCommit('AndrewGable')]),
+            });
+
+            const result = await VerifyPeerReview.evaluatePeerReview(gitHubUtils, {...BASE_INPUT, repo: 'react-native-wallet'});
+
+            assert.equal(result.status, 'pass');
+        });
+
+        it('does not count a Software Mansion maintainer for other repositories', async () => {
+            const gitHubUtils = createBaseFakeGitHubUtils({
+                getLatestApprovers: async () => ['JakubKorytko'],
+                listPullRequestCommits: mockCommits([makeCommit('AndrewGable')]),
+            });
+
+            const result = await VerifyPeerReview.evaluatePeerReview(gitHubUtils, BASE_INPUT);
+
+            assert.equal(result.status, 'fail');
         });
 
         it('fails when independent approver count is below required', async () => {
