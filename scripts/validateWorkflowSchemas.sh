@@ -9,7 +9,6 @@ readonly SCRIPT_DIR
 source "$SCRIPT_DIR/shellUtils.sh"
 
 readonly REPO_ROOT="${REPO_ROOT:-.}"
-readonly SCHEMASTORE_COMMIT="5c0bfe97efb759922f71c378584246cc07e7c3ed"
 
 title "Validating the Github Actions and workflows using the json schemas provided by (https://www.schemastore.org/json/)"
 
@@ -21,7 +20,7 @@ trap 'rm -rf "$TEMP_SCHEMA_DIR"' EXIT
 # Download the pinned json schemas for github actions and workflows
 for SCHEMA in github-action.json github-workflow.json; do
     info "Downloading $SCHEMA schema..."
-    if curl "https://raw.githubusercontent.com/SchemaStore/schemastore/$SCHEMASTORE_COMMIT/src/schemas/json/$SCHEMA" --output "$TEMP_SCHEMA_DIR/$SCHEMA" --silent; then
+    if curl "https://raw.githubusercontent.com/SchemaStore/schemastore/5c0bfe97efb759922f71c378584246cc07e7c3ed/src/schemas/json/$SCHEMA" --output "$TEMP_SCHEMA_DIR/$SCHEMA" --silent; then
         success "Successfully downloaded $SCHEMA schema!"
     else
         error "Failed downloading $SCHEMA schema" >&2
