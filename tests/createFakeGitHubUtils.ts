@@ -7,6 +7,7 @@ function createFakeGitHubUtils(overrides: Partial<GitHubUtils> = {}): GitHubUtil
         getLatestApprovers: async () => [],
         getPullRequestCommitCount: async () => 0,
         getRequiredApprovingReviewCount: async () => 1,
+        getTeamMemberLogins: async () => new Set(),
         isBotUser,
         isExpensifyEmployee: async () => false,
         listPullRequestCommits: async () => [],

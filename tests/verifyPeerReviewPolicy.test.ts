@@ -155,6 +155,10 @@ describe('verifyPeerReview', () => {
             const gitHubUtils = createBaseFakeGitHubUtils({
                 getLatestApprovers: async () => ['JakubKorytko'],
                 listPullRequestCommits: mockCommits([makeCommit('AndrewGable')]),
+                getTeamMemberLogins: async () => new Set(['JakubKorytko']),
+                isExpensifyEmployee: async () => {
+                    throw new Error('Expensify employee lookup should not be used for a supported repository');
+                },
             });
 
             const result = await VerifyPeerReview.evaluatePeerReview(gitHubUtils, {...BASE_INPUT, repo: 'react-native-wallet'});
@@ -166,6 +170,9 @@ describe('verifyPeerReview', () => {
             const gitHubUtils = createBaseFakeGitHubUtils({
                 getLatestApprovers: async () => ['JakubKorytko'],
                 listPullRequestCommits: mockCommits([makeCommit('AndrewGable')]),
+                getTeamMemberLogins: async () => {
+                    throw new Error('Repository-specific team lookup should not be used for an unsupported repository');
+                },
             });
 
             const result = await VerifyPeerReview.evaluatePeerReview(gitHubUtils, BASE_INPUT);

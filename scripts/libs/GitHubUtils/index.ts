@@ -3,6 +3,7 @@ import getEmployeeLogins, {isExpensifyEmployee} from './getEmployeeLogins';
 import getLatestApprovers from './getLatestApprovers';
 import getPullRequestCommitCount from './getPullRequestCommitCount';
 import getRequiredApprovingReviewCount from './getRequiredApprovingReviewCount';
+import getTeamMemberLogins from './getTeamMemberLogins';
 import isBotUser from './isBotUser';
 import type {ActorType} from './isBotUser';
 import listPullRequestCommits from './listPullRequestCommits';
@@ -20,6 +21,7 @@ function createGitHubUtils(client: GitHubAPIClient) {
         getRequiredApprovingReviewCount: (args: {owner: string; repo: string; baseRef: string}) => getRequiredApprovingReviewCount(client, args),
         isBotUser,
         isExpensifyEmployee: (login: string) => isExpensifyEmployee(client, login),
+        getTeamMemberLogins: (teamSlug: string) => getTeamMemberLogins(client, teamSlug),
         listPullRequestCommits: (args: {owner: string; repo: string; number: number}) => listPullRequestCommits(client, args),
     };
 }

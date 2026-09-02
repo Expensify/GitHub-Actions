@@ -22,8 +22,10 @@ type PeerReviewResult = {status: 'pass'; reason: string} | {status: 'fail'; erro
 // GitHub's List commits on a pull request endpoint never returns more than 250 commits, no matter how it's paginated,
 // so commit authorship can't be reliably determined above this count.
 const MAX_VERIFIABLE_COMMITS = 250;
-const SOFTWARE_MANSION_REPOSITORIES = new Set(['Expensify/react-native-wallet', 'Expensify/react-native-live-markdown']);
-const SOFTWARE_MANSION_REVIEWERS = new Set(['JakubKorytko', 'Skalakid', 'WoLewicki', 'brunovjk', 'j-piasecki', 'jmusial', 'staszekscp', 'tomekzaw', 'war-in', 'zfurtak']);
+const REPOSITORY_REVIEWER_TEAMS = new Map([
+    ['Expensify/react-native-wallet', ['react-native-wallet-writers']],
+    ['Expensify/react-native-live-markdown', ['react-native-live-markdown-writers', 'react-native-live-markdown-maintainers']],
+]);
 
 async function getCommitAuthors(gitHubUtils: GitHubUtils, {owner, repo, prNumber, actorType}: {owner: string; repo: string; prNumber: number; actorType: ActorType}): Promise<string[]> {
     const commits = await gitHubUtils.listPullRequestCommits({owner, repo, number: prNumber});
@@ -63,10 +65,14 @@ async function getCommitAuthors(gitHubUtils: GitHubUtils, {owner, repo, prNumber
 async function getIndependentApprovers(gitHubUtils: GitHubUtils, approvers: string[], authors: string[], owner: string, repo: string): Promise<string[]> {
     const authorsSet = new Set(authors);
     const independentApprovers = approvers.filter((approver) => !authorsSet.has(approver));
-    return CollectionUtils.filterAsync(
-        independentApprovers,
-        async (approver) => (SOFTWARE_MANSION_REPOSITORIES.has(`${owner}/${repo}`) && SOFTWARE_MANSION_REVIEWERS.has(approver)) || (await gitHubUtils.isExpensifyEmployee(approver)),
-    );
+    const reviewerTeams = REPOSITORY_REVIEWER_TEAMS.get(`${owner}/${repo}`);
+    if (reviewerTeams) {
+        const teamMembers = await Promise.all(reviewerTeams.map((teamSlug) => gitHubUtils.getTeamMemberLogins(teamSlug)));
+        const eligibleReviewers = new Set(teamMembers.flatMap((members) => [...members]));
+        return independentApprovers.filter((approver) => eligibleReviewers.has(approver));
+    }
+
+    return CollectionUtils.filterAsync(independentApprovers, (approver) => gitHubUtils.isExpensifyEmployee(approver));
 }
 
 async function evaluatePeerReview(gitHubUtils: GitHubUtils, input: PeerReviewInput): Promise<PeerReviewResult> {
