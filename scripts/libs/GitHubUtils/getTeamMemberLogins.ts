@@ -105,4 +105,4 @@ async function isExpensifyEmployee(client: GitHubAPIClient, login: string): Prom
 }
 
 export default getTeamMemberLogins;
-export {getEmployeeLogins, isExpensifyEmployee};
+export {EXPENSIFY_EMPLOYEE_TEAM_SLUG, getEmployeeLogins, isExpensifyEmployee};

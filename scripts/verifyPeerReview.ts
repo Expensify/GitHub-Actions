@@ -5,7 +5,7 @@ import CLI from 'expensify-common/CLI';
 import CollectionUtils from './libs/CollectionUtils';
 import GitCommitUtils from './libs/GitCommitUtils';
 import GitHubAPIClient from './libs/GitHubAPIClient';
-import createGitHubUtils from './libs/GitHubUtils';
+import createGitHubUtils, {EXPENSIFY_EMPLOYEE_TEAM_SLUG} from './libs/GitHubUtils';
 import type {ActorType, GitHubUtils} from './libs/GitHubUtils';
 import GitHubWorkflowUtils, {WorkflowError} from './libs/GitHubWorkflowUtils';
 
@@ -65,11 +65,11 @@ async function getCommitAuthors(gitHubUtils: GitHubUtils, {owner, repo, prNumber
 async function getIndependentApprovers(gitHubUtils: GitHubUtils, approvers: string[], authors: string[], owner: string, repo: string): Promise<string[]> {
     const authorsSet = new Set(authors);
     const independentApprovers = approvers.filter((approver) => !authorsSet.has(approver));
-    const reviewerTeams = REPOSITORY_REVIEWER_TEAMS.get(`${owner}/${repo}`);
-    const repositoryTeamMembers = reviewerTeams ? await Promise.all(reviewerTeams.map((teamSlug) => gitHubUtils.getTeamMemberLogins(teamSlug))) : [];
-    const eligibleRepositoryReviewers = new Set(repositoryTeamMembers.flatMap((members) => [...members]));
+    const reviewerTeams = [EXPENSIFY_EMPLOYEE_TEAM_SLUG, ...(REPOSITORY_REVIEWER_TEAMS.get(`${owner}/${repo}`) ?? [])];
+    const teamMembers = await Promise.all(reviewerTeams.map((teamSlug) => gitHubUtils.getTeamMemberLogins(teamSlug)));
+    const eligibleReviewers = new Set(teamMembers.flatMap((members) => [...members]));
 
-    return CollectionUtils.filterAsync(independentApprovers, async (approver) => eligibleRepositoryReviewers.has(approver) || (await gitHubUtils.isExpensifyEmployee(approver)));
+    return independentApprovers.filter((approver) => eligibleReviewers.has(approver));
 }
 
 async function evaluatePeerReview(gitHubUtils: GitHubUtils, input: PeerReviewInput): Promise<PeerReviewResult> {

@@ -28,7 +28,7 @@ const BASE_INPUT: PeerReviewInput = {
 describe('verifyPeerReview', () => {
     describe('getIndependentApprovers', () => {
         it('excludes commit authors and non-employees', async () => {
-            const gitHubUtils = createFakeGitHubUtils({isExpensifyEmployee: async (login) => new Set(['AndrewGable', 'MonilBhavsar']).has(login)});
+            const gitHubUtils = createFakeGitHubUtils({getTeamMemberLogins: async () => new Set(['AndrewGable', 'MonilBhavsar'])});
 
             const independent = await VerifyPeerReview.getIndependentApprovers(gitHubUtils, ['AndrewGable', 'MonilBhavsar'], ['AndrewGable'], 'Expensify', 'Auth');
 
@@ -38,7 +38,7 @@ describe('verifyPeerReview', () => {
         it('does not match employee logins with different casing', async () => {
             // GitHub logins are case-sensitive, and both approvers and employee logins come directly from
             // GitHub's API, so a real match is never case-mismatched. Folding case here would be incorrect.
-            const gitHubUtils = createFakeGitHubUtils({isExpensifyEmployee: async (login) => new Set(['MonilBhavsar']).has(login)});
+            const gitHubUtils = createFakeGitHubUtils({getTeamMemberLogins: async () => new Set(['MonilBhavsar'])});
 
             const independent = await VerifyPeerReview.getIndependentApprovers(gitHubUtils, ['monilbhavsar'], ['AndrewGable'], 'Expensify', 'Auth');
 
@@ -48,7 +48,7 @@ describe('verifyPeerReview', () => {
         it('does not treat an approver as a commit-author match when casing differs', async () => {
             // Same reasoning as above: a real commit author and a real approver are never the same
             // account with different casing, so this must not be a case-insensitive comparison.
-            const gitHubUtils = createFakeGitHubUtils({isExpensifyEmployee: async (login) => new Set(['andrewgable']).has(login)});
+            const gitHubUtils = createFakeGitHubUtils({getTeamMemberLogins: async () => new Set(['andrewgable'])});
 
             const independent = await VerifyPeerReview.getIndependentApprovers(gitHubUtils, ['andrewgable'], ['AndrewGable'], 'Expensify', 'Auth');
 
@@ -62,7 +62,7 @@ describe('verifyPeerReview', () => {
                 getRequiredApprovingReviewCount: async () => 1,
                 getLatestApprovers: async () => [],
                 listPullRequestCommits: async () => [],
-                isExpensifyEmployee: async (login) => new Set(['MonilBhavsar', 'AndrewGable', 'rafecolton']).has(login),
+                getTeamMemberLogins: async (teamSlug) => (teamSlug === 'expensify-expensify' ? new Set(['MonilBhavsar', 'AndrewGable', 'rafecolton']) : new Set()),
                 ...overrides,
             });
         }
@@ -155,7 +155,7 @@ describe('verifyPeerReview', () => {
             const gitHubUtils = createBaseFakeGitHubUtils({
                 getLatestApprovers: async () => ['JakubKorytko'],
                 listPullRequestCommits: mockCommits([makeCommit('AndrewGable')]),
-                getTeamMemberLogins: async () => new Set(['JakubKorytko']),
+                getTeamMemberLogins: async (teamSlug) => (teamSlug === 'react-native-wallet-writers' ? new Set(['JakubKorytko']) : new Set()),
             });
 
             const result = await VerifyPeerReview.evaluatePeerReview(gitHubUtils, {...BASE_INPUT, repo: 'react-native-wallet'});
@@ -167,7 +167,15 @@ describe('verifyPeerReview', () => {
             const gitHubUtils = createBaseFakeGitHubUtils({
                 getLatestApprovers: async () => ['MonilBhavsar'],
                 listPullRequestCommits: mockCommits([makeCommit('AndrewGable')]),
-                getTeamMemberLogins: async () => new Set(['JakubKorytko']),
+                getTeamMemberLogins: async (teamSlug) => {
+                    if (teamSlug === 'expensify-expensify') {
+                        return new Set(['MonilBhavsar']);
+                    }
+                    if (teamSlug === 'react-native-wallet-writers') {
+                        return new Set(['JakubKorytko']);
+                    }
+                    return new Set();
+                },
             });
 
             const result = await VerifyPeerReview.evaluatePeerReview(gitHubUtils, {...BASE_INPUT, repo: 'react-native-wallet'});
@@ -179,8 +187,11 @@ describe('verifyPeerReview', () => {
             const gitHubUtils = createBaseFakeGitHubUtils({
                 getLatestApprovers: async () => ['JakubKorytko'],
                 listPullRequestCommits: mockCommits([makeCommit('AndrewGable')]),
-                getTeamMemberLogins: async () => {
-                    throw new Error('Repository-specific team lookup should not be used for an unsupported repository');
+                getTeamMemberLogins: async (teamSlug) => {
+                    if (teamSlug === 'expensify-expensify') {
+                        return new Set(['MonilBhavsar', 'AndrewGable', 'rafecolton']);
+                    }
+                    throw new Error(`Unexpected team lookup: ${teamSlug}`);
                 },
             });
 
