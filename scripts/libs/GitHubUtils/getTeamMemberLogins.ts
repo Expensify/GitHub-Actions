@@ -1,6 +1,7 @@
 import type GitHubAPIClient from '../GitHubAPIClient';
 
 const EXPENSIFY_ORG = 'Expensify';
+const EXPENSIFY_EMPLOYEE_TEAM_SLUG = 'expensify-expensify';
 
 type TeamMembersResponse = {
     organization: {
@@ -89,4 +90,19 @@ async function fetchTeamMemberLogins(client: GitHubAPIClient, teamSlug: string):
     return teamMemberLogins;
 }
 
+/**
+ * This exists largely to replace Web-Expensify's Whitelist lookup, which we can't directly replace in open source.
+ * So our authoritative source for "is this an Expensify employee" is this GitHub Team
+ * which is meant to include all Expensify employees: https://github.com/orgs/Expensify/teams/expensify-expensify
+ */
+async function getEmployeeLogins(client: GitHubAPIClient): Promise<Set<string>> {
+    return getTeamMemberLogins(client, EXPENSIFY_EMPLOYEE_TEAM_SLUG);
+}
+
+async function isExpensifyEmployee(client: GitHubAPIClient, login: string): Promise<boolean> {
+    const employeeLogins = await getEmployeeLogins(client);
+    return employeeLogins.has(login);
+}
+
 export default getTeamMemberLogins;
+export {getEmployeeLogins, isExpensifyEmployee};

@@ -1,9 +1,8 @@
 import type GitHubAPIClient from '../GitHubAPIClient';
-import getEmployeeLogins, {isExpensifyEmployee} from './getEmployeeLogins';
 import getLatestApprovers from './getLatestApprovers';
 import getPullRequestCommitCount from './getPullRequestCommitCount';
 import getRequiredApprovingReviewCount from './getRequiredApprovingReviewCount';
-import getTeamMemberLogins from './getTeamMemberLogins';
+import getTeamMemberLogins, {getEmployeeLogins, isExpensifyEmployee} from './getTeamMemberLogins';
 import isBotUser from './isBotUser';
 import type {ActorType} from './isBotUser';
 import listPullRequestCommits from './listPullRequestCommits';
