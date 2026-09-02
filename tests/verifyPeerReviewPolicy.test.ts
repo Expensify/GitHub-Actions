@@ -156,9 +156,18 @@ describe('verifyPeerReview', () => {
                 getLatestApprovers: async () => ['JakubKorytko'],
                 listPullRequestCommits: mockCommits([makeCommit('AndrewGable')]),
                 getTeamMemberLogins: async () => new Set(['JakubKorytko']),
-                isExpensifyEmployee: async () => {
-                    throw new Error('Expensify employee lookup should not be used for a supported repository');
-                },
+            });
+
+            const result = await VerifyPeerReview.evaluatePeerReview(gitHubUtils, {...BASE_INPUT, repo: 'react-native-wallet'});
+
+            assert.equal(result.status, 'pass');
+        });
+
+        it('passes when an Expensify employee approves a supported repository without being on the repository-specific team', async () => {
+            const gitHubUtils = createBaseFakeGitHubUtils({
+                getLatestApprovers: async () => ['MonilBhavsar'],
+                listPullRequestCommits: mockCommits([makeCommit('AndrewGable')]),
+                getTeamMemberLogins: async () => new Set(['JakubKorytko']),
             });
 
             const result = await VerifyPeerReview.evaluatePeerReview(gitHubUtils, {...BASE_INPUT, repo: 'react-native-wallet'});

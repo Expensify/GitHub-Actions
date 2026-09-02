@@ -66,13 +66,10 @@ async function getIndependentApprovers(gitHubUtils: GitHubUtils, approvers: stri
     const authorsSet = new Set(authors);
     const independentApprovers = approvers.filter((approver) => !authorsSet.has(approver));
     const reviewerTeams = REPOSITORY_REVIEWER_TEAMS.get(`${owner}/${repo}`);
-    if (reviewerTeams) {
-        const teamMembers = await Promise.all(reviewerTeams.map((teamSlug) => gitHubUtils.getTeamMemberLogins(teamSlug)));
-        const eligibleReviewers = new Set(teamMembers.flatMap((members) => [...members]));
-        return independentApprovers.filter((approver) => eligibleReviewers.has(approver));
-    }
+    const repositoryTeamMembers = reviewerTeams ? await Promise.all(reviewerTeams.map((teamSlug) => gitHubUtils.getTeamMemberLogins(teamSlug))) : [];
+    const eligibleRepositoryReviewers = new Set(repositoryTeamMembers.flatMap((members) => [...members]));
 
-    return CollectionUtils.filterAsync(independentApprovers, (approver) => gitHubUtils.isExpensifyEmployee(approver));
+    return CollectionUtils.filterAsync(independentApprovers, async (approver) => eligibleRepositoryReviewers.has(approver) || (await gitHubUtils.isExpensifyEmployee(approver)));
 }
 
 async function evaluatePeerReview(gitHubUtils: GitHubUtils, input: PeerReviewInput): Promise<PeerReviewResult> {
