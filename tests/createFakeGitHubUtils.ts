@@ -3,13 +3,11 @@ import isBotUser from '../scripts/libs/GitHubUtils/isBotUser';
 
 function createFakeGitHubUtils(overrides: Partial<GitHubUtils> = {}): GitHubUtils {
     return {
-        getEmployeeLogins: async () => new Set(),
         getLatestApprovers: async () => [],
         getPullRequestCommitCount: async () => 0,
         getRequiredApprovingReviewCount: async () => 1,
         getTeamMemberLogins: async () => new Set(),
         isBotUser,
-        isExpensifyEmployee: async () => false,
         listPullRequestCommits: async () => [],
         ...overrides,
     };

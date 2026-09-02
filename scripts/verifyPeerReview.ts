@@ -5,7 +5,7 @@ import CLI from 'expensify-common/CLI';
 import CollectionUtils from './libs/CollectionUtils';
 import GitCommitUtils from './libs/GitCommitUtils';
 import GitHubAPIClient from './libs/GitHubAPIClient';
-import createGitHubUtils, {EXPENSIFY_EMPLOYEE_TEAM_SLUG} from './libs/GitHubUtils';
+import createGitHubUtils from './libs/GitHubUtils';
 import type {ActorType, GitHubUtils} from './libs/GitHubUtils';
 import GitHubWorkflowUtils, {WorkflowError} from './libs/GitHubWorkflowUtils';
 
@@ -22,6 +22,7 @@ type PeerReviewResult = {status: 'pass'; reason: string} | {status: 'fail'; erro
 // GitHub's List commits on a pull request endpoint never returns more than 250 commits, no matter how it's paginated,
 // so commit authorship can't be reliably determined above this count.
 const MAX_VERIFIABLE_COMMITS = 250;
+const EXPENSIFY_EMPLOYEE_TEAM_SLUG = 'expensify-expensify';
 const REPOSITORY_REVIEWER_TEAMS = new Map([
     ['Expensify/react-native-wallet', ['react-native-wallet-writers']],
     ['Expensify/react-native-live-markdown', ['react-native-live-markdown-writers', 'react-native-live-markdown-maintainers']],
