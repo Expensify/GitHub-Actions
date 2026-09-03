@@ -26,11 +26,11 @@ const BASE_INPUT: PeerReviewInput = {
 };
 
 describe('verifyPeerReview', () => {
-    describe('getIndependentEmployeeApprovers', () => {
+    describe('getIndependentApprovers', () => {
         it('excludes commit authors and non-employees', async () => {
-            const gitHubUtils = createFakeGitHubUtils({isExpensifyEmployee: async (login) => new Set(['AndrewGable', 'MonilBhavsar']).has(login)});
+            const gitHubUtils = createFakeGitHubUtils({getTeamMemberLogins: async () => new Set(['AndrewGable', 'MonilBhavsar'])});
 
-            const independent = await VerifyPeerReview.getIndependentEmployeeApprovers(gitHubUtils, ['AndrewGable', 'MonilBhavsar'], ['AndrewGable']);
+            const independent = await VerifyPeerReview.getIndependentApprovers(gitHubUtils, ['AndrewGable', 'MonilBhavsar'], ['AndrewGable'], 'Expensify', 'Auth');
 
             assert.deepEqual(independent, ['MonilBhavsar']);
         });
@@ -38,9 +38,9 @@ describe('verifyPeerReview', () => {
         it('does not match employee logins with different casing', async () => {
             // GitHub logins are case-sensitive, and both approvers and employee logins come directly from
             // GitHub's API, so a real match is never case-mismatched. Folding case here would be incorrect.
-            const gitHubUtils = createFakeGitHubUtils({isExpensifyEmployee: async (login) => new Set(['MonilBhavsar']).has(login)});
+            const gitHubUtils = createFakeGitHubUtils({getTeamMemberLogins: async () => new Set(['MonilBhavsar'])});
 
-            const independent = await VerifyPeerReview.getIndependentEmployeeApprovers(gitHubUtils, ['monilbhavsar'], ['AndrewGable']);
+            const independent = await VerifyPeerReview.getIndependentApprovers(gitHubUtils, ['monilbhavsar'], ['AndrewGable'], 'Expensify', 'Auth');
 
             assert.deepEqual(independent, []);
         });
@@ -48,9 +48,9 @@ describe('verifyPeerReview', () => {
         it('does not treat an approver as a commit-author match when casing differs', async () => {
             // Same reasoning as above: a real commit author and a real approver are never the same
             // account with different casing, so this must not be a case-insensitive comparison.
-            const gitHubUtils = createFakeGitHubUtils({isExpensifyEmployee: async (login) => new Set(['andrewgable']).has(login)});
+            const gitHubUtils = createFakeGitHubUtils({getTeamMemberLogins: async () => new Set(['andrewgable'])});
 
-            const independent = await VerifyPeerReview.getIndependentEmployeeApprovers(gitHubUtils, ['andrewgable'], ['AndrewGable']);
+            const independent = await VerifyPeerReview.getIndependentApprovers(gitHubUtils, ['andrewgable'], ['AndrewGable'], 'Expensify', 'Auth');
 
             assert.deepEqual(independent, ['andrewgable']);
         });
@@ -62,7 +62,7 @@ describe('verifyPeerReview', () => {
                 getRequiredApprovingReviewCount: async () => 1,
                 getLatestApprovers: async () => [],
                 listPullRequestCommits: async () => [],
-                isExpensifyEmployee: async (login) => new Set(['MonilBhavsar', 'AndrewGable', 'rafecolton']).has(login),
+                getTeamMemberLogins: async (teamSlug) => (teamSlug === 'expensify-expensify' ? new Set(['MonilBhavsar', 'AndrewGable', 'rafecolton']) : new Set()),
                 ...overrides,
             });
         }
@@ -120,7 +120,7 @@ describe('verifyPeerReview', () => {
 
             assert.equal(result.status, 'fail');
             if (result.status === 'fail') {
-                assert.match(result.error.message, /does not have enough independent Expensify employee approvals/);
+                assert.match(result.error.message, /does not have enough independent eligible reviewer approvals/);
                 assert.ok(result.error instanceof WorkflowError);
                 assert.equal(result.error.title, 'Missing independent peer review');
             }
@@ -136,7 +136,7 @@ describe('verifyPeerReview', () => {
 
             assert.equal(result.status, 'fail');
             if (result.status === 'fail') {
-                assert.match(result.error.message, /does not have enough independent Expensify employee approvals/);
+                assert.match(result.error.message, /does not have enough independent eligible reviewer approvals/);
             }
         });
 
@@ -149,6 +149,55 @@ describe('verifyPeerReview', () => {
             const result = await VerifyPeerReview.evaluatePeerReview(gitHubUtils, BASE_INPUT);
 
             assert.equal(result.status, 'pass');
+        });
+
+        it('passes when a Software Mansion maintainer approves a supported repository', async () => {
+            const gitHubUtils = createBaseFakeGitHubUtils({
+                getLatestApprovers: async () => ['JakubKorytko'],
+                listPullRequestCommits: mockCommits([makeCommit('AndrewGable')]),
+                getTeamMemberLogins: async (teamSlug) => (teamSlug === 'react-native-wallet-writers' ? new Set(['JakubKorytko']) : new Set()),
+            });
+
+            const result = await VerifyPeerReview.evaluatePeerReview(gitHubUtils, {...BASE_INPUT, repo: 'react-native-wallet'});
+
+            assert.equal(result.status, 'pass');
+        });
+
+        it('passes when an Expensify employee approves a supported repository without being on the repository-specific team', async () => {
+            const gitHubUtils = createBaseFakeGitHubUtils({
+                getLatestApprovers: async () => ['MonilBhavsar'],
+                listPullRequestCommits: mockCommits([makeCommit('AndrewGable')]),
+                getTeamMemberLogins: async (teamSlug) => {
+                    if (teamSlug === 'expensify-expensify') {
+                        return new Set(['MonilBhavsar']);
+                    }
+                    if (teamSlug === 'react-native-wallet-writers') {
+                        return new Set(['JakubKorytko']);
+                    }
+                    return new Set();
+                },
+            });
+
+            const result = await VerifyPeerReview.evaluatePeerReview(gitHubUtils, {...BASE_INPUT, repo: 'react-native-wallet'});
+
+            assert.equal(result.status, 'pass');
+        });
+
+        it('does not count a Software Mansion maintainer for other repositories', async () => {
+            const gitHubUtils = createBaseFakeGitHubUtils({
+                getLatestApprovers: async () => ['JakubKorytko'],
+                listPullRequestCommits: mockCommits([makeCommit('AndrewGable')]),
+                getTeamMemberLogins: async (teamSlug) => {
+                    if (teamSlug === 'expensify-expensify') {
+                        return new Set(['MonilBhavsar', 'AndrewGable', 'rafecolton']);
+                    }
+                    throw new Error(`Unexpected team lookup: ${teamSlug}`);
+                },
+            });
+
+            const result = await VerifyPeerReview.evaluatePeerReview(gitHubUtils, BASE_INPUT);
+
+            assert.equal(result.status, 'fail');
         });
 
         it('fails when independent approver count is below required', async () => {
@@ -189,7 +238,7 @@ describe('verifyPeerReview', () => {
             if (result.status === 'fail') {
                 assert.match(
                     result.error.message,
-                    /does not have enough independent Expensify employee approvals\. Pull requests authored solely by bots require a minimum of 2 independent Expensify employee approvals\./,
+                    /does not have enough independent eligible reviewer approvals\. Pull requests authored solely by bots require a minimum of 2 independent eligible reviewer approvals\./,
                 );
             }
         });

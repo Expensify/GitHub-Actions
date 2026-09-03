@@ -183,8 +183,8 @@ describe('GitHubUtils', () => {
         });
     });
 
-    describe('isExpensifyEmployee', () => {
-        it('checks membership in the fetched employee login set', async () => {
+    describe('getTeamMemberLogins', () => {
+        it('returns the fetched team login set', async () => {
             const gitHubUtils = createGitHubUtils(
                 createMockClient(async () => ({
                     organization: {
@@ -198,9 +198,11 @@ describe('GitHubUtils', () => {
                 })),
             );
 
+            const logins = await gitHubUtils.getTeamMemberLogins('expensify-expensify');
+
             // GitHub logins are case-sensitive, so this is a direct set lookup, not a case-insensitive match.
-            assert.equal(await gitHubUtils.isExpensifyEmployee('AndrewGable'), true);
-            assert.equal(await gitHubUtils.isExpensifyEmployee('andrewgable'), false);
+            assert.equal(logins.has('AndrewGable'), true);
+            assert.equal(logins.has('andrewgable'), false);
         });
     });
 
