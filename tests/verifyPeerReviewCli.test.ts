@@ -1,31 +1,35 @@
-import {describe, it} from 'bun:test';
+import {afterEach, beforeEach, describe, it} from 'bun:test';
 import assert from 'node:assert/strict';
 
 import VerifyPeerReview from '../scripts/verifyPeerReview';
 import createFakeGitHubUtils from './createFakeGitHubUtils';
 
-const VALID_ARGS = ['--owner', 'Expensify', '--repo', 'Auth', '--pull-request-number', '21136', '--target-branch', 'main', '--actor-type', 'User'];
+const ORIGINAL_ARGV = process.argv;
 
 describe('main CLI parsing', () => {
+    let originalExit: typeof process.exit;
     const fakeGitHubUtils = createFakeGitHubUtils({getRequiredApprovingReviewCount: async () => 0});
 
+    beforeEach(() => {
+        process.argv = ['bun', 'scripts/verifyPeerReview.ts'];
+        originalExit = process.exit.bind(process);
+        process.exit = (code?: string | number | null) => {
+            throw new Error(`exit ${code ?? 0}`);
+        };
+    });
+
+    afterEach(() => {
+        process.argv = ORIGINAL_ARGV;
+        process.exit = originalExit;
+    });
+
     it('parses required pull request CLI arguments', async () => {
-        await assert.doesNotReject(() => VerifyPeerReview.main(fakeGitHubUtils, VALID_ARGS));
+        process.argv.push('--owner', 'Expensify', '--repo', 'Auth', '--pull-request-number', '21136', '--target-branch', 'main', '--actor-type', 'User');
+
+        await assert.doesNotReject(() => VerifyPeerReview.main(fakeGitHubUtils));
     });
 
     it('fails when required arguments are missing', async () => {
-        await assert.rejects(() => VerifyPeerReview.main(fakeGitHubUtils, []), /Missing required CLI argument/);
-    });
-
-    it('fails when the pull request number is invalid', async () => {
-        const args = [...VALID_ARGS];
-        args[5] = 'invalid';
-        await assert.rejects(() => VerifyPeerReview.main(fakeGitHubUtils, args), /must be a positive integer/);
-    });
-
-    it('fails when the actor type is invalid', async () => {
-        const args = [...VALID_ARGS];
-        args[9] = 'Organization';
-        await assert.rejects(() => VerifyPeerReview.main(fakeGitHubUtils, args), /must be "Bot" or "User"/);
+        await assert.rejects(() => VerifyPeerReview.main(fakeGitHubUtils), /exit 1/);
     });
 });

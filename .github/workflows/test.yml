@@ -43,7 +43,7 @@ jobs:
           STATUS=$?
           set -e
           test "$STATUS" -eq 1
-          grep --fixed-strings 'Missing required CLI argument' <<< "$OUTPUT"
+          grep --fixed-strings 'Missing required named argument --owner' <<< "$OUTPUT"
 
       - name: Tell people how to run the failing check
         if: failure()

@@ -49,8 +49,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          readonly VERSION="$(bun -p "require('./package.json').version")"
-          readonly TAG="verify-peer-review-v${VERSION}"
+          VERSION="$(bun -p "require('./package.json').version")"
+          readonly VERSION
+          TAG="verify-peer-review-v${VERSION}"
+          readonly TAG
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "::error::Release $TAG already exists. Bump package.json version before publishing a changed executable."
             exit 1

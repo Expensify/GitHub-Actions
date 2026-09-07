@@ -10,6 +10,12 @@ source "$SCRIPT_DIR/shellUtils.sh"
 
 readonly REPO_ROOT="${REPO_ROOT:-.}"
 
+if command -v bun &>/dev/null; then
+    readonly -a AJV=(bunx --bun ajv-cli@5.0.0)
+else
+    readonly -a AJV=(npx ajv)
+fi
+
 title "Validating the Github Actions and workflows using the json schemas provided by (https://www.schemastore.org/json/)"
 
 # Create a temporary directory for schemas
@@ -41,7 +47,7 @@ if [[ -z "$ACTIONS" ]]; then
 else
     # Disabling shellcheck because we WANT word-splitting on ACTIONS in this case
     # shellcheck disable=SC2086
-    if ! bunx --bun ajv-cli@5.0.0 --strict=false -s "$TEMP_SCHEMA_DIR/github-action.json" $ACTIONS; then
+    if ! "${AJV[@]}" --strict=false -s "$TEMP_SCHEMA_DIR/github-action.json" $ACTIONS; then
         EXIT_CODE=1
     fi
 fi
@@ -56,7 +62,7 @@ if [[ -z "$WORKFLOWS" ]]; then
     warning "No workflows found. Did you remember to run this script from the root of a repo?" >&2
 else
     # shellcheck disable=SC2086
-    if ! bunx --bun ajv-cli@5.0.0 --strict=false -s "$TEMP_SCHEMA_DIR/github-workflow.json" $WORKFLOWS; then
+    if ! "${AJV[@]}" --strict=false -s "$TEMP_SCHEMA_DIR/github-workflow.json" $WORKFLOWS; then
         EXIT_CODE=1
     fi
 fi
