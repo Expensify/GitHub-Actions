@@ -74,6 +74,214 @@ describe('GitHubUtils', () => {
             assert.equal(await gitHubUtils.getRequiredApprovingReviewCount(context), 0);
         });
 
+        it('returns the count required by an org-level ruleset when there is no branch protection rule', async () => {
+            const gitHubUtils = createGitHubUtils(
+                createMockClient(async () => ({
+                    repository: {
+                        ref: {
+                            branchProtectionRule: null,
+                            rules: {
+                                nodes: [{type: 'PULL_REQUEST', parameters: {requiredApprovingReviewCount: 2}}],
+                            },
+                        },
+                    },
+                })),
+            );
+
+            assert.equal(await gitHubUtils.getRequiredApprovingReviewCount(context), 2);
+        });
+
+        it('returns the higher of the branch protection and ruleset review counts', async () => {
+            const gitHubUtils = createGitHubUtils(
+                createMockClient(async () => ({
+                    repository: {
+                        ref: {
+                            branchProtectionRule: {requiredApprovingReviewCount: 1},
+                            rules: {
+                                nodes: [{type: 'PULL_REQUEST', parameters: {requiredApprovingReviewCount: 2}}],
+                            },
+                        },
+                    },
+                })),
+            );
+
+            assert.equal(await gitHubUtils.getRequiredApprovingReviewCount(context), 2);
+
+            const gitHubUtilsReversed = createGitHubUtils(
+                createMockClient(async () => ({
+                    repository: {
+                        ref: {
+                            branchProtectionRule: {requiredApprovingReviewCount: 2},
+                            rules: {
+                                nodes: [{type: 'PULL_REQUEST', parameters: {requiredApprovingReviewCount: 1}}],
+                            },
+                        },
+                    },
+                })),
+            );
+
+            assert.equal(await gitHubUtilsReversed.getRequiredApprovingReviewCount(context), 2);
+        });
+
+        it('returns the highest requiredApprovingReviewCount across multiple PULL_REQUEST rules', async () => {
+            const gitHubUtils = createGitHubUtils(
+                createMockClient(async () => ({
+                    repository: {
+                        ref: {
+                            branchProtectionRule: null,
+                            rules: {
+                                nodes: [
+                                    {type: 'PULL_REQUEST', parameters: {requiredApprovingReviewCount: 1}},
+                                    {type: 'PULL_REQUEST', parameters: {requiredApprovingReviewCount: 3}},
+                                    {type: 'PULL_REQUEST', parameters: {requiredApprovingReviewCount: 2}},
+                                ],
+                            },
+                        },
+                    },
+                })),
+            );
+
+            assert.equal(await gitHubUtils.getRequiredApprovingReviewCount(context), 3);
+        });
+
+        it('treats a PULL_REQUEST rule with null parameters as a non-numeric review count', async () => {
+            const gitHubUtils = createGitHubUtils(
+                createMockClient(async () => ({
+                    repository: {
+                        ref: {
+                            branchProtectionRule: null,
+                            rules: {
+                                nodes: [{type: 'PULL_REQUEST', parameters: null}],
+                            },
+                        },
+                    },
+                })),
+            );
+
+            await assert.rejects(
+                () => gitHubUtils.getRequiredApprovingReviewCount(context),
+                (error: unknown) => {
+                    assert.ok(error instanceof WorkflowError);
+                    assert.equal(error.title, 'Unexpected branch protection response');
+                    assert.match(error.message, /PULL_REQUEST rule.*non-numeric requiredApprovingReviewCount/);
+                    return true;
+                },
+            );
+        });
+
+        it('ignores ruleset rules that are not of type PULL_REQUEST', async () => {
+            const gitHubUtils = createGitHubUtils(
+                createMockClient(async () => ({
+                    repository: {
+                        ref: {
+                            branchProtectionRule: null,
+                            rules: {
+                                nodes: [{type: 'REQUIRED_STATUS_CHECKS', parameters: null}],
+                            },
+                        },
+                    },
+                })),
+            );
+
+            assert.equal(await gitHubUtils.getRequiredApprovingReviewCount(context), 0);
+        });
+
+        it('returns 0 when no rulesets target the ref', async () => {
+            const gitHubUtils = createGitHubUtils(
+                createMockClient(async () => ({
+                    repository: {
+                        ref: {
+                            branchProtectionRule: null,
+                            rules: {nodes: []},
+                        },
+                    },
+                })),
+            );
+
+            assert.equal(await gitHubUtils.getRequiredApprovingReviewCount(context), 0);
+        });
+
+        it('returns 0 when rules is null', async () => {
+            const gitHubUtils = createGitHubUtils(
+                createMockClient(async () => ({
+                    repository: {
+                        ref: {
+                            branchProtectionRule: null,
+                            rules: null,
+                        },
+                    },
+                })),
+            );
+
+            assert.equal(await gitHubUtils.getRequiredApprovingReviewCount(context), 0);
+        });
+
+        it('returns 0 when rules.nodes is null', async () => {
+            const gitHubUtils = createGitHubUtils(
+                createMockClient(async () => ({
+                    repository: {
+                        ref: {
+                            branchProtectionRule: null,
+                            rules: {nodes: null},
+                        },
+                    },
+                })),
+            );
+
+            assert.equal(await gitHubUtils.getRequiredApprovingReviewCount(context), 0);
+        });
+
+        it('throws when more than 100 active rules target the ref instead of silently ignoring the rest', async () => {
+            const gitHubUtils = createGitHubUtils(
+                createMockClient(async () => ({
+                    repository: {
+                        ref: {
+                            branchProtectionRule: null,
+                            rules: {
+                                nodes: [{type: 'PULL_REQUEST', parameters: {requiredApprovingReviewCount: 1}}],
+                                pageInfo: {hasNextPage: true},
+                            },
+                        },
+                    },
+                })),
+            );
+
+            await assert.rejects(
+                () => gitHubUtils.getRequiredApprovingReviewCount(context),
+                (error: unknown) => {
+                    assert.ok(error instanceof WorkflowError);
+                    assert.equal(error.title, 'Unexpected branch protection response');
+                    assert.match(error.message, /more than 100 active rules/);
+                    return true;
+                },
+            );
+        });
+
+        it('throws when a PULL_REQUEST rule has a non-numeric requiredApprovingReviewCount', async () => {
+            const gitHubUtils = createGitHubUtils(
+                createMockClient(async () => ({
+                    repository: {
+                        ref: {
+                            branchProtectionRule: null,
+                            rules: {
+                                nodes: [{type: 'PULL_REQUEST', parameters: {requiredApprovingReviewCount: null}}],
+                            },
+                        },
+                    },
+                })),
+            );
+
+            await assert.rejects(
+                () => gitHubUtils.getRequiredApprovingReviewCount(context),
+                (error: unknown) => {
+                    assert.ok(error instanceof WorkflowError);
+                    assert.equal(error.title, 'Unexpected branch protection response');
+                    assert.match(error.message, /PULL_REQUEST rule.*non-numeric requiredApprovingReviewCount/);
+                    return true;
+                },
+            );
+        });
+
         it('throws when the repository is missing', async () => {
             const gitHubUtils = createGitHubUtils(createMockClient(async () => ({repository: null})));
 
