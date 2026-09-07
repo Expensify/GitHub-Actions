@@ -2,9 +2,6 @@ import type GitHubAPIClient from '../GitHubAPIClient';
 import {WorkflowError} from '../GitHubWorkflowUtils';
 import isPermissionError from './isPermissionError';
 
-// GitHub's GraphQL schema pairs every RepositoryRuleType with a specific RuleParameters member. PULL_REQUEST rules
-// always carry PullRequestParameters, so checking a rule's `type` is enough to know its `parameters` includes
-// `requiredApprovingReviewCount` without needing a `__typename` disambiguator on the RuleParameters union.
 const PULL_REQUEST_RULE_TYPE = 'PULL_REQUEST';
 
 type RepositoryRuleNode = {
