@@ -34,13 +34,8 @@ type BranchProtectionResponse = {
  *
  * - Classic branch protection, surfaced via `branchProtectionRule.requiredApprovingReviewCount`.
  * - Repository- or **organization-level rulesets** that target this ref, surfaced via `rules`. `Ref.rules` returns
- *   the effective rules from all active rulesets that apply to the ref (repo-owned or org-owned), so this also
- *   covers repos that enforce reviews exclusively through an org-wide ruleset and have no branchProtectionRule at
- *   all. Only rules of type `PULL_REQUEST` carry a review count; other rule types (status checks, signature
- *   requirements, etc.) are irrelevant here and are skipped.
- *
- * Since a reviewer satisfying the higher of two independently-enforced requirements also satisfies the lower one,
- * the two counts aren't summed - we return whichever is higher.
+ *   the effective rules from all active rulesets that apply to the ref. Only rules of type `PULL_REQUEST` carry a
+ *   review count; other rule types are irrelevant here.
  *
  * GitHub answers this query with a null at whichever level of the response is missing, and only some of those nulls
  * are benign:
