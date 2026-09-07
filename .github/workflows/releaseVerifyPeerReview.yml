@@ -1,0 +1,61 @@
+name: Release peer review verifier
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/verifyPeerReview.ts'
+      - 'scripts/libs/**'
+      - 'package.json'
+      - 'bun.lock'
+      - '.bun-version'
+      - '.github/workflows/releaseVerifyPeerReview.yml'
+  workflow_dispatch:
+
+permissions:
+  attestations: write
+  contents: write
+  id-token: write
+
+concurrency:
+  group: release-peer-review-verifier
+
+jobs:
+  release:
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    steps:
+      # v7.0.0
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+
+      - name: Verify Bun version
+        run: test "$(bun --version)" = "$(<.bun-version)"
+
+      - name: Install packages
+        run: bun install --frozen-lockfile
+
+      - name: Compile native executable
+        run: bun run build:verify-peer-review
+
+      # v4.2.2
+      - name: Attest native executable
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8
+        with:
+          subject-path: dist/verify-peer-review-linux-x64
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          readonly VERSION="$(bun -p "require('./package.json').version")"
+          readonly TAG="verify-peer-review-v${VERSION}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "::error::Release $TAG already exists. Bump package.json version before publishing a changed executable."
+            exit 1
+          fi
+          gh release create "$TAG" \
+            dist/verify-peer-review-linux-x64 \
+            --target "$GITHUB_SHA" \
+            --title "Peer review verifier v${VERSION}" \
+            --notes "Standalone Linux x64 executable for the peer review ruleset check."

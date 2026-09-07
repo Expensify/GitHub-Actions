@@ -41,7 +41,7 @@ export default defineConfig([
             },
         },
         rules: {
-            // node:test is used instead of Jest in this repo.
+            // bun:test is used instead of Jest in this repo.
             'jest/no-jest-import': 'off',
         },
     },

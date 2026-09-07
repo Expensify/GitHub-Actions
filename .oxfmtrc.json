@@ -10,7 +10,7 @@
     "sortImports": {
         "ignoreCase": true
     },
-    "ignorePatterns": ["package.json", "package-lock.json", "*.md", "*.markdown", "dist/**"],
+    "ignorePatterns": ["package.json", "bun.lock", "*.md", "*.markdown", "dist/**"],
     "overrides": [
         {
             "files": ["*.yml", "*.yaml"],

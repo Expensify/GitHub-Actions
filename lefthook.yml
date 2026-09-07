@@ -5,5 +5,5 @@ pre-commit:
         - '*.{c,m,}{j,t}s'
         - '*.tsx'
         - '*.{yml,yaml}'
-      run: npx oxfmt --write {staged_files}
+      run: bunx oxfmt --write {staged_files}
       stage_fixed: true

@@ -8,8 +8,8 @@ on:
       - '**/*.?[tj]s'
       - 'tsconfig.json'
       - 'package.json'
-      - 'package-lock.json'
-      - '.nvmrc'
+      - 'bun.lock'
+      - '.bun-version'
       - '.npmrc'
       - '.github/workflows/typecheck.yml'
 
@@ -21,20 +21,12 @@ jobs:
         # 6.0.3
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
 
-      # v6.1.0
-      - name: Setup Node
-        uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-          cache-dependency-path: package-lock.json
-
-      - name: Install npm packages
-        run: npm ci
+      - name: Install packages
+        run: bun install --frozen-lockfile
 
       - name: Typecheck
-        run: npm run typecheck
+        run: bun run typecheck
 
       - name: Tell people how to run the failing check
         if: failure()
-        run: echo "::error::The typecheck check failed! To run it locally, run \`npm ci && npm run typecheck\` from the GitHub-Actions repo root."
+        run: echo "::error::The typecheck check failed! To run it locally, run \`bun install && bun run typecheck\` from the GitHub-Actions repo root."

@@ -43,7 +43,9 @@ Org-level ruleset workflow that verifies pull requests have an independent emplo
 
 Configure it to run via an org [ruleset](#rulesets) that requires this workflow on `pull_request_target` events. See the Rulesets section below for caveats.
 
-The check only reads GitHub pull request metadata via the API; it does not checkout or execute code from the pull request branch. It uses `pull_request_target` so the workflow YAML and scripts always run from `main`, and only `GitHub-Actions@main` is checked out.
+The check only reads GitHub pull request metadata via the API; it does not checkout or execute code from the pull request branch. It uses `pull_request_target` so the workflow YAML always comes from `main`, then downloads the versioned standalone executable built from `GitHub-Actions@main`. The runner does not install Node, Bun, or npm packages.
+
+The executable is compiled for Linux x64, attested, and published to GitHub Releases by `releaseVerifyPeerReview.yml`. The consumer verifies its build provenance against that workflow and the `main` branch. Changes to its source or dependencies must bump the package version and update the release URL in `verifyPeerReview.yml`; releases are immutable.
 
 This workflow requires a GitHub App token with read access for repository metadata, pull requests, organization members, and branch administration. It uses the Peer Review Checker app ID `3877737` and the org secret `PEER_REVIEW_CHECKER_PRIVATE_KEY` to generate that token.
 

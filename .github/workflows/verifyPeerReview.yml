@@ -2,8 +2,8 @@
 #
 # Security model:
 #   - pull_request_target runs this workflow file from the base branch, not the PR head.
-#   - Only GitHub-Actions@main is checked out for scripts.
-#   - Never checkout the repo where the PR lives.
+#   - Only the peer-review executable compiled from GitHub-Actions@main is downloaded.
+#   - No repository is checked out.
 #
 # Thus, all code we run for the check is itself peer-reviewed, and the check can't be hacked, bypassed, or used to leak secrets.
 #
@@ -41,33 +41,28 @@ jobs:
           permission-metadata: read
           permission-pull-requests: read
 
-      # v7.0.0
-      - name: Checkout GitHub-Actions
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
-        with:
-          repository: Expensify/GitHub-Actions
-          path: GitHub-Actions
-
-      # v6.4.0
-      - name: Setup Node
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
-        with:
-          node-version-file: GitHub-Actions/.nvmrc
-          cache: npm
-          cache-dependency-path: GitHub-Actions/package-lock.json
-
-      - name: Install npm packages
-        run: npm ci
-        working-directory: GitHub-Actions
+      - name: Download peer review verifier
+        run: |
+          set -euo pipefail
+          readonly RELEASE_URL="https://github.com/Expensify/GitHub-Actions/releases/download/verify-peer-review-v1.0.0"
+          curl --fail --location --retry 60 --retry-all-errors --retry-delay 5 \
+            "$RELEASE_URL/verify-peer-review-linux-x64" \
+            --output verify-peer-review-linux-x64
+          gh attestation verify verify-peer-review-linux-x64 \
+            --repo Expensify/GitHub-Actions \
+            --signer-workflow Expensify/GitHub-Actions/.github/workflows/releaseVerifyPeerReview.yml \
+            --source-ref refs/heads/main
+          chmod +x verify-peer-review-linux-x64
+        env:
+          GH_TOKEN: ${{ steps.generateAppToken.outputs.token }}
 
       - name: Verify peer review
         run: >-
-          npm run verify-peer-review --
+          ./verify-peer-review-linux-x64
           --owner '${{ github.event.pull_request.base.repo.owner.login }}'
           --repo '${{ github.event.pull_request.base.repo.name }}'
           --pull-request-number '${{ github.event.pull_request.number }}'
           --target-branch '${{ github.event.pull_request.base.ref }}'
           --actor-type '${{ github.event.sender.type }}'
-        working-directory: GitHub-Actions
         env:
           GITHUB_TOKEN: ${{ steps.generateAppToken.outputs.token }}

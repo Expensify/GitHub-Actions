@@ -1,5 +1,5 @@
+import {describe, it} from 'bun:test';
 import assert from 'node:assert/strict';
-import {describe, it} from 'node:test';
 
 import GitCommitUtils, {type GitHubPullRequestCommit} from '../scripts/libs/GitCommitUtils';
 import {WorkflowError} from '../scripts/libs/GitHubWorkflowUtils';

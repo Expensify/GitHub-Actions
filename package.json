@@ -1,34 +1,30 @@
 {
   "name": "@expensify/github-actions",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
-  "engines": {
-    "node": "24.19.0",
-    "npm": "11.17.0"
-  },
+  "packageManager": "bun@1.3.14",
   "scripts": {
+    "build:verify-peer-review": "bun build --compile --minify --sourcemap --bytecode --target=bun-linux-x64 --outfile=dist/verify-peer-review-linux-x64 scripts/verifyPeerReview.ts",
     "fmt": "oxfmt --write .",
     "lint": "eslint .",
     "typecheck": "tsgo --noEmit -p tsconfig.json",
-    "verify-peer-review": "tsx scripts/verifyPeerReview.ts",
-    "test": "tsx --test tests/*.test.ts"
+    "verify-peer-review": "bun scripts/verifyPeerReview.ts",
+    "test": "bun test"
   },
   "dependencies": {
-    "@actions/core": "^3.0.1",
     "@octokit/graphql": "^9.0.3",
     "@octokit/plugin-paginate-rest": "^14.0.0",
     "@octokit/plugin-throttling": "^11.0.0",
     "@octokit/request-error": "^7.0.0",
-    "@octokit/rest": "^22.0.1",
-    "expensify-common": "2.0.195"
+    "@octokit/rest": "^22.0.1"
   },
   "devDependencies": {
-    "@types/node": "^25.9.4",
+    "@types/bun": "1.3.14",
     "@typescript/native-preview": "7.0.0-dev.20260702.3",
     "eslint": "^9.39.4",
     "eslint-config-expensify": "^4.0.6",
     "lefthook": "2.1.9",
-    "oxfmt": "^0.57.0",
-    "tsx": "^4.22.5"
+    "oxfmt": "^0.57.0"
   }
 }

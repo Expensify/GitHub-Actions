@@ -43,7 +43,7 @@ class GitHubAPIClient {
      * Builds a client from the GITHUB_TOKEN or GH_TOKEN environment variable, as set by actions/checkout or the GitHub CLI.
      */
     static fromEnv(): GitHubAPIClient {
-        const token = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN;
+        const token = Bun.env.GITHUB_TOKEN ?? Bun.env.GH_TOKEN;
         if (!token) {
             throw new Error('GITHUB_TOKEN or GH_TOKEN is required');
         }

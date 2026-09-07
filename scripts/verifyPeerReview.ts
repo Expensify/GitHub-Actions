@@ -1,6 +1,4 @@
-#!/usr/bin/env -S node --import tsx
-
-import CLI from 'expensify-common/CLI';
+#!/usr/bin/env bun
 
 import CollectionUtils from './libs/CollectionUtils';
 import GitCommitUtils from './libs/GitCommitUtils';
@@ -18,6 +16,12 @@ type PeerReviewInput = {
 };
 
 type PeerReviewResult = {status: 'pass'; reason: string} | {status: 'fail'; error: Error};
+
+type PeerReviewCLIArgName = 'owner' | 'repo' | 'pull-request-number' | 'target-branch' | 'actor-type';
+
+function isPeerReviewCLIArgName(value: string): value is PeerReviewCLIArgName {
+    return value === 'owner' || value === 'repo' || value === 'pull-request-number' || value === 'target-branch' || value === 'actor-type';
+}
 
 // GitHub's List commits on a pull request endpoint never returns more than 250 commits, no matter how it's paginated,
 // so commit authorship can't be reliably determined above this count.
@@ -147,56 +151,50 @@ async function evaluatePeerReview(gitHubUtils: GitHubUtils, input: PeerReviewInp
     };
 }
 
-async function main(gitHubUtilsOverride?: GitHubUtils): Promise<void> {
-    /* eslint-disable @typescript-eslint/naming-convention -- CLI uses kebab-case argument names */
-    const cli = new CLI({
-        namedArgs: {
-            owner: {
-                description: 'Repository owner organization or user login',
-            },
-            repo: {
-                description: 'Repository name',
-            },
-            'pull-request-number': {
-                description: 'Pull request number',
-                parse: (value: string) => {
-                    const number = Number(value);
-                    if (!Number.isInteger(number) || number <= 0) {
-                        throw new Error('Must be a positive integer');
-                    }
-                    return number;
-                },
-            },
-            'target-branch': {
-                description: 'Ref for the branch into which the pull request is being merged e.g. "refs/heads/main"',
-            },
-            'actor-type': {
-                description: 'GitHub actor type of the user who triggered the event (Bot or User)',
-                parse: (value: string): ActorType => {
-                    if (value !== 'Bot' && value !== 'User') {
-                        throw new Error('Must be "Bot" or "User"');
-                    }
-                    return value;
-                },
-            },
-        },
-    });
-    /* eslint-enable @typescript-eslint/naming-convention */
+function parseCLIArgs(args: string[]): PeerReviewInput {
+    const namedArgs = new Map<PeerReviewCLIArgName, string>();
 
-    const owner = cli.namedArgs.owner;
-    const repo = cli.namedArgs.repo;
-    const pullRequestNumber = cli.namedArgs['pull-request-number'];
-    const targetBranch = cli.namedArgs['target-branch'];
-    const actorType = cli.namedArgs['actor-type'];
+    for (let index = 0; index < args.length; index += 2) {
+        const rawName = args.at(index)?.replace(/^--/, '');
+        const value = args.at(index + 1);
+        if (!rawName || !isPeerReviewCLIArgName(rawName) || !value) {
+            throw new Error(`Invalid CLI argument: ${args.at(index) ?? ''}`);
+        }
+        namedArgs.set(rawName, value);
+    }
+
+    const getRequiredArg = (name: PeerReviewCLIArgName): string => {
+        const value = namedArgs.get(name);
+        if (!value) {
+            throw new Error(`Missing required CLI argument: --${name}`);
+        }
+        return value;
+    };
+
+    const pullRequestNumber = Number(getRequiredArg('pull-request-number'));
+    if (!Number.isInteger(pullRequestNumber) || pullRequestNumber <= 0) {
+        throw new Error('--pull-request-number must be a positive integer');
+    }
+
+    const actorType = getRequiredArg('actor-type');
+    if (actorType !== 'Bot' && actorType !== 'User') {
+        throw new Error('--actor-type must be "Bot" or "User"');
+    }
+
+    return {
+        owner: getRequiredArg('owner'),
+        repo: getRequiredArg('repo'),
+        prNumber: pullRequestNumber,
+        targetBranch: getRequiredArg('target-branch'),
+        actorType,
+    };
+}
+
+async function main(gitHubUtilsOverride?: GitHubUtils, args = Bun.argv.slice(2)): Promise<void> {
+    const input = parseCLIArgs(args);
 
     const gitHubUtils = gitHubUtilsOverride ?? createGitHubUtils(GitHubAPIClient.fromEnv());
-    const result = await evaluatePeerReview(gitHubUtils, {
-        owner,
-        repo,
-        prNumber: pullRequestNumber,
-        targetBranch,
-        actorType,
-    });
+    const result = await evaluatePeerReview(gitHubUtils, input);
 
     if (result.status === 'pass') {
         console.log(result.reason);

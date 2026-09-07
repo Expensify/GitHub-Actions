@@ -41,7 +41,7 @@ if [[ -z "$ACTIONS" ]]; then
 else
     # Disabling shellcheck because we WANT word-splitting on ACTIONS in this case
     # shellcheck disable=SC2086
-    if ! npx ajv --strict=false -s "$TEMP_SCHEMA_DIR/github-action.json" $ACTIONS; then
+    if ! bunx --bun ajv-cli@5.0.0 --strict=false -s "$TEMP_SCHEMA_DIR/github-action.json" $ACTIONS; then
         EXIT_CODE=1
     fi
 fi
@@ -56,7 +56,7 @@ if [[ -z "$WORKFLOWS" ]]; then
     warning "No workflows found. Did you remember to run this script from the root of a repo?" >&2
 else
     # shellcheck disable=SC2086
-    if ! npx ajv --strict=false -s "$TEMP_SCHEMA_DIR/github-workflow.json" $WORKFLOWS; then
+    if ! bunx --bun ajv-cli@5.0.0 --strict=false -s "$TEMP_SCHEMA_DIR/github-workflow.json" $WORKFLOWS; then
         EXIT_CODE=1
     fi
 fi
