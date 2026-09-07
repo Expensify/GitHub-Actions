@@ -10,8 +10,6 @@ on:
       - 'bun.lock'
       - '.bun-version'
       - '.github/workflows/releaseVerifyPeerReview.yml'
-  workflow_dispatch:
-
 permissions:
   attestations: write
   contents: write
