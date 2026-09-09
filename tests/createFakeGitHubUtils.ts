@@ -3,6 +3,7 @@ import isBotUser from '../scripts/libs/GitHubUtils/isBotUser';
 
 function createFakeGitHubUtils(overrides: Partial<GitHubUtils> = {}): GitHubUtils {
     return {
+        getCommitAuthorLoginsByEmail: async () => new Map<string, string>(),
         getLatestApprovers: async () => [],
         getPullRequestCommitCount: async () => 0,
         getRequiredApprovingReviewCount: async () => 1,

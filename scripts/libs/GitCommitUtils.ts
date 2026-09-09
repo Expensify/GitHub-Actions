@@ -1,6 +1,7 @@
 import {WorkflowError} from './GitHubWorkflowUtils';
 
 type GitHubPullRequestCommit = {
+    sha: string;
     author: {
         login?: string;
     } | null;

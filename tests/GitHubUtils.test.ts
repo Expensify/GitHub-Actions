@@ -206,6 +206,72 @@ describe('GitHubUtils', () => {
         });
     });
 
+    describe('getCommitAuthorLoginsByEmail', () => {
+        const commitContext = {owner: 'Expensify', repo: 'Integration-Server', sha: '11cfd67d458e0d97bd22d637aea32534d9666f12'};
+
+        it('maps each verified author email to its login, keyed by lowercased email', async () => {
+            let variables: Record<string, unknown> | undefined;
+            const gitHubUtils = createGitHubUtils(
+                createMockClient(async (_query, queryVariables) => {
+                    variables = queryVariables;
+                    return {
+                        repository: {
+                            object: {
+                                authors: {
+                                    nodes: [
+                                        {email: 'infra+melvinbot@expensify.com', user: {login: 'MelvinBot'}},
+                                        {email: 'Rachael@Expensify.com', user: {login: 'RachCHopkins'}},
+                                        {email: 'RachCHopkins@users.noreply.github.com', user: {login: 'RachCHopkins'}},
+                                        {email: 'jane.doe@gmail.com', user: null},
+                                    ],
+                                },
+                            },
+                        },
+                    };
+                }),
+            );
+
+            const loginsByEmail = await gitHubUtils.getCommitAuthorLoginsByEmail(commitContext);
+
+            assert.deepEqual(variables, commitContext);
+            assert.deepEqual(
+                loginsByEmail,
+                new Map([
+                    ['infra+melvinbot@expensify.com', 'MelvinBot'],
+                    ['rachael@expensify.com', 'RachCHopkins'],
+                    ['rachchopkins@users.noreply.github.com', 'RachCHopkins'],
+                ]),
+            );
+        });
+
+        it('throws when the commit cannot be found', async () => {
+            const gitHubUtils = createGitHubUtils(createMockClient(async () => ({repository: {object: null}})));
+
+            await assert.rejects(
+                () => gitHubUtils.getCommitAuthorLoginsByEmail(commitContext),
+                (error: unknown) => {
+                    assert.ok(error instanceof WorkflowError);
+                    assert.equal(error.title, 'Unknown commit');
+                    assert.match(error.message, /11cfd67d458e0d97bd22d637aea32534d9666f12 could not be found/);
+                    return true;
+                },
+            );
+        });
+
+        it('throws when the object is not a commit', async () => {
+            const gitHubUtils = createGitHubUtils(createMockClient(async () => ({repository: {object: {}}})));
+
+            await assert.rejects(
+                () => gitHubUtils.getCommitAuthorLoginsByEmail(commitContext),
+                (error: unknown) => {
+                    assert.ok(error instanceof WorkflowError);
+                    assert.equal(error.title, 'Unknown commit');
+                    return true;
+                },
+            );
+        });
+    });
+
     describe('isBotUser', () => {
         const gitHubUtils = createGitHubUtils(new GitHubAPIClient('fake-token'));
 

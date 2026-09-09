@@ -6,6 +6,7 @@ import {WorkflowError} from '../scripts/libs/GitHubWorkflowUtils';
 
 function makeCommit(authorLogin: string | undefined, authorName: string | undefined, message: string): GitHubPullRequestCommit {
     return {
+        sha: 'b26b3b2845725b0342443f5990801fe2d95bcf7d',
         author: authorLogin ? {login: authorLogin} : null,
         commit: {
             message,
