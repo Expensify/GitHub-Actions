@@ -8,7 +8,7 @@ import VerifyPeerReview, {type PeerReviewInput} from '../scripts/verifyPeerRevie
 import createFakeGitHubUtils from './createFakeGitHubUtils';
 
 function makeCommit(login: string, message = ''): GitHubPullRequestCommit {
-    return {author: {login}, commit: {message}};
+    return {sha: 'b26b3b2845725b0342443f5990801fe2d95bcf7d', author: {login}, commit: {message}};
 }
 
 function mockCommits(commits: GitHubPullRequestCommit[]): GitHubUtils['listPullRequestCommits'] {

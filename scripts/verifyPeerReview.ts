@@ -50,13 +50,37 @@ async function getCommitAuthors(gitHubUtils: GitHubUtils, {owner, repo, prNumber
             continue;
         }
 
+        const unresolvedCoAuthorEmails: string[] = [];
         for (const coAuthorEmail of GitCommitUtils.parseCoAuthorEmails(commit.commit.message)) {
             const login = GitCommitUtils.resolveNoreplyEmailToLogin(coAuthorEmail);
             if (login) {
                 authors.add(login);
             } else {
+                unresolvedCoAuthorEmails.push(coAuthorEmail);
+            }
+        }
+
+        if (unresolvedCoAuthorEmails.length === 0) {
+            continue;
+        }
+
+        // Co-authored-by trailers don't always use a users.noreply.github.com address (e.g. `Co-authored-by: RachCHopkins <rachael@expensify.com>`).
+        // GitHub matches every verified email on a commit's authors to a user, including private emails, so ask it to resolve the rest.
+        // Commits are processed one at a time so a large PR doesn't fan out into hundreds of concurrent API requests.
+        // eslint-disable-next-line no-await-in-loop
+        const loginsByEmail = await gitHubUtils.getCommitAuthorLoginsByEmail({owner, repo, sha: commit.sha});
+        for (const coAuthorEmail of unresolvedCoAuthorEmails) {
+            const login = loginsByEmail.get(coAuthorEmail.toLowerCase());
+            if (!login) {
                 throw new WorkflowError({title: 'Unresolved co-author', message: `Unable to resolve co-author email to GitHub user: ${coAuthorEmail}`});
             }
+
+            console.log('Resolved co-author email through GitHub commit authors', {
+                commitSHA: commit.sha,
+                coAuthorEmail,
+                login,
+            });
+            authors.add(login);
         }
     }
 

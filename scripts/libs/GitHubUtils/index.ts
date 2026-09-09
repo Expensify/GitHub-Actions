@@ -1,4 +1,5 @@
 import type GitHubAPIClient from '../GitHubAPIClient';
+import getCommitAuthorLoginsByEmail from './getCommitAuthorLoginsByEmail';
 import getLatestApprovers from './getLatestApprovers';
 import getPullRequestCommitCount from './getPullRequestCommitCount';
 import getRequiredApprovingReviewCount from './getRequiredApprovingReviewCount';
@@ -14,6 +15,7 @@ export type {ActorType};
  */
 function createGitHubUtils(client: GitHubAPIClient) {
     return {
+        getCommitAuthorLoginsByEmail: (args: {owner: string; repo: string; sha: string}) => getCommitAuthorLoginsByEmail(client, args),
         getLatestApprovers: (args: {owner: string; repo: string; number: number}) => getLatestApprovers(client, args),
         getPullRequestCommitCount: (args: {owner: string; repo: string; number: number}) => getPullRequestCommitCount(client, args),
         getRequiredApprovingReviewCount: (args: {owner: string; repo: string; baseRef: string}) => getRequiredApprovingReviewCount(client, args),

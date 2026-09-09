@@ -49,6 +49,7 @@ This workflow requires a GitHub App token with read access for repository metada
 
 - If the target branch has no branch-protection rule, or has one that requires zero approving reviews, the check passes.
 - If branch protection cannot be read — missing permissions, an API error, an unknown branch, or a response the script can't interpret — the check fails rather than assuming a review count.
+- Co-authors of bot-authored commits count as authors. Each `Co-authored-by` email is resolved to a login from the `users.noreply.github.com` pattern, or otherwise by asking GitHub which user has verified that email. The check fails if an email can't be resolved either way.
 
 ### `setup-composer-cache`
 
