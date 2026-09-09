@@ -209,31 +209,36 @@ describe('GitHubUtils', () => {
     describe('getCommitAuthorLoginsByEmail', () => {
         const commitContext = {owner: 'Expensify', repo: 'Integration-Server', sha: '11cfd67d458e0d97bd22d637aea32534d9666f12'};
 
+        function authorsPage(nodes: Array<{email: string; user: {login: string} | null}>, endCursor: string | null = null) {
+            return {
+                repository: {
+                    object: {
+                        authors: {
+                            pageInfo: {hasNextPage: endCursor !== null, endCursor},
+                            nodes,
+                        },
+                    },
+                },
+            };
+        }
+
         it('maps each verified author email to its login, keyed by lowercased email', async () => {
             let variables: Record<string, unknown> | undefined;
             const gitHubUtils = createGitHubUtils(
                 createMockClient(async (_query, queryVariables) => {
                     variables = queryVariables;
-                    return {
-                        repository: {
-                            object: {
-                                authors: {
-                                    nodes: [
-                                        {email: 'infra+melvinbot@expensify.com', user: {login: 'MelvinBot'}},
-                                        {email: 'Rachael@Expensify.com', user: {login: 'RachCHopkins'}},
-                                        {email: 'RachCHopkins@users.noreply.github.com', user: {login: 'RachCHopkins'}},
-                                        {email: 'jane.doe@gmail.com', user: null},
-                                    ],
-                                },
-                            },
-                        },
-                    };
+                    return authorsPage([
+                        {email: 'infra+melvinbot@expensify.com', user: {login: 'MelvinBot'}},
+                        {email: 'Rachael@Expensify.com', user: {login: 'RachCHopkins'}},
+                        {email: 'RachCHopkins@users.noreply.github.com', user: {login: 'RachCHopkins'}},
+                        {email: 'jane.doe@gmail.com', user: null},
+                    ]);
                 }),
             );
 
             const loginsByEmail = await gitHubUtils.getCommitAuthorLoginsByEmail(commitContext);
 
-            assert.deepEqual(variables, commitContext);
+            assert.deepEqual(variables, {...commitContext, pageSize: 100, cursor: null});
             assert.deepEqual(
                 loginsByEmail,
                 new Map([
@@ -242,6 +247,45 @@ describe('GitHubUtils', () => {
                     ['rachchopkins@users.noreply.github.com', 'RachCHopkins'],
                 ]),
             );
+        });
+
+        it('follows pagination cursors until the last page', async () => {
+            const cursors: unknown[] = [];
+            const gitHubUtils = createGitHubUtils(
+                createMockClient(async (_query, queryVariables) => {
+                    cursors.push(queryVariables?.cursor);
+                    if (queryVariables?.cursor === null) {
+                        return authorsPage([{email: 'first@expensify.com', user: {login: 'first'}}], 'cursor-1');
+                    }
+                    return authorsPage([{email: 'second@expensify.com', user: {login: 'second'}}]);
+                }),
+            );
+
+            const loginsByEmail = await gitHubUtils.getCommitAuthorLoginsByEmail(commitContext);
+
+            assert.deepEqual(cursors, [null, 'cursor-1']);
+            assert.deepEqual(
+                loginsByEmail,
+                new Map([
+                    ['first@expensify.com', 'first'],
+                    ['second@expensify.com', 'second'],
+                ]),
+            );
+        });
+
+        it('stops after three pages even when GitHub reports more', async () => {
+            let requestCount = 0;
+            const gitHubUtils = createGitHubUtils(
+                createMockClient(async () => {
+                    requestCount++;
+                    return authorsPage([{email: `author${requestCount}@expensify.com`, user: {login: `author${requestCount}`}}], `cursor-${requestCount}`);
+                }),
+            );
+
+            const loginsByEmail = await gitHubUtils.getCommitAuthorLoginsByEmail(commitContext);
+
+            assert.equal(requestCount, 3);
+            assert.equal(loginsByEmail.size, 3);
         });
 
         it('throws when the commit cannot be found', async () => {
