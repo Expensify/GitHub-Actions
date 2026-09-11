@@ -12,6 +12,7 @@ on:
       - '.nvmrc'
       - '.npmrc'
       - '.github/workflows/test.yml'
+      - '.github/actions/claude-review-toolkit/**'
 
 jobs:
   test:

@@ -23,7 +23,25 @@ It places a set of helper scripts on `GITHUB_PATH`, exposes the canonical violat
   run: createInlineComment.sh "${{ github.event.pull_request.number }}" "src/foo.ts" "PERF-1: ..." 42
 ```
 
-Caller repos must ship a `.claude/skills/coding-standards/rules/` directory with at least one `.md` rule file whose YAML frontmatter declares a `ruleId:` tag matching `[A-Z]+(-[A-Z]+)*-[0-9]+` (e.g. `PERF-1`, `GEN-01`, `CLEAN-REACT-PATTERNS-0`). The action's extract step builds an allowlist from those tags and fails the workflow if the directory is missing or yields no tags.
+Caller repos must ship a rules directory with at least one `.md` rule file whose YAML frontmatter declares a `ruleId:` tag matching `[A-Z]+(-[A-Z]+)*-[0-9]+` (e.g. `PERF-1`, `GEN-01`, `CLEAN-REACT-PATTERNS-0`). The action's extract step builds an allowlist from those tags and fails the workflow if the directory is missing or yields no tags.
+
+## Inputs
+
+| Name | Default | Description |
+| --- | --- | --- |
+| `rules_directory` | `.claude/skills/coding-standards/rules` | Rules directory relative to the caller's `GITHUB_WORKSPACE`. |
+
+For a repo-specific skill name, pass the rules directory explicitly. For example, Auth uses:
+
+```yaml
+- name: Setup Claude review toolkit
+  id: toolkit
+  uses: Expensify/GitHub-Actions/.github/actions/claude-review-toolkit@<sha>
+  with:
+    rules_directory: .claude/skills/auth-coding-standards/rules
+```
+
+Pin a commit that includes the `rules_directory` input before configuring it in a caller workflow.
 
 ## Outputs
 

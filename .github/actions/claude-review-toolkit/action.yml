@@ -1,5 +1,10 @@
 name: 'Claude Review Toolkit'
 description: 'Sets up scripts and schema for the Claude PR review pipeline'
+inputs:
+  rules_directory:
+    description: 'Rules directory relative to GITHUB_WORKSPACE'
+    required: false
+    default: '.claude/skills/coding-standards/rules'
 outputs:
   schema_path:
     description: 'Filesystem path to the canonical schema JSON'
@@ -21,8 +26,10 @@ runs:
         echo "schema_json=$(jq -c . "$GITHUB_ACTION_PATH/schemas/code-review-output.json")" >> "$GITHUB_OUTPUT"
     - name: Extract allowed rules
       shell: bash
+      env:
+        RULES_DIRECTORY: ${{ inputs.rules_directory }}
       run: |
         "$GITHUB_ACTION_PATH/scripts/extractAllowedRules.sh" \
-          "$GITHUB_WORKSPACE/.claude/skills/coding-standards/rules" \
+          "$GITHUB_WORKSPACE/$RULES_DIRECTORY" \
           "$RUNNER_TEMP/allowed-rules.txt"
         echo "ALLOWED_RULES_FILE=$RUNNER_TEMP/allowed-rules.txt" >> "$GITHUB_ENV"
