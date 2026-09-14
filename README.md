@@ -25,6 +25,24 @@ jobs:
       should_run_build: true
 ```
 
+### `snyk-pull-requests.yml`
+
+Assigns PullerBear reviewers when a Snyk bot opens a pull request. Should be triggered when a pull request is opened.
+
+```yml
+on:
+  pull_request:
+    types:
+      - opened
+
+jobs:
+  snyk-pull-requests:
+    uses: Expensify/GitHub-Actions/.github/workflows/snyk-pull-requests.yml@main
+    secrets: inherit
+```
+
+Requires the `MELVIN_GH_TOKEN` secret.
+
 ### `cla.yml`
 
 Used to check if a user has signed the [Contributor License Agreement](./CLA.md), Should be triggered when a PR is opened or updated.
