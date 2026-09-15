@@ -88,10 +88,11 @@ jobs:
       runner: blacksmith-4vcpu-ubuntu-2404
 ```
 
-Three behaviours worth knowing before you tune the arguments:
+Four behaviours worth knowing before you change anything:
 
 - The scan runs with `--no-verification`. Verification authenticates each candidate against its live provider, and a burst of failed authentication attempts from CI is indistinguishable from credential stuffing in CloudTrail. A consequence is that every finding is classified `unverified`, so do not add `--results=verified` — it would report nothing.
-- Warn-only mode suppresses findings, not errors. TruffleHog exits 183 for a finding and 1 for an operational error such as a failed image pull, so `fail_on_findings: false` appends `--no-fail` to suppress only the 183 exit. A scan that never ran still fails the job. Do not reach for `continue-on-error` here, because it cannot tell those two exits apart.
+- Warn-only mode suppresses findings, not errors. TruffleHog exits 183 for a finding and 1 for an operational error such as a failed image pull, and the workflow branches on that exit code. With `fail_on_findings: false` a 183 becomes a warning annotation, while every other non-zero exit still fails the job. A scan that never ran must not report a pass, so do not reach for `continue-on-error` here — it cannot tell those two exits apart.
+- The workflow runs the TruffleHog container directly rather than using `trufflesecurity/trufflehog`. That action hardcodes `--fail` and exposes no exit code, and `--fail` cannot be repeated, so `--no-fail` is rejected with `flag 'fail' cannot be repeated`. Reading the exit code is the only way to separate the two failure kinds above. The image is pinned by digest.
 - TruffleHog needs an access key ID adjacent to a plausible secret to detect an AWS credential, so it misses keys split across separate `key = value` lines. Treat a clean scan as a weak signal, not proof.
 
 This repository scans itself via `secretScanSelf.yml`, which uses a local ref so that a pull request changing `secretScan.yml` is checked by the version it proposes.
