@@ -50,6 +50,49 @@ This workflow requires a GitHub App token with read access for repository metada
 - If the target branch has no branch-protection rule, or has one that requires zero approving reviews, the check passes.
 - If branch protection cannot be read — missing permissions, an API error, an unknown branch, or a response the script can't interpret — the check fails rather than assuming a review count.
 
+### `secretScan.yml`
+
+Scans a repository for committed credentials using [TruffleHog](https://github.com/trufflesecurity/trufflehog).
+
+The scan scope follows the event that triggered the calling workflow, so a repository needs two callers for full coverage:
+
+```yml
+# .github/workflows/secret-scan.yml — scans the commits in each pull request
+on:
+  pull_request:
+
+jobs:
+  secretScan:
+    uses: Expensify/GitHub-Actions/.github/workflows/secretScan.yml@main
+```
+
+```yml
+# .github/workflows/secret-scan-full-history.yml — scans the whole default branch weekly
+on:
+  schedule:
+    - cron: '0 14 * * 1'
+  workflow_dispatch:
+
+jobs:
+  secretScan:
+    uses: Expensify/GitHub-Actions/.github/workflows/secretScan.yml@main
+    with:
+      # Optional. Fail the job on a finding. Leave unset to warn only.
+      fail_on_findings: false
+
+      # Optional. File of newline-separated regexes for paths to skip.
+      # Ignored when the file does not exist.
+      exclude_paths_file: .github/trufflehog-exclude-paths.txt
+
+      # Optional. Runner label. Use a larger runner for full-history scans of large repositories.
+      runner: blacksmith-4vcpu-ubuntu-2404
+```
+
+Two behaviours worth knowing before you tune the arguments:
+
+- The scan runs with `--no-verification`. Verification authenticates each candidate against its live provider, and a burst of failed authentication attempts from CI is indistinguishable from credential stuffing in CloudTrail. A consequence is that every finding is classified `unverified`, so do not add `--results=verified` — it would report nothing.
+- TruffleHog needs an access key ID adjacent to a plausible secret to detect an AWS credential, so it misses keys split across separate `key = value` lines. Treat a clean scan as a weak signal, not proof.
+
 ### `setup-composer-cache`
 
 Restores Composer download caches and optionally runs `composer install`. See [setup-composer-cache/README.md](./setup-composer-cache/README.md) for details.
