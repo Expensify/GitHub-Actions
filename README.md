@@ -88,10 +88,13 @@ jobs:
       runner: blacksmith-4vcpu-ubuntu-2404
 ```
 
-Two behaviours worth knowing before you tune the arguments:
+Three behaviours worth knowing before you tune the arguments:
 
 - The scan runs with `--no-verification`. Verification authenticates each candidate against its live provider, and a burst of failed authentication attempts from CI is indistinguishable from credential stuffing in CloudTrail. A consequence is that every finding is classified `unverified`, so do not add `--results=verified` — it would report nothing.
+- Warn-only mode suppresses findings, not errors. TruffleHog exits 183 for a finding and 1 for an operational error such as a failed image pull, so `fail_on_findings: false` appends `--no-fail` to suppress only the 183 exit. A scan that never ran still fails the job. Do not reach for `continue-on-error` here, because it cannot tell those two exits apart.
 - TruffleHog needs an access key ID adjacent to a plausible secret to detect an AWS credential, so it misses keys split across separate `key = value` lines. Treat a clean scan as a weak signal, not proof.
+
+This repository scans itself via `secretScanSelf.yml`, which uses a local ref so that a pull request changing `secretScan.yml` is checked by the version it proposes.
 
 ### `setup-composer-cache`
 
