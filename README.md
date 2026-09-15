@@ -88,11 +88,14 @@ jobs:
       runner: blacksmith-4vcpu-ubuntu-2404
 ```
 
-Four behaviours worth knowing before you change anything:
+Only `pull_request`, `schedule`, and `workflow_dispatch` are supported. Any other event fails the job with an explicit error rather than scanning the wrong range. The scan reads `file:///repo` and cannot reach the remote, so an event only qualifies if the local clone is guaranteed to hold the commits it names. `pull_request_target` does not qualify, because it checks out the base repository and a fork's head commit is absent. `push` does not qualify, because a force push can leave the previous head unreachable from every remaining ref.
+
+Five behaviours worth knowing before you change anything:
 
 - The scan runs with `--no-verification`. Verification authenticates each candidate against its live provider, and a burst of failed authentication attempts from CI is indistinguishable from credential stuffing in CloudTrail. A consequence is that every finding is classified `unverified`, so do not add `--results=verified` — it would report nothing.
 - Warn-only mode suppresses findings, not errors. TruffleHog exits 183 for a finding and 1 for an operational error such as a failed image pull, and the workflow branches on that exit code. With `fail_on_findings: false` a 183 becomes a warning annotation, while every other non-zero exit still fails the job. A scan that never ran must not report a pass, so do not reach for `continue-on-error` here — it cannot tell those two exits apart.
 - The workflow runs the TruffleHog container directly rather than using `trufflesecurity/trufflehog`. That action hardcodes `--fail` and exposes no exit code, and `--fail` cannot be repeated, so `--no-fail` is rejected with `flag 'fail' cannot be repeated`. Reading the exit code is the only way to separate the two failure kinds above. The image is pinned by digest.
+- The workflow checks that every commit in the scan range resolves locally before it starts. TruffleHog aborts with an unhelpful operational error on a missing commit, so this turns that into a message naming the commit and pointing at `fetch-depth`.
 - TruffleHog needs an access key ID adjacent to a plausible secret to detect an AWS credential, so it misses keys split across separate `key = value` lines. Treat a clean scan as a weak signal, not proof.
 
 This repository scans itself via `secretScanSelf.yml`, which uses a local ref so that a pull request changing `secretScan.yml` is checked by the version it proposes.
