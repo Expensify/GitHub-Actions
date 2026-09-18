@@ -27,6 +27,26 @@ const BASE_INPUT: PeerReviewInput = {
 
 describe('verifyPeerReview', () => {
     describe('getIndependentApprovers', () => {
+        it('looks up only independent approvers in each eligible team', async () => {
+            const teams: string[] = [];
+            const gitHubUtils = createFakeGitHubUtils({
+                getTeamMemberLogins: async (teamSlug, candidates) => {
+                    teams.push(teamSlug);
+                    assert.deepEqual(candidates, ['MonilBhavsar', 'outsider']);
+                    return new Set(['MonilBhavsar']);
+                },
+            });
+            const independent = await VerifyPeerReview.getIndependentApprovers(
+                gitHubUtils,
+                ['AndrewGable', 'MonilBhavsar', 'outsider'],
+                ['AndrewGable'],
+                'Expensify',
+                'react-native-live-markdown',
+            );
+            assert.deepEqual(independent, ['MonilBhavsar']);
+            assert.deepEqual(teams, ['expensify-expensify', 'react-native-live-markdown-writers', 'react-native-live-markdown-maintainers']);
+        });
+
         it('excludes commit authors and non-employees', async () => {
             const gitHubUtils = createFakeGitHubUtils({getTeamMemberLogins: async () => new Set(['AndrewGable', 'MonilBhavsar'])});
 
