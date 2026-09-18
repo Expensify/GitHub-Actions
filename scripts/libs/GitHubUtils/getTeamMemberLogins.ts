@@ -4,86 +4,72 @@ const EXPENSIFY_ORG = 'Expensify';
 
 type TeamMembersResponse = {
     organization: {
-        team: {
-            members: {
-                pageInfo: {
-                    hasNextPage: boolean;
-                    endCursor: string | null;
-                };
-                nodes: Array<{
-                    login: string;
-                }>;
-            };
-        } | null;
+        team: Record<
+            string,
+            {
+                pageInfo: {hasNextPage: boolean; endCursor: string | null};
+                nodes: Array<{login: string}>;
+            }
+        > | null;
     } | null;
 };
 
-const teamMemberLoginsPromisesByClient = new WeakMap<GitHubAPIClient, Map<string, Promise<Set<string>>>>();
-
 /**
- * Fetches and memoizes all members of a GitHub team for the lifetime of a client.
+ * Returns the candidate logins that belong to a team, batching their searches into one request per page.
  */
-async function getTeamMemberLogins(client: GitHubAPIClient, teamSlug: string): Promise<Set<string>> {
-    let teamPromises = teamMemberLoginsPromisesByClient.get(client);
-    if (!teamPromises) {
-        teamPromises = new Map();
-        teamMemberLoginsPromisesByClient.set(client, teamPromises);
-    }
-
-    let teamMembersPromise = teamPromises.get(teamSlug);
-    if (!teamMembersPromise) {
-        teamMembersPromise = fetchTeamMemberLogins(client, teamSlug);
-        teamPromises.set(teamSlug, teamMembersPromise);
-    }
-
-    return teamMembersPromise;
-}
-
-async function fetchTeamMemberLogins(client: GitHubAPIClient, teamSlug: string): Promise<Set<string>> {
+async function getTeamMemberLogins(client: GitHubAPIClient, teamSlug: string, candidateLogins: string[]): Promise<Set<string>> {
     const teamMemberLogins = new Set<string>();
-    let cursor: string | null = null;
-    let hasNextPage = true;
+    let searches = [...new Set(candidateLogins)].map((login, index) => ({login, alias: `member${index}`, cursor: null as string | null}));
 
-    while (hasNextPage) {
-        // await-in-loop is necessary and appropriate for polling a paginated endpoint;
-        // each request is dependent upon the response of the previous.
-        // eslint-disable-next-line no-await-in-loop
-        const response: TeamMembersResponse = await client.graphql<TeamMembersResponse>(
-            `
-            query TeamMembers($organization: String!, $teamSlug: String!, $cursor: String) {
-                organization(login: $organization) {
-                    team(slug: $teamSlug) {
-                        members(first: 100, after: $cursor) {
-                            pageInfo {
-                                hasNextPage
-                                endCursor
-                            }
-                            nodes {
-                                login
-                            }
-                        }
-                    }
-                }
+    while (searches.length > 0) {
+        const variables: Record<string, string | null> = {organization: EXPENSIFY_ORG, teamSlug};
+        const declarations = searches.map(({alias, login, cursor}) => {
+            variables[alias] = login;
+            variables[`${alias}Cursor`] = cursor;
+            return `$${alias}: String!, $${alias}Cursor: String`;
+        });
+        const fields = searches.map(
+            ({alias}) => `
+            ${alias}: members(first: 100, query: $${alias}, after: $${alias}Cursor) {
+                pageInfo { hasNextPage endCursor }
+                nodes { login }
             }
         `,
-            {
-                organization: EXPENSIFY_ORG,
-                teamSlug,
-                cursor,
-            },
         );
 
-        const members = response.organization?.team?.members;
-        if (!members) {
+        // Each subsequent request depends on the cursors returned by the previous page.
+        // eslint-disable-next-line no-await-in-loop
+        const response = await client.graphql<TeamMembersResponse>(
+            `query TeamMembers($organization: String!, $teamSlug: String!, ${declarations.join(', ')}) {
+                organization(login: $organization) {
+                    team(slug: $teamSlug) { ${fields.join('\n')} }
+                }
+            }`,
+            variables,
+        );
+        const team = response.organization?.team;
+        if (!team) {
             throw new Error(`${EXPENSIFY_ORG}/${teamSlug} team could not be found.`);
         }
 
-        for (const member of members.nodes) {
-            teamMemberLogins.add(member.login);
-        }
-
-        hasNextPage = members.pageInfo.hasNextPage;
-        cursor = members.pageInfo.endCursor;
+        searches = searches.flatMap((search) => {
+            const members = team[search.alias];
+            if (!members) {
+                throw new Error(`Missing team membership search result for ${search.login}.`);
+            }
+            // GitHub's query is a fuzzy search, so only an exact login match proves membership.
+            if (members.nodes.some(({login}) => login === search.login)) {
+                teamMemberLogins.add(search.login);
+                return [];
+            }
+            if (!members.pageInfo.hasNextPage) {
+                return [];
+            }
+            if (!members.pageInfo.endCursor || members.pageInfo.endCursor === search.cursor) {
+                throw new Error(`Missing or repeated team membership cursor for ${search.login}.`);
+            }
+            return [{...search, cursor: members.pageInfo.endCursor}];
+        });
     }
 
     return teamMemberLogins;
