@@ -1,6 +1,6 @@
 #!/bin/bash
 #################################################################
-#    Lint workflows with https://github.com/rhysd/actionlint    #
+#    Lint workflows with https://github.com/kjanat/actionlint    #
 #################################################################
 
 # Verify that shellcheck is installed (preinstalled on GitHub Actions runners)
@@ -19,7 +19,7 @@ readonly REPO_ROOT="${REPO_ROOT:-.}"
 
 source "$SCRIPT_DIR/shellUtils.sh"
 
-title "Lint Github Actions via actionlint (https://github.com/rhysd/actionlint)"
+title "Lint Github Actions via actionlint (https://github.com/kjanat/actionlint)"
 
 # Make sure there are workflows or actions to check before downloading and running actionlint
 WORKFLOWS="$(find "$REPO_ROOT/.github/workflows" -type f \( -name "*.yml" -o -name "*.yaml" \))"
@@ -53,8 +53,14 @@ EXPECTED_VERSION="$(echo "$TARBALL_NAME" | grep -oE "actionlint_[0-9\.]+_" | awk
 EXPECTED_CHECKSUM="$(grep "$TARBALL_NAME" "$CHECKSUMS_FILE" | awk '{print $1}')"
 readonly EXPECTED_VERSION EXPECTED_CHECKSUM
 
+# The fork reports its version as "actionlint.kjanat.dev 1.17.0" rather than the bare version the
+# upstream binary prints, so match on the version number instead of the whole first line.
+installed_version_matches() {
+    [[ "$("$ACTIONLINT_PATH" -version | head -n 1)" == *" $EXPECTED_VERSION"* ]]
+}
+
 # Get actionlint binary
-if [[ -x "$ACTIONLINT_PATH" && "$EXPECTED_VERSION" == "$("$ACTIONLINT_PATH" -version | head -n 1)" ]]; then
+if [[ -x "$ACTIONLINT_PATH" ]] && installed_version_matches; then
     info "Found actionlint version $EXPECTED_VERSION already installed" >&2
 else
     info "Downloading and verifying actionlint verion $EXPECTED_VERSION..." >&2
@@ -68,7 +74,7 @@ else
     curl --fail --location \
         --retry 3 \
         --retry-delay 3 \
-        "https://github.com/rhysd/actionlint/releases/download/v${EXPECTED_VERSION}/${TARBALL_NAME}" \
+        "https://github.com/kjanat/actionlint/releases/download/v${EXPECTED_VERSION}/${TARBALL_NAME}" \
         --output "$TARBALL"
     CURL_EXIT=$?
 
