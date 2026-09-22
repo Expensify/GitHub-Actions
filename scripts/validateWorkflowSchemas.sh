@@ -20,7 +20,7 @@ trap 'rm -rf "$TEMP_SCHEMA_DIR"' EXIT
 # Download the pinned json schemas for github actions and workflows
 for SCHEMA in github-action.json github-workflow.json; do
     info "Downloading $SCHEMA schema..."
-    if curl "https://raw.githubusercontent.com/SchemaStore/schemastore/5c0bfe97efb759922f71c378584246cc07e7c3ed/src/schemas/json/$SCHEMA" --output "$TEMP_SCHEMA_DIR/$SCHEMA" --silent; then
+    if curl "https://raw.githubusercontent.com/SchemaStore/schemastore/8b994c014937a9332f2fb53d993eb1a30705677c/src/schemas/json/$SCHEMA" --output "$TEMP_SCHEMA_DIR/$SCHEMA" --silent; then
         success "Successfully downloaded $SCHEMA schema!"
     else
         error "Failed downloading $SCHEMA schema" >&2
