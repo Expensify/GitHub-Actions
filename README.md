@@ -88,7 +88,13 @@ The scan scope follows the triggering event:
 
 Any other event fails the job with an explicit error rather than scanning the wrong range. The scan reads `file:///repo` and cannot reach the remote, so an event only qualifies if the local clone is guaranteed to hold the commits it names. `pull_request_target` does not qualify, because it checks out the base repository and an external fork's head commit is absent.
 
-Three pushes need care, and the workflow handles each: deleting a branch introduces no commits and is skipped, a tag push points at a commit already scanned on its branch and is skipped, and a force push or a new branch names no usable starting commit — those fall back to the point where the branch left the default branch, capped at 50 commits if there is no shared ancestor.
+Add `workflow_dispatch` to the caller too. `push` only covers commits that land after the workflow exists, so run it once from the Actions tab to scan the history that predates it. Do not add a `schedule`: history does not change, so repeating a full scan reports the same answer every time.
+
+Three pushes need care, and the workflow handles each:
+
+- **Deleting a ref** introduces no commits, so it is skipped.
+- **A tag push** is skipped only if the tagged commit already reaches a branch. Git allows pushing a tag whose commit reaches no branch, which transfers that commit with the tag, and that is the only event that can scan it.
+- **A force push or a new branch** names no usable starting commit, so the scan falls back to the point where the branch left the default branch, capped at 50 commits if there is no shared ancestor.
 
 Six behaviours worth knowing before you change anything:
 
