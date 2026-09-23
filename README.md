@@ -94,7 +94,7 @@ Three pushes need care, and the workflow handles each:
 
 - **Deleting a ref** introduces no commits, so it is skipped.
 - **A tag push** is skipped only if the tagged commit already reaches a branch. Git allows pushing a tag whose commit reaches no branch, which transfers that commit with the tag, and that is the only event that can scan it.
-- **A force push or a new branch** names no usable starting commit, so the scan falls back to the point where the branch left the default branch, capped at 50 commits if there is no shared ancestor.
+- **A force push or a new branch** names no usable starting commit, so the scan falls back to the point where the branch left the default branch. Where there is no shared ancestor at all — an orphan branch, a new repository, a force push to the default branch — it scans the whole branch, because no later push covers those commits.
 
 Six behaviours worth knowing before you change anything:
 
