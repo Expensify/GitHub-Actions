@@ -8,6 +8,22 @@ type InternalOctokit = InstanceType<typeof OctokitWithPlugins>;
 
 const OctokitWithPlugins = Octokit.plugin(throttling, paginateRest);
 
+type GraphQLVariable<Name extends string = string> = {
+    name: Name;
+    value: string;
+    declaration: `$${Name}: String!`;
+    reference: `$${Name}`;
+};
+
+function createGraphQLVariable<Name extends string>(name: Name, value: string): GraphQLVariable<Name> {
+    return {
+        name,
+        value,
+        declaration: `$${name}: String!`,
+        reference: `$${name}`,
+    };
+}
+
 /**
  * This GitHub API client:
  *   - Exposes utils for octokit (rest), graphql, and pagination.
@@ -67,4 +83,5 @@ class GitHubAPIClient {
 }
 
 export default GitHubAPIClient;
-export type {InternalOctokit};
+export {createGraphQLVariable};
+export type {GraphQLVariable, InternalOctokit};

@@ -1,89 +1,116 @@
 import type GitHubAPIClient from '../GitHubAPIClient';
+import {createGraphQLVariable} from '../GitHubAPIClient';
+import type {GraphQLVariable} from '../GitHubAPIClient';
 
 const EXPENSIFY_ORG = 'Expensify';
 
-type TeamMembersResponse = {
-    organization: {
-        team: {
-            members: {
-                pageInfo: {
-                    hasNextPage: boolean;
-                    endCursor: string | null;
-                };
-                nodes: Array<{
-                    login: string;
-                }>;
-            };
-        } | null;
-    } | null;
+type TeamMemberSearch = {
+    login: string;
+    alias: string;
+    variable: GraphQLVariable;
 };
 
-const teamMemberLoginsPromisesByClient = new WeakMap<GitHubAPIClient, Map<string, Promise<Set<string>>>>();
+type TeamSearch = {
+    slug: string;
+    alias: string;
+    variable: GraphQLVariable;
+};
+
+type TeamMemberSearchResult = {
+    nodes: Array<{login: string}>;
+};
+
+type TeamMembersResponse = {
+    organization: Record<string, Record<string, TeamMemberSearchResult | null> | null> | null;
+};
 
 /**
- * Fetches and memoizes all members of a GitHub team for the lifetime of a client.
+ * Returns the candidate logins that belong to any of the teams, batching all searches into one request.
  */
-async function getTeamMemberLogins(client: GitHubAPIClient, teamSlug: string): Promise<Set<string>> {
-    let teamPromises = teamMemberLoginsPromisesByClient.get(client);
-    if (!teamPromises) {
-        teamPromises = new Map();
-        teamMemberLoginsPromisesByClient.set(client, teamPromises);
-    }
-
-    let teamMembersPromise = teamPromises.get(teamSlug);
-    if (!teamMembersPromise) {
-        teamMembersPromise = fetchTeamMemberLogins(client, teamSlug);
-        teamPromises.set(teamSlug, teamMembersPromise);
-    }
-
-    return teamMembersPromise;
-}
-
-async function fetchTeamMemberLogins(client: GitHubAPIClient, teamSlug: string): Promise<Set<string>> {
+async function getTeamMemberLogins(client: GitHubAPIClient, teamSlugs: string[], candidateLogins: string[]): Promise<Set<string>> {
     const teamMemberLogins = new Set<string>();
-    let cursor: string | null = null;
-    let hasNextPage = true;
+    const uniqueTeamSlugs = new Set(teamSlugs);
+    const uniqueCandidateLogins = new Set(candidateLogins);
 
-    while (hasNextPage) {
-        // await-in-loop is necessary and appropriate for polling a paginated endpoint;
-        // each request is dependent upon the response of the previous.
-        // eslint-disable-next-line no-await-in-loop
-        const response: TeamMembersResponse = await client.graphql<TeamMembersResponse>(
-            `
-            query TeamMembers($organization: String!, $teamSlug: String!, $cursor: String) {
-                organization(login: $organization) {
-                    team(slug: $teamSlug) {
-                        members(first: 100, after: $cursor) {
-                            pageInfo {
-                                hasNextPage
-                                endCursor
-                            }
-                            nodes {
-                                login
-                            }
-                        }
+    if (uniqueTeamSlugs.size === 0 || uniqueCandidateLogins.size === 0) {
+        return teamMemberLogins;
+    }
+
+    const organizationVariable = createGraphQLVariable('organization', EXPENSIFY_ORG);
+    const memberSearches: TeamMemberSearch[] = [...uniqueCandidateLogins].map((login, index) => {
+        const alias = `member${index}`;
+        return {
+            login,
+            alias,
+            variable: createGraphQLVariable(alias, login),
+        };
+    });
+    const teamSearches: TeamSearch[] = [...uniqueTeamSlugs].map((slug, index) => {
+        const alias = `team${index}`;
+        return {
+            slug,
+            alias,
+            variable: createGraphQLVariable(`teamSlug${index}`, slug),
+        };
+    });
+
+    const queryVariables: GraphQLVariable[] = [organizationVariable, ...memberSearches.map(({variable}) => variable), ...teamSearches.map(({variable}) => variable)];
+    const teamQueries = teamSearches.map((teamSearch) => {
+        const memberQueries = memberSearches.map(
+            (memberSearch) => `
+                ${memberSearch.alias}: members(first: 1, query: ${memberSearch.variable.reference}) {
+                    nodes {
+                        login
                     }
                 }
-            }
-        `,
-            {
-                organization: EXPENSIFY_ORG,
-                teamSlug,
-                cursor,
-            },
+            `,
         );
 
-        const members = response.organization?.team?.members;
-        if (!members) {
-            throw new Error(`${EXPENSIFY_ORG}/${teamSlug} team could not be found.`);
+        return `
+            ${teamSearch.alias}: team(slug: ${teamSearch.variable.reference}) {
+                ${memberQueries.join('\n')}
+            }
+        `;
+    });
+
+    const variables: Record<string, string> = {};
+    const variableDeclarations: Array<GraphQLVariable['declaration']> = [];
+    for (const variable of queryVariables) {
+        variables[variable.name] = variable.value;
+        variableDeclarations.push(variable.declaration);
+    }
+
+    const query = `
+        query TeamMembers(${variableDeclarations.join(', ')}) {
+            organization(login: ${organizationVariable.reference}) {
+                ${teamQueries.join('\n')}
+            }
+        }
+    `;
+
+    const response = await client.graphql<TeamMembersResponse>(query, variables);
+    const organization = response.organization;
+    if (!organization) {
+        throw new Error(`${EXPENSIFY_ORG} organization could not be found.`);
+    }
+
+    for (const teamSearch of teamSearches) {
+        const team = organization[teamSearch.alias];
+        if (!team) {
+            throw new Error(`${EXPENSIFY_ORG}/${teamSearch.slug} team could not be found.`);
         }
 
-        for (const member of members.nodes) {
-            teamMemberLogins.add(member.login);
-        }
+        for (const memberSearch of memberSearches) {
+            const members = team[memberSearch.alias];
+            if (!members) {
+                throw new Error(`Missing team membership search result for ${memberSearch.login} in ${teamSearch.slug}.`);
+            }
 
-        hasNextPage = members.pageInfo.hasNextPage;
-        cursor = members.pageInfo.endCursor;
+            // GitHub's query can be fuzzy, so only an exact login match proves membership.
+            if (members.nodes.some((member) => member.login === memberSearch.login)) {
+                teamMemberLogins.add(memberSearch.login);
+            }
+        }
     }
 
     return teamMemberLogins;

@@ -27,6 +27,31 @@ const BASE_INPUT: PeerReviewInput = {
 
 describe('verifyPeerReview', () => {
     describe('getIndependentApprovers', () => {
+        it('looks up only independent approvers across all eligible teams in one call', async () => {
+            let callCount = 0;
+            let teamSlugs: string[] = [];
+            let candidateLogins: string[] = [];
+            const gitHubUtils = createFakeGitHubUtils({
+                getTeamMemberLogins: async (teams, candidates) => {
+                    callCount++;
+                    teamSlugs = teams;
+                    candidateLogins = candidates;
+                    return new Set(['MonilBhavsar']);
+                },
+            });
+            const independent = await VerifyPeerReview.getIndependentApprovers(
+                gitHubUtils,
+                ['AndrewGable', 'MonilBhavsar', 'outsider'],
+                ['AndrewGable'],
+                'Expensify',
+                'react-native-live-markdown',
+            );
+            assert.deepEqual(independent, ['MonilBhavsar']);
+            assert.equal(callCount, 1);
+            assert.deepEqual(teamSlugs, ['expensify-expensify', 'react-native-live-markdown-writers', 'react-native-live-markdown-maintainers']);
+            assert.deepEqual(candidateLogins, ['MonilBhavsar', 'outsider']);
+        });
+
         it('excludes commit authors and non-employees', async () => {
             const gitHubUtils = createFakeGitHubUtils({getTeamMemberLogins: async () => new Set(['AndrewGable', 'MonilBhavsar'])});
 
@@ -62,7 +87,7 @@ describe('verifyPeerReview', () => {
                 getRequiredApprovingReviewCount: async () => 1,
                 getLatestApprovers: async () => [],
                 listPullRequestCommits: async () => [],
-                getTeamMemberLogins: async (teamSlug) => (teamSlug === 'expensify-expensify' ? new Set(['MonilBhavsar', 'AndrewGable', 'rafecolton']) : new Set()),
+                getTeamMemberLogins: async () => new Set(['MonilBhavsar', 'AndrewGable', 'rafecolton']),
                 ...overrides,
             });
         }
@@ -155,7 +180,10 @@ describe('verifyPeerReview', () => {
             const gitHubUtils = createBaseFakeGitHubUtils({
                 getLatestApprovers: async () => ['JakubKorytko'],
                 listPullRequestCommits: mockCommits([makeCommit('AndrewGable')]),
-                getTeamMemberLogins: async (teamSlug) => (teamSlug === 'react-native-wallet-writers' ? new Set(['JakubKorytko']) : new Set()),
+                getTeamMemberLogins: async (teamSlugs) => {
+                    assert.deepEqual(teamSlugs, ['expensify-expensify', 'react-native-wallet-writers']);
+                    return new Set(['JakubKorytko']);
+                },
             });
 
             const result = await VerifyPeerReview.evaluatePeerReview(gitHubUtils, {...BASE_INPUT, repo: 'react-native-wallet'});
@@ -167,14 +195,9 @@ describe('verifyPeerReview', () => {
             const gitHubUtils = createBaseFakeGitHubUtils({
                 getLatestApprovers: async () => ['MonilBhavsar'],
                 listPullRequestCommits: mockCommits([makeCommit('AndrewGable')]),
-                getTeamMemberLogins: async (teamSlug) => {
-                    if (teamSlug === 'expensify-expensify') {
-                        return new Set(['MonilBhavsar']);
-                    }
-                    if (teamSlug === 'react-native-wallet-writers') {
-                        return new Set(['JakubKorytko']);
-                    }
-                    return new Set();
+                getTeamMemberLogins: async (teamSlugs) => {
+                    assert.deepEqual(teamSlugs, ['expensify-expensify', 'react-native-wallet-writers']);
+                    return new Set(['MonilBhavsar']);
                 },
             });
 
@@ -187,11 +210,9 @@ describe('verifyPeerReview', () => {
             const gitHubUtils = createBaseFakeGitHubUtils({
                 getLatestApprovers: async () => ['JakubKorytko'],
                 listPullRequestCommits: mockCommits([makeCommit('AndrewGable')]),
-                getTeamMemberLogins: async (teamSlug) => {
-                    if (teamSlug === 'expensify-expensify') {
-                        return new Set(['MonilBhavsar', 'AndrewGable', 'rafecolton']);
-                    }
-                    throw new Error(`Unexpected team lookup: ${teamSlug}`);
+                getTeamMemberLogins: async (teamSlugs) => {
+                    assert.deepEqual(teamSlugs, ['expensify-expensify']);
+                    return new Set(['MonilBhavsar', 'AndrewGable', 'rafecolton']);
                 },
             });
 
