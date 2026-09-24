@@ -20,7 +20,7 @@ function createGitHubUtils(client: GitHubAPIClient) {
         getPullRequestCommitCount: (args: {owner: string; repo: string; number: number}) => getPullRequestCommitCount(client, args),
         getRequiredApprovingReviewCount: (args: {owner: string; repo: string; baseRef: string}) => getRequiredApprovingReviewCount(client, args),
         isBotUser,
-        getTeamMemberLogins: (teamSlug: string, candidateLogins: string[]) => getTeamMemberLogins(client, teamSlug, candidateLogins),
+        getTeamMemberLogins: (teamSlugs: string[], candidateLogins: string[]) => getTeamMemberLogins(client, teamSlugs, candidateLogins),
         listPullRequestCommits: (args: {owner: string; repo: string; number: number}) => listPullRequestCommits(client, args),
     };
 }

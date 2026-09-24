@@ -10,16 +10,16 @@ const OctokitWithPlugins = Octokit.plugin(throttling, paginateRest);
 
 type GraphQLVariable<Name extends string = string> = {
     name: Name;
-    value: string | null;
-    declaration: `$${Name}: String${'' | '!'}`;
+    value: string;
+    declaration: `$${Name}: String!`;
     reference: `$${Name}`;
 };
 
-function createGraphQLVariable<Name extends string>(name: Name, value: string | null, type: 'String' | 'String!'): GraphQLVariable<Name> {
+function createGraphQLVariable<Name extends string>(name: Name, value: string): GraphQLVariable<Name> {
     return {
         name,
         value,
-        declaration: `$${name}: ${type}`,
+        declaration: `$${name}: String!`,
         reference: `$${name}`,
     };
 }

@@ -392,83 +392,58 @@ describe('GitHubUtils', () => {
     });
 
     describe('getTeamMemberLogins', () => {
-        it('batches unique candidates and rejects fuzzy and differently cased matches', async () => {
+        it('batches unique candidate searches across teams and rejects fuzzy and differently cased matches', async () => {
             let calls = 0;
             const gitHubUtils = createGitHubUtils(
                 createMockClient(async (query, variables) => {
                     calls++;
-                    assert.match(query, /member0: members\(first: 100, query: \$member0/);
-                    assert.match(query, /member1: members\(first: 100, query: \$member1/);
+                    assert.match(query, /team0: team\(slug: \$teamSlug0\)/);
+                    assert.match(query, /team1: team\(slug: \$teamSlug1\)/);
+                    assert.match(query, /member0: members\(first: 1, query: \$member0\)/);
+                    assert.match(query, /member1: members\(first: 1, query: \$member1\)/);
+                    assert.doesNotMatch(query, /pageInfo|after:/);
                     assert.deepEqual(variables, {
                         organization: 'Expensify',
-                        teamSlug: 'expensify-expensify',
                         member0: 'AndrewGable',
-                        member0Cursor: null,
                         member1: 'outsider',
-                        member1Cursor: null,
+                        teamSlug0: 'expensify-expensify',
+                        teamSlug1: 'writers',
                     });
                     return {
                         organization: {
-                            team: {
-                                member0: {nodes: [{login: 'AndrewGable'}], pageInfo: {hasNextPage: false, endCursor: null}},
-                                member1: {nodes: [{login: 'outsider-other'}, {login: 'Outsider'}], pageInfo: {hasNextPage: false, endCursor: null}},
+                            team0: {
+                                member0: {nodes: [{login: 'AndrewGable'}]},
+                                member1: {nodes: [{login: 'outsider-other'}]},
+                            },
+                            team1: {
+                                member0: {nodes: []},
+                                member1: {nodes: [{login: 'Outsider'}]},
                             },
                         },
                     };
                 }),
             );
-            assert.deepEqual(await gitHubUtils.getTeamMemberLogins('expensify-expensify', ['AndrewGable', 'outsider', 'AndrewGable']), new Set(['AndrewGable']));
+            assert.deepEqual(
+                await gitHubUtils.getTeamMemberLogins(['expensify-expensify', 'writers', 'expensify-expensify'], ['AndrewGable', 'outsider', 'AndrewGable']),
+                new Set(['AndrewGable']),
+            );
             assert.equal(calls, 1);
         });
 
-        it('paginates only unresolved searches so fuzzy matches cannot hide an exact match', async () => {
-            let calls = 0;
-            const gitHubUtils = createGitHubUtils(
-                createMockClient(async (query, variables) => {
-                    calls++;
-                    if (calls === 1) {
-                        return {
-                            organization: {
-                                team: {
-                                    member0: {nodes: [{login: 'alice'}], pageInfo: {hasNextPage: true, endCursor: 'unused'}},
-                                    member1: {nodes: [{login: 'bob-other'}], pageInfo: {hasNextPage: true, endCursor: 'next'}},
-                                },
-                            },
-                        };
-                    }
-                    assert.doesNotMatch(query, /member0/);
-                    assert.equal(variables?.member1Cursor, 'next');
-                    return {
-                        organization: {
-                            team: {
-                                member1: {nodes: [{login: 'bob'}], pageInfo: {hasNextPage: false, endCursor: null}},
-                            },
-                        },
-                    };
-                }),
-            );
-            assert.deepEqual(await gitHubUtils.getTeamMemberLogins('team', ['alice', 'bob']), new Set(['alice', 'bob']));
-            assert.equal(calls, 2);
-        });
-
-        it('skips the API when there are no candidates', async () => {
+        it('skips the API when there are no teams or candidates', async () => {
             const gitHubUtils = createGitHubUtils(
                 createMockClient(async () => {
                     throw new Error('Unexpected API call');
                 }),
             );
-            assert.deepEqual(await gitHubUtils.getTeamMemberLogins('team', []), new Set());
+            assert.deepEqual(await gitHubUtils.getTeamMemberLogins(['team'], []), new Set());
+            assert.deepEqual(await gitHubUtils.getTeamMemberLogins([], ['alice']), new Set());
         });
 
-        it('fails closed for missing organizations, teams, results, and cursors', async () => {
-            for (const response of [
-                {organization: null},
-                {organization: {team: null}},
-                {organization: {team: {}}},
-                {organization: {team: {member0: {nodes: [], pageInfo: {hasNextPage: true, endCursor: null}}}}},
-            ]) {
+        it('fails closed for missing organizations, teams, or search results', async () => {
+            for (const response of [{organization: null}, {organization: {team0: null}}, {organization: {team0: {}}}, {organization: {team0: {member0: null}}}]) {
                 const gitHubUtils = createGitHubUtils(createMockClient(async () => response));
-                await assert.rejects(() => gitHubUtils.getTeamMemberLogins('team', ['alice']));
+                await assert.rejects(() => gitHubUtils.getTeamMemberLogins(['team'], ['alice']));
             }
         });
 
@@ -478,24 +453,21 @@ describe('GitHubUtils', () => {
                     throw new Error('Forbidden');
                 }),
             );
-            await assert.rejects(() => gitHubUtils.getTeamMemberLogins('team', ['alice']), /Forbidden/);
+            await assert.rejects(() => gitHubUtils.getTeamMemberLogins(['team'], ['alice']), /Forbidden/);
         });
 
-        it('returns the fetched team login set', async () => {
+        it('returns only exact candidate logins', async () => {
             const gitHubUtils = createGitHubUtils(
                 createMockClient(async () => ({
                     organization: {
-                        team: {
-                            member0: {
-                                pageInfo: {hasNextPage: false, endCursor: null},
-                                nodes: [{login: 'AndrewGable'}],
-                            },
+                        team0: {
+                            member0: {nodes: [{login: 'AndrewGable'}]},
                         },
                     },
                 })),
             );
 
-            const logins = await gitHubUtils.getTeamMemberLogins('expensify-expensify', ['AndrewGable']);
+            const logins = await gitHubUtils.getTeamMemberLogins(['expensify-expensify'], ['AndrewGable']);
 
             // GitHub logins are case-sensitive, so this is a direct set lookup, not a case-insensitive match.
             assert.equal(logins.has('AndrewGable'), true);

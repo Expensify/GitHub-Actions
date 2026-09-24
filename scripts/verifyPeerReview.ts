@@ -91,8 +91,7 @@ async function getIndependentApprovers(gitHubUtils: GitHubUtils, approvers: stri
     const authorsSet = new Set(authors);
     const independentApprovers = approvers.filter((approver) => !authorsSet.has(approver));
     const reviewerTeams = [EXPENSIFY_EMPLOYEE_TEAM_SLUG, ...(REPOSITORY_REVIEWER_TEAMS.get(`${owner}/${repo}`) ?? [])];
-    const teamMembers = await Promise.all(reviewerTeams.map((teamSlug) => gitHubUtils.getTeamMemberLogins(teamSlug, independentApprovers)));
-    const eligibleReviewers = new Set(teamMembers.flatMap((members) => [...members]));
+    const eligibleReviewers = await gitHubUtils.getTeamMemberLogins(reviewerTeams, independentApprovers);
 
     return independentApprovers.filter((approver) => eligibleReviewers.has(approver));
 }
