@@ -94,6 +94,12 @@ Three pushes need care, and the workflow handles each:
 
 - **Deleting a ref** introduces no commits, so it is skipped.
 - **A tag push** is skipped only if the tagged commit already reaches a branch. Git allows pushing a tag whose commit reaches no branch, which transfers that commit with the tag, and that is the only event that can scan it.
+
+### Known gap: more than three tags at once
+
+GitHub [does not create events](https://docs.github.com/en/webhooks/webhook-events-and-payloads) for tags when more than three are pushed at once, so `git push --tags` with four or more tags starts no workflow run. A commit reaching no branch, carried in such a batch, therefore goes unscanned.
+
+Run the workflow from the Actions tab to recover. A `schedule` would close this automatically, but today a full scan re-reports every finding already in history, so the noise costs more than the gap. Once findings create deduplicated issues, repeats collapse and a schedule becomes worth adding.
 - **A force push or a new branch** names no usable starting commit, so the scan falls back to the point where the branch left the default branch. Where there is no shared ancestor at all — an orphan branch, a new repository, a force push to the default branch — it scans the whole branch, because no later push covers those commits.
 
 Eight behaviours worth knowing before you change anything:
