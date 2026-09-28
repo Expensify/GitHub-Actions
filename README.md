@@ -66,7 +66,7 @@ jobs:
     uses: Expensify/GitHub-Actions/.github/workflows/secretScan.yml@main
     with:
       # Optional. Fail the job on a finding. Leave unset to warn only.
-      fail_on_findings: false
+      should_fail_on_findings: false
 
       # Optional. File of newline-separated regexes for paths to skip.
       # Ignored when the file does not exist.
@@ -96,12 +96,13 @@ Three pushes need care, and the workflow handles each:
 - **A tag push** is skipped only if the tagged commit already reaches a branch. Git allows pushing a tag whose commit reaches no branch, which transfers that commit with the tag, and that is the only event that can scan it.
 - **A force push or a new branch** names no usable starting commit, so the scan falls back to the point where the branch left the default branch. Where there is no shared ancestor at all — an orphan branch, a new repository, a force push to the default branch — it scans the whole branch, because no later push covers those commits.
 
-Six behaviours worth knowing before you change anything:
+Seven behaviours worth knowing before you change anything:
 
 - The scan runs with `--no-verification`. Verification authenticates each candidate against its live provider, and a burst of failed authentication attempts from CI is indistinguishable from credential stuffing in CloudTrail. A consequence is that every finding is classified `unverified`, so do not add `--results=verified` — it would report nothing.
-- Warn-only mode suppresses findings, not errors. TruffleHog exits 183 for a finding and 1 for an operational error such as a failed image pull, and the workflow branches on that exit code. With `fail_on_findings: false` a 183 becomes a warning annotation, while every other non-zero exit still fails the job. A scan that never ran must not report a pass, so do not reach for `continue-on-error` here — it cannot tell those two exits apart.
+- Warn-only mode suppresses findings, not errors. TruffleHog exits 183 for a finding and 1 for an operational error such as a failed image pull, and the workflow branches on that exit code. With `should_fail_on_findings: false` a 183 becomes a warning annotation, while every other non-zero exit still fails the job. A scan that never ran must not report a pass, so do not reach for `continue-on-error` here — it cannot tell those two exits apart.
 - The workflow runs the TruffleHog container directly rather than using `trufflesecurity/trufflehog`. That action hardcodes `--fail` and exposes no exit code, and `--fail` cannot be repeated, so `--no-fail` is rejected with `flag 'fail' cannot be repeated`. Reading the exit code is the only way to separate the two failure kinds above. The image is pinned by digest.
-- The workflow checks that every commit in the scan range resolves locally before it starts. TruffleHog aborts with an unhelpful operational error on a missing commit, so this turns that into a message naming the commit and pointing at `fetch-depth`.
+- The workflow checks that every commit in the scan range resolves locally before it starts. TruffleHog aborts with an unhelpful operational error on a missing commit, so this turns that into a message naming the commit.
+- The checkout is shallow, then deepened by only the commits the event introduced. `fetch-depth: 0` would clone the whole repository — around 1 GB for `Auth` or `Web-Expensify`, 3 GB for `App` — for a scan that reads a handful of commits. A pull request, a tag push, and a push naming no reachable starting commit still need every branch, so those fall back to a full fetch.
 - TruffleHog needs an access key ID adjacent to a plausible secret to detect an AWS credential, so it misses keys split across separate `key = value` lines. Treat a clean scan as a weak signal, not proof.
 
 - A finding does not fail the check, by design. A credential that has been pushed is already compromised, so blocking a merge does not undo the leak. The value is detection latency, and rotation is the response.
