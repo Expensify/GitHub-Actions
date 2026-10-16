@@ -117,6 +117,28 @@ Eight behaviours worth knowing before you change anything:
 
 This repository scans itself via `secretScanSelf.yml`, which uses a local ref so that a pull request changing `secretScan.yml` is checked by the version it proposes.
 
+### `psalmBaselineCheck.yml`
+
+Posts an inline review comment when a pull request adds new lines to `psalm-baseline.xml`, reminding the author to fix the Psalm issue or use an inline `@psalm-suppress` annotation with a reason instead of growing the baseline.
+
+```yml
+name: Check Psalm Baseline
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+    paths:
+      - 'psalm-baseline.xml'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  checkPsalmBaseline:
+    uses: Expensify/GitHub-Actions/.github/workflows/psalmBaselineCheck.yml@main
+```
+
 ### `setup-composer-cache`
 
 Restores Composer download caches and optionally runs `composer install`. See [setup-composer-cache/README.md](./setup-composer-cache/README.md) for details.

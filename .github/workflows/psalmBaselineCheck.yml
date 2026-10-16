@@ -1,0 +1,110 @@
+name: Check Psalm Baseline
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  check:
+    name: Check psalm-baseline.xml for additions
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    steps:
+      - name: Check for added lines in psalm-baseline.xml
+        # v9.0.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            if (!pr) {
+              core.info('Not a pull request event. Skipping.');
+              return;
+            }
+
+            const {owner, repo} = context.repo;
+            const pull_number = pr.number;
+            const commit_id = pr.head.sha;
+            const marker = '<!-- psalm-baseline-check -->';
+
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner,
+              repo,
+              pull_number,
+            });
+
+            const baselineFiles = files.filter(
+              (file) =>
+                (file.filename === 'psalm-baseline.xml' || file.filename.endsWith('/psalm-baseline.xml')) &&
+                file.status !== 'removed' &&
+                file.patch,
+            );
+
+            if (baselineFiles.length === 0) {
+              core.info('No changes with patch found in psalm-baseline.xml.');
+              return;
+            }
+
+            const existingComments = await github.paginate(github.rest.pulls.listReviewComments, {
+              owner,
+              repo,
+              pull_number,
+            });
+
+            for (const file of baselineFiles) {
+              if (existingComments.some((comment) => comment.path === file.filename && comment.body?.includes(marker))) {
+                core.info(`Review comment already exists for ${file.filename}. Skipping.`);
+                continue;
+              }
+
+              let currentLine = 0;
+              let firstAddedLine = null;
+
+              for (const rawLine of file.patch.split('\n')) {
+                const hunkMatch = rawLine.match(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
+                if (hunkMatch) {
+                  currentLine = parseInt(hunkMatch[1], 10);
+                  continue;
+                }
+
+                if (rawLine.startsWith('+') && !rawLine.startsWith('+++')) {
+                  if (firstAddedLine === null) {
+                    firstAddedLine = currentLine;
+                    break;
+                  }
+                  currentLine++;
+                } else if (rawLine.startsWith('-') && !rawLine.startsWith('---')) {
+                  // Removed lines do not advance the right-side line number.
+                } else if (!rawLine.startsWith('\\')) {
+                  currentLine++;
+                }
+              }
+
+              if (firstAddedLine === null) {
+                core.info(`No added lines in ${file.filename}.`);
+                continue;
+              }
+
+              const body = [
+                marker,
+                'Please do not add new entries to `psalm-baseline.xml`. The baseline is only for existing issues that we plan to fix and eventually remove.',
+                '',
+                'Instead, please:',
+                '1. Fix the underlying Psalm issue properly, or',
+                '2. Use an inline suppression (`/** @psalm-suppress IssueName - reason */`) with a clear reason if the issue cannot be fixed right now.',
+              ].join('\n');
+
+              await github.rest.pulls.createReviewComment({
+                owner,
+                repo,
+                pull_number,
+                commit_id,
+                path: file.filename,
+                line: firstAddedLine,
+                side: 'RIGHT',
+                body,
+              });
+
+              core.warning(`Added lines detected in ${file.filename} at line ${firstAddedLine}.`);
+            }
