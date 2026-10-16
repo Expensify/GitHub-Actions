@@ -92,7 +92,7 @@ jobs:
                 '',
                 'Instead, please:',
                 '1. Fix the underlying Psalm issue properly, or',
-                '2. Use an inline suppression (`/** @psalm-suppress IssueName - reason */`) with a clear reason if the issue cannot be fixed right now.',
+                '2. Use an inline suppression (`/** @psalm-suppress IssueName - reason */`) with a clear reason.',
               ].join('\n');
 
               await github.rest.pulls.createReviewComment({
