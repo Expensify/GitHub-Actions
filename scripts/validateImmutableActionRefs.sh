@@ -67,7 +67,7 @@ echo
 #    - uses: .github/workflows/myCallableWorkflow.yml
 #    - uses: .github/actions/composite/myCompositeAction.yml
 #    - uses: Expensify/GitHub-Actions/setupGitForOSBotify@main
-ACTION_USAGES="$(echo "$ACTION_USAGES" | grep -vE '^(\./|\.github/|Expensify/)')"
+ACTION_USAGES="$(echo "$ACTION_USAGES" | grep -vE "^((./)?.github|Expensify/)")"
 
 # Next, we'll check all the untrusted actions we found to make sure they're immutable
 info "Untrusted action usages..."

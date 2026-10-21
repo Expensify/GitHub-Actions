@@ -1,39 +1,45 @@
+import {afterEach, beforeEach, describe, it} from 'bun:test';
 import assert from 'node:assert/strict';
-import {X509Certificate} from 'node:crypto';
+import {createHash, X509Certificate} from 'node:crypto';
 import {chmodSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
-import {afterEach, beforeEach, describe, it} from 'node:test';
+import {fileURLToPath} from 'node:url';
 
-import {blockedFingerprints, parseFingerprints, parseJavaRuntime, resolveBlocklist, updateBlocklist} from '../scripts/libs/JavaCertificateBlocklist';
+import {blockedFingerprints, certificateFingerprints, parseJavaRuntime, resolveBlocklist, updateBlocklist} from '../../scripts/libs/JavaCertificateBlocklist';
 
-const MANIFEST = readFileSync(new URL('../block-compromised-java-certificates/compromised-java-certificates.txt', import.meta.url), 'utf8');
-const FINGERPRINTS = parseFingerprints(MANIFEST);
+const CERTIFICATES = await Bun.file(new URL('../../block-compromised-java-certificates/compromised-java-certificates.pem', import.meta.url)).text();
+const FINGERPRINTS = certificateFingerprints(CERTIFICATES);
+const PEMS = CERTIFICATES.match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g) ?? [];
+const [FIRST_CERTIFICATE] = PEMS;
 const [FIRST_FINGERPRINT, SECOND_FINGERPRINT, THIRD_FINGERPRINT, FOURTH_FINGERPRINT] = FINGERPRINTS;
 const VENDOR_CONTENT = Buffer.from(`Algorithm=SHA-256\n# Vendor entry; keep comments and ordering\n${'F'.repeat(64)}\n`);
 
-describe('Java certificate blocklist manifest', () => {
-    it('contains all 16 distinct certificate fingerprints, not SPKI hashes', () => {
+describe('Java certificate bundle', () => {
+    it('derives all 16 distinct certificate fingerprints, not SPKI hashes', () => {
         assert.equal(FINGERPRINTS.length, 16);
         assert.equal(new Set(FINGERPRINTS).size, 16);
-        assert.deepEqual(parseFingerprints(` # A comment\r\n${FINGERPRINTS.join('\r\n')}\r\n`), FINGERPRINTS);
-        const bundle = readFileSync(new URL('./fixtures/java-blocklist/impacted-certificates.pem', import.meta.url), 'ascii');
-        const certificates = bundle.match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g) ?? [];
-        const actual = certificates.map((pem) => new X509Certificate(pem).fingerprint256.replaceAll(':', ''));
-        assert.equal(certificates.length, 16);
+        const actual = PEMS.map((pem) => createHash('sha256').update(new X509Certificate(pem).raw).digest('hex').toUpperCase());
+        assert.equal(PEMS.length, 16);
         assert.deepEqual(actual.sort(), [...FINGERPRINTS].sort());
     });
 
-    it('rejects missing, duplicate, lowercase, or malformed fingerprints', () => {
-        for (const entries of [
-            FINGERPRINTS.slice(1),
-            [...FINGERPRINTS, FIRST_FINGERPRINT],
-            [...FINGERPRINTS.slice(1), SECOND_FINGERPRINT],
-            FINGERPRINTS.map((value) => value.toLowerCase()),
-            ['bad'],
-        ]) {
-            assert.throws(() => parseFingerprints(entries.join('\n')), /16 distinct uppercase SHA-256/);
+    it('rejects missing, duplicate, malformed, or unexpected certificate data', () => {
+        for (const bundle of [PEMS.slice(1).join('\n'), [...PEMS, FIRST_CERTIFICATE].join('\n'), PEMS.map(() => FIRST_CERTIFICATE).join('\n'), `${CERTIFICATES}unexpected`, 'bad']) {
+            assert.throws(() => certificateFingerprints(bundle), /16 distinct PEM certificates/);
         }
+        const malformed = '-----BEGIN CERTIFICATE-----\nYmFk\n-----END CERTIFICATE-----';
+        assert.throws(() => certificateFingerprints([malformed, ...PEMS.slice(1)].join('\n')));
+    });
+
+    it('does not execute the CLI when imported', () => {
+        const script = fileURLToPath(new URL('../../scripts/blockCompromisedJavaCertificates.ts', import.meta.url));
+        const result = Bun.spawnSync([process.execPath, '--no-env-file', '-e', `await import(${JSON.stringify(script)})`], {
+            env: {...process.env, JAVA_HOME: '', BLOCKLIST_JAVA_HOME: ''},
+        });
+        assert.equal(result.exitCode, 0, result.stderr.toString());
+        assert.equal(result.stdout.toString(), '');
+        assert.equal(result.stderr.toString(), '');
     });
 });
 
@@ -110,9 +116,9 @@ describe('JVM certificate blocklist update', () => {
         rmSync(directory, {recursive: true, force: true});
     });
 
-    it('appends all missing fingerprints while preserving vendor content and metadata', () => {
+    it('appends all missing fingerprints while preserving vendor content and metadata', async () => {
         const before = statSync(target);
-        assert.equal(updateBlocklist(target, FINGERPRINTS), 16);
+        assert.equal(await updateBlocklist(target, FINGERPRINTS), 16);
         const content = readFileSync(target);
         assert.ok(content.subarray(0, VENDOR_CONTENT.length).equals(VENDOR_CONTENT));
         for (const fingerprint of FINGERPRINTS) {
@@ -124,18 +130,26 @@ describe('JVM certificate blocklist update', () => {
         }
     });
 
-    it('is byte-for-byte idempotent and does not change mtime on a repeat run', () => {
-        updateBlocklist(target, FINGERPRINTS);
+    it('is byte-for-byte idempotent and does not change mtime on a repeat run', async () => {
+        await updateBlocklist(target, FINGERPRINTS);
         const content = readFileSync(target);
         const modified = statSync(target).mtimeMs;
-        assert.equal(updateBlocklist(target, FINGERPRINTS), 0);
+        assert.equal(await updateBlocklist(target, FINGERPRINTS), 0);
         assert.deepEqual(readFileSync(target), content);
         assert.equal(statSync(target).mtimeMs, modified);
     });
 
-    it('adds only genuinely missing keys, not duplicate bare or key-value entries', () => {
+    it('safely appends to paths containing spaces and shell characters', async () => {
+        const unusualTarget = path.join(directory, "vendor ' $(echo unsafe).certs");
+        await Bun.write(unusualTarget, VENDOR_CONTENT);
+        assert.equal(await updateBlocklist(unusualTarget, FINGERPRINTS), 16);
+        const blocked = blockedFingerprints(Buffer.from(await Bun.file(unusualTarget).bytes()));
+        assert.ok(FINGERPRINTS.every((fingerprint) => blocked.has(fingerprint)));
+    });
+
+    it('adds only genuinely missing keys, not duplicate bare or key-value entries', async () => {
         writeFileSync(target, Buffer.concat([VENDOR_CONTENT, Buffer.from(`${FIRST_FINGERPRINT}=\n#${SECOND_FINGERPRINT}\n${THIRD_FINGERPRINT.toLowerCase()}\n`)]));
-        assert.equal(updateBlocklist(target, FINGERPRINTS), 15);
+        assert.equal(await updateBlocklist(target, FINGERPRINTS), 15);
         assert.equal(
             readFileSync(target, 'utf8')
                 .split('\n')
@@ -144,55 +158,50 @@ describe('JVM certificate blocklist update', () => {
         );
     });
 
-    it('verifies an already-patched read-only file without needing write permission', () => {
-        updateBlocklist(target, FINGERPRINTS);
+    it('verifies an already-patched read-only file without needing write permission', async () => {
+        await updateBlocklist(target, FINGERPRINTS);
         chmodSync(target, 0o400);
         const content = readFileSync(target);
         const before = statSync(target);
-        assert.equal(updateBlocklist(target, FINGERPRINTS), 0);
+        assert.equal(await updateBlocklist(target, FINGERPRINTS), 0);
         assert.deepEqual(readFileSync(target), content);
         assert.equal(statSync(target).mode, before.mode);
         assert.equal(statSync(target).mtimeMs, before.mtimeMs);
     });
 
-    it('handles CRLF and missing final newlines without altering original bytes', () => {
-        for (const ending of ['', '\r', '\r\n']) {
-            const original = Buffer.from(`Algorithm=SHA-256\r\n# Vendor comment${ending}`);
-            writeFileSync(target, original);
-            assert.equal(updateBlocklist(target, FINGERPRINTS), 16);
-            assert.ok(readFileSync(target).subarray(0, original.length).equals(original));
-        }
+    it.each(['', '\r', '\r\n'])('preserves original bytes with line ending %j', async (ending) => {
+        const original = Buffer.from(`Algorithm=SHA-256\r\n# Vendor comment${ending}`);
+        writeFileSync(target, original);
+        assert.equal(await updateBlocklist(target, FINGERPRINTS), 16);
+        assert.ok(readFileSync(target).subarray(0, original.length).equals(original));
     });
 
-    it('discovers both blocklist filenames and preserves symlinks and paths with shell characters', () => {
-        for (const name of ['blocked.certs', 'blacklisted.certs']) {
-            const home = path.join(directory, `JDK with spaces and $(echo no) '${name}'`, 'jre');
-            const security = path.join(home, 'lib', 'security');
-            mkdirSync(security, {recursive: true});
-            const link = path.join(security, name);
-            symlinkSync(target, link);
-            assert.equal(resolveBlocklist(home), realpathSync(target));
-            updateBlocklist(resolveBlocklist(home), FINGERPRINTS);
-            assert.ok(lstatSync(link).isSymbolicLink());
-        }
+    it.each(['blocked.certs', 'blacklisted.certs'])('discovers %s and preserves symlinks and paths with shell characters', async (name) => {
+        const home = path.join(directory, `JDK with spaces and $(echo no) '${name}'`, 'jre');
+        const security = path.join(home, 'lib', 'security');
+        mkdirSync(security, {recursive: true});
+        const link = path.join(security, name);
+        symlinkSync(target, link);
+        assert.equal(await resolveBlocklist(home), realpathSync(target));
+        await updateBlocklist(await resolveBlocklist(home), FINGERPRINTS);
+        assert.ok(lstatSync(link).isSymbolicLink());
     });
 
-    it('fails on missing, ambiguous, or non-file blocklists without creating one', () => {
-        assert.throws(() => resolveBlocklist(directory), /exactly one/);
+    it('fails on missing, ambiguous, or non-file blocklists without creating one', async () => {
+        await assert.rejects(resolveBlocklist(directory), /exactly one/);
         const security = path.join(directory, 'lib', 'security');
         mkdirSync(path.join(security, 'blocked.certs'), {recursive: true});
-        assert.throws(() => resolveBlocklist(directory), /regular file/);
+        await assert.rejects(resolveBlocklist(directory), /exactly one/);
+        rmSync(path.join(security, 'blocked.certs'), {recursive: true});
+        writeFileSync(path.join(security, 'blocked.certs'), VENDOR_CONTENT);
         writeFileSync(path.join(security, 'blacklisted.certs'), VENDOR_CONTENT);
-        assert.throws(() => resolveBlocklist(directory), /exactly one/);
-        assert.throws(() => updateBlocklist(path.join(directory, 'missing.certs'), FINGERPRINTS), /ENOENT/);
+        await assert.rejects(resolveBlocklist(directory), /exactly one/);
+        await assert.rejects(updateBlocklist(path.join(directory, 'missing.certs'), FINGERPRINTS), /ENOENT/);
     });
 
-    it('does not modify a malformed vendor blocklist', () => {
-        const blocklist = target;
-        for (const content of ['Algorithm=SHA-512\n', 'Algorithm=SHA-256\nAlgorithm SHA-512\n', 'Algorithm=SHA-256\nother=continued\\\n']) {
-            writeFileSync(blocklist, content);
-            assert.throws(() => updateBlocklist(blocklist, FINGERPRINTS));
-            assert.equal(readFileSync(blocklist, 'utf8'), content);
-        }
+    it.each(['Algorithm=SHA-512\n', 'Algorithm=SHA-256\nAlgorithm SHA-512\n', 'Algorithm=SHA-256\nother=continued\\\n'])('does not modify malformed blocklist %j', async (content) => {
+        writeFileSync(target, content);
+        await assert.rejects(updateBlocklist(target, FINGERPRINTS));
+        assert.equal(readFileSync(target, 'utf8'), content);
     });
 });

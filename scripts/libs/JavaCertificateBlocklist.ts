@@ -1,5 +1,9 @@
-import {appendFileSync, closeSync, constants, existsSync, fstatSync, fsyncSync, openSync, readFileSync, realpathSync, statSync} from 'node:fs';
+import {X509Certificate} from 'node:crypto';
+import {constants} from 'node:fs';
+import {access, realpath, stat} from 'node:fs/promises';
 import path from 'node:path';
+
+import {$} from 'bun';
 
 type JavaRuntime = {
     home: string;
@@ -7,14 +11,16 @@ type JavaRuntime = {
     version: string;
 };
 
-/** Validate the checked-in incident snapshot rather than downloading policy during a build. */
-function parseFingerprints(manifest: string): string[] {
-    const fingerprints = manifest
-        .split(/\r?\n/)
-        .map((line) => line.trim())
-        .filter((line) => line && !line.startsWith('#'));
-    if (fingerprints.length !== 16 || new Set(fingerprints).size !== 16 || fingerprints.some((fingerprint) => !/^[0-9A-F]{64}$/.test(fingerprint))) {
-        throw new Error('Expected 16 distinct uppercase SHA-256 certificate fingerprints.');
+/** Derive certificate fingerprints from the single checked-in incident snapshot. */
+function certificateFingerprints(bundle: string): string[] {
+    const certificatePattern = /-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g;
+    const certificates = bundle.match(certificatePattern) ?? [];
+    if (certificates.length !== 16 || bundle.replaceAll(certificatePattern, '').trim()) {
+        throw new Error('Expected 16 distinct PEM certificates.');
+    }
+    const fingerprints = certificates.map((pem) => new X509Certificate(pem).fingerprint256.replaceAll(':', ''));
+    if (new Set(fingerprints).size !== 16) {
+        throw new Error('Expected 16 distinct PEM certificates.');
     }
     return fingerprints;
 }
@@ -41,15 +47,17 @@ function parseJavaRuntime(properties: string): JavaRuntime {
     return {home, vendor: property('java.vendor'), version: property('java.runtime.version')};
 }
 
-function resolveBlocklist(runtimeHome: string): string {
+async function resolveBlocklist(runtimeHome: string): Promise<string> {
     // Discover both names: vendors and older updates can use different layouts for the same Java major.
-    const candidates = ['blocked.certs', 'blacklisted.certs'].map((name) => path.join(runtimeHome, 'lib', 'security', name)).filter((candidate) => existsSync(candidate));
+    const paths = ['blocked.certs', 'blacklisted.certs'].map((name) => path.join(runtimeHome, 'lib', 'security', name));
+    const existing = await Promise.all(paths.map(async (candidate) => ((await Bun.file(candidate).exists()) ? candidate : undefined)));
+    const candidates = existing.filter((candidate) => candidate !== undefined);
     if (candidates.length !== 1) {
         throw new Error(`Expected exactly one existing JVM certificate blocklist under ${runtimeHome}/lib/security; found ${candidates.length}.`);
     }
     const [candidate] = candidates;
-    const target = realpathSync(candidate);
-    if (!statSync(target).isFile()) {
+    const target = await realpath(candidate);
+    if (!(await stat(target)).isFile()) {
         throw new Error(`JVM certificate blocklist is not a regular file: ${target}`);
     }
     return target;
@@ -86,12 +94,12 @@ function blockedFingerprints(content: Buffer): Set<string> {
     return fingerprints;
 }
 
-function updateBlocklist(target: string, fingerprints: string[]): number {
-    const before = statSync(target);
+async function updateBlocklist(target: string, fingerprints: string[]): Promise<number> {
+    const before = await stat(target);
     if (!before.isFile()) {
         throw new Error(`JVM certificate blocklist is not a regular file: ${target}`);
     }
-    const original = readFileSync(target);
+    const original = Buffer.from(await Bun.file(target).bytes());
     const existing = blockedFingerprints(original);
     const missing = fingerprints.filter((fingerprint) => !existing.has(fingerprint));
     // Already-patched, read-only vendor files need no write permission or sudo.
@@ -99,31 +107,23 @@ function updateBlocklist(target: string, fingerprints: string[]): number {
         return 0;
     }
 
-    // Append to the physical file instead of replacing it, preserving symlinks and vendor metadata.
-    // eslint-disable-next-line no-bitwise -- filesystem open flags are a bitmask
-    const descriptor = openSync(target, constants.O_RDWR | constants.O_APPEND | (constants.O_NOFOLLOW ?? 0));
-    try {
-        const opened = fstatSync(descriptor);
-        if (opened.ino !== before.ino || opened.dev !== before.dev) {
-            throw new Error('JVM certificate blocklist changed before the update.');
-        }
-        const separator = original.at(-1) === 10 || original.at(-1) === 13 ? '' : '\n';
-        appendFileSync(descriptor, `${separator}${missing.join('\n')}\n`, 'ascii');
-        fsyncSync(descriptor);
+    // Check permission separately so the caller can elevate only the file update when necessary.
+    await access(target, constants.W_OK);
+    const separator = original.at(-1) === 10 || original.at(-1) === 13 ? '' : '\n';
+    const additions = `${separator}${missing.join('\n')}\n`;
+    // Append instead of replacing the file, preserving existing contents and metadata.
+    await $`echo -n ${additions} >> ${target}`.quiet();
 
-        const updated = readFileSync(target);
-        const after = statSync(target);
-        const blocked = blockedFingerprints(updated);
-        if (!updated.subarray(0, original.length).equals(original) || fingerprints.some((fingerprint) => !blocked.has(fingerprint))) {
-            throw new Error('JVM certificate blocklist verification failed.');
-        }
-        if (before.mode !== after.mode || before.uid !== after.uid || before.gid !== after.gid || before.ino !== after.ino || before.dev !== after.dev) {
-            throw new Error('JVM certificate blocklist metadata changed.');
-        }
-        return missing.length;
-    } finally {
-        closeSync(descriptor);
+    const updated = Buffer.from(await Bun.file(target).bytes());
+    const after = await stat(target);
+    const blocked = blockedFingerprints(updated);
+    if (!updated.subarray(0, original.length).equals(original) || fingerprints.some((fingerprint) => !blocked.has(fingerprint))) {
+        throw new Error('JVM certificate blocklist verification failed.');
     }
+    if (before.mode !== after.mode || before.uid !== after.uid || before.gid !== after.gid || before.ino !== after.ino || before.dev !== after.dev) {
+        throw new Error('JVM certificate blocklist metadata changed.');
+    }
+    return missing.length;
 }
 
-export {blockedFingerprints, parseFingerprints, parseJavaRuntime, resolveBlocklist, updateBlocklist};
+export {blockedFingerprints, certificateFingerprints, parseJavaRuntime, resolveBlocklist, updateBlocklist};

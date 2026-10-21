@@ -8,15 +8,36 @@ on:
       - 'scripts/blockCompromisedJavaCertificates.ts'
       - 'scripts/libs/JavaCertificateBlocklist.ts'
       - 'tests/fixtures/java-blocklist/**'
+      - 'tests/java-blocklist/**'
       - '.github/workflows/javaCertificateBlocklist.yml'
 
 permissions:
   contents: read
 
 jobs:
+  unit:
+    name: Bun unit tests
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    steps:
+      - name: Checkout
+        # v6.0.3
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+
+      - name: Set up Bun
+        # v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: '1.4.3'
+
+      - name: Run Bun unit tests
+        run: bun test tests/java-blocklist
+
   verify:
     name: ${{ matrix.distribution }} ${{ matrix.java }} / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: .github/actions/under-test
     strategy:
       fail-fast: false
       matrix:
@@ -32,11 +53,12 @@ jobs:
           - {os: blacksmith-2vcpu-ubuntu-2404, distribution: oracle, java: '25'}
           - {os: blacksmith-2vcpu-ubuntu-2404, distribution: semeru, java: '17'}
           - {os: macos-15, distribution: temurin, java: '21'}
-          - {os: windows-latest, distribution: temurin, java: '21'}
     steps:
       - name: Checkout
         # v6.0.3
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          path: .github/actions/under-test
 
       - name: Set up Java
         # v5.2.0
@@ -46,7 +68,7 @@ jobs:
           java-version: ${{ matrix.java }}
 
       - name: Patch the selected JVM
-        uses: ./block-compromised-java-certificates
+        uses: ./.github/actions/under-test/block-compromised-java-certificates
 
       - name: Verify the actual JVM rejects every compromised certificate
         shell: bash
@@ -60,8 +82,7 @@ jobs:
             exports+=(--add-exports=java.base/sun.security.util=ALL-UNNAMED)
           fi
           java "${exports[@]}" -cp "$RUNNER_TEMP/java-blocklist-test" VerifyBlockedCertificates \
-            block-compromised-java-certificates/compromised-java-certificates.txt \
-            tests/fixtures/java-blocklist/impacted-certificates.pem
+            block-compromised-java-certificates/compromised-java-certificates.pem
 
       - name: Verify repeat-run idempotence
         shell: bash

@@ -1,22 +1,25 @@
-import {readFileSync} from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 import {$} from 'bun';
 
 // Bun runs the source directly; consumers do not install this repository's npm dependencies.
-import {parseFingerprints, parseJavaRuntime, resolveBlocklist, updateBlocklist} from './libs/JavaCertificateBlocklist';
+import {certificateFingerprints, parseJavaRuntime, resolveBlocklist, updateBlocklist} from './libs/JavaCertificateBlocklist';
 
 const SCRIPT = fileURLToPath(import.meta.url);
-const MANIFEST = new URL('../block-compromised-java-certificates/compromised-java-certificates.txt', import.meta.url);
+// Source: https://emudhra.we-have-a-problem.com/impacted-intermediates.json
+const CERTIFICATES = new URL('../block-compromised-java-certificates/compromised-java-certificates.pem', import.meta.url);
 
 async function main() {
-    const fingerprints = parseFingerprints(readFileSync(MANIFEST, 'utf8'));
+    if (!['linux', 'darwin'].includes(process.platform)) {
+        throw new Error('This action supports Linux and macOS.');
+    }
+    const fingerprints = certificateFingerprints(await Bun.file(CERTIFICATES).text());
 
     // Only the file update can be elevated, never Java execution or runtime discovery.
     const [, , mode, updateTarget] = process.argv;
     if (mode === '--update-blocklist' && process.argv.length === 4 && path.isAbsolute(updateTarget)) {
-        const added = updateBlocklist(updateTarget, fingerprints);
+        const added = await updateBlocklist(updateTarget, fingerprints);
         console.log(`Verified all ${fingerprints.length} compromised certificates in ${updateTarget}; added ${added} fingerprints.`);
         return;
     }
@@ -30,7 +33,7 @@ async function main() {
     if (!javaHome || !path.isAbsolute(javaHome)) {
         throw new Error('Set JAVA_HOME with actions/setup-java, or provide an absolute java-home input.');
     }
-    const java = path.join(javaHome, 'bin', process.platform === 'win32' ? 'java.exe' : 'java');
+    const java = path.join(javaHome, 'bin', 'java');
     const inspection = await $`${java} -XshowSettings:properties -version`.quiet().nothrow();
     if (inspection.exitCode !== 0) {
         // JVM diagnostics may echo secret-bearing JAVA_TOOL_OPTIONS. Do not print captured output on failure.
@@ -38,13 +41,13 @@ async function main() {
     }
     const runtime = parseJavaRuntime(`${inspection.stdout.toString()}\n${inspection.stderr.toString()}`);
     console.log(`Selected JVM: ${runtime.vendor} ${runtime.version}; java.home=${runtime.home}`);
-    const target = resolveBlocklist(runtime.home);
+    const target = await resolveBlocklist(runtime.home);
 
     let added: number;
     try {
-        added = updateBlocklist(target, fingerprints);
+        added = await updateBlocklist(target, fingerprints);
     } catch (error) {
-        if (!(error instanceof Error) || !('code' in error) || !['EACCES', 'EPERM'].includes(String(error.code)) || process.platform === 'win32') {
+        if (!(error instanceof Error) || !('code' in error) || !['EACCES', 'EPERM'].includes(String(error.code))) {
             throw error;
         }
         // Use absolute paths because sudo need not retain the caller's PATH or JAVA_HOME.
@@ -58,7 +61,9 @@ async function main() {
     console.log(`Verified all ${fingerprints.length} compromised certificates in ${target}; added ${added} fingerprints.`);
 }
 
-main().catch((error: unknown) => {
-    console.error(error instanceof Error ? error.message : 'Unable to protect the selected JVM.');
-    process.exitCode = 1;
-});
+if (import.meta.main) {
+    main().catch((error: unknown) => {
+        console.error(error instanceof Error ? error.message : 'Unable to protect the selected JVM.');
+        process.exitCode = 1;
+    });
+}
