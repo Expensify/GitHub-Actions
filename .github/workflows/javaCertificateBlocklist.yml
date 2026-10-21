@@ -1,0 +1,71 @@
+name: Java certificate blocklist
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+    paths:
+      - 'block-compromised-java-certificates/**'
+      - 'scripts/blockCompromisedJavaCertificates.ts'
+      - 'scripts/libs/JavaCertificateBlocklist.ts'
+      - 'tests/fixtures/java-blocklist/**'
+      - '.github/workflows/javaCertificateBlocklist.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: ${{ matrix.distribution }} ${{ matrix.java }} / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {os: blacksmith-2vcpu-ubuntu-2404, distribution: temurin, java: '8'}
+          - {os: blacksmith-2vcpu-ubuntu-2404, distribution: temurin, java: '11'}
+          - {os: blacksmith-2vcpu-ubuntu-2404, distribution: temurin, java: '17'}
+          - {os: blacksmith-2vcpu-ubuntu-2404, distribution: temurin, java: '21'}
+          - {os: blacksmith-2vcpu-ubuntu-2404, distribution: temurin, java: '25'}
+          - {os: blacksmith-2vcpu-ubuntu-2404, distribution: zulu, java: '8'}
+          - {os: blacksmith-2vcpu-ubuntu-2404, distribution: corretto, java: '17'}
+          - {os: blacksmith-2vcpu-ubuntu-2404, distribution: microsoft, java: '21'}
+          - {os: blacksmith-2vcpu-ubuntu-2404, distribution: oracle, java: '25'}
+          - {os: blacksmith-2vcpu-ubuntu-2404, distribution: semeru, java: '17'}
+          - {os: macos-15, distribution: temurin, java: '21'}
+          - {os: windows-latest, distribution: temurin, java: '21'}
+    steps:
+      - name: Checkout
+        # v6.0.3
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+
+      - name: Set up Java
+        # v5.2.0
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654
+        with:
+          distribution: ${{ matrix.distribution }}
+          java-version: ${{ matrix.java }}
+
+      - name: Patch the selected JVM
+        uses: ./block-compromised-java-certificates
+
+      - name: Verify the actual JVM rejects every compromised certificate
+        shell: bash
+        env:
+          JAVA_MAJOR: ${{ matrix.java }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/java-blocklist-test"
+          javac -d "$RUNNER_TEMP/java-blocklist-test" tests/fixtures/java-blocklist/VerifyBlockedCertificates.java
+          exports=()
+          if [[ "$JAVA_MAJOR" != '8' ]]; then
+            exports+=(--add-exports=java.base/sun.security.util=ALL-UNNAMED)
+          fi
+          java "${exports[@]}" -cp "$RUNNER_TEMP/java-blocklist-test" VerifyBlockedCertificates \
+            block-compromised-java-certificates/compromised-java-certificates.txt \
+            tests/fixtures/java-blocklist/impacted-certificates.pem
+
+      - name: Verify repeat-run idempotence
+        shell: bash
+        run: |
+          result=$(bun --no-env-file scripts/blockCompromisedJavaCertificates.ts)
+          echo "$result"
+          grep -F 'added 0 fingerprints.' <<< "$result"
