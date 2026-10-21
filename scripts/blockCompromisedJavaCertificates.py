@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Discover and protect local Java runtimes. Requires Python 3.9+, with no external packages."""
+"""
+Discover and protect local Java runtimes. Requires Python 3.9+, with no external packages.
+"""
 
 from __future__ import annotations
 
@@ -25,7 +27,9 @@ BLOCKLIST_NAMES = ('blocked.certs', 'blacklisted.certs')
 
 @dataclass(frozen=True)
 class SearchRoot:
-    """Describe a discovery root, its traversal limit, and whether a missing directory is an error."""
+    """
+    Describe a discovery root, its traversal limit, and whether a missing directory is an error.
+    """
 
     path: Path
     depth: int = 6
@@ -35,7 +39,9 @@ class SearchRoot:
 
 @dataclass
 class Discovery:
-    """Collect candidate runtime homes and the coverage, skips, and errors from discovery."""
+    """
+    Collect candidate runtime homes and the coverage, skips, and errors from discovery.
+    """
 
     homes: set[Path] = field(default_factory=set)
     searched: list[str] = field(default_factory=list)
@@ -44,11 +50,13 @@ class Discovery:
 
 
 def certificateFingerprints(bundle: str) -> list[str]:
-    """Derive uppercase SHA-256 certificate fingerprints from the reviewed PEM bundle.
+    """
+    Derive uppercase SHA-256 certificate fingerprints from the reviewed PEM bundle.
 
     Require exactly 16 distinct certificates and reject malformed or unexpected bundle data.
     Hash each certificate's DER bytes, not its public key.
     """
+
     pattern = r'-----BEGIN CERTIFICATE-----\s*([A-Za-z0-9+/=\s]+?)\s*-----END CERTIFICATE-----'
     certificates = re.findall(pattern, bundle)
     if len(certificates) != 16 or re.sub(pattern, '', bundle).strip():
@@ -66,11 +74,13 @@ def certificateFingerprints(bundle: str) -> list[str]:
 
 
 def blockedFingerprints(content: bytes) -> set[str]:
-    """Return active fingerprint keys from a SHA-256 Java Properties blocklist.
+    """
+    Return active fingerprint keys from a SHA-256 Java Properties blocklist.
 
     Reject duplicate algorithm declarations, escapes, and continuations rather than risk
     interpreting a property differently from the JVM. Ignore commented and non-fingerprint keys.
     """
+
     algorithms = []
     fingerprints = set()
     # Java Properties.load(InputStream) uses Latin-1 and CR/LF, not Unicode line boundaries.
@@ -94,12 +104,14 @@ def blockedFingerprints(content: bytes) -> set[str]:
 
 
 def updateBlocklist(target: Path, fingerprints: list[str], apply: bool = False) -> dict:
-    """Inspect or patch an existing, resolved blocklist and return its status and entry counts.
+    """
+    Inspect or patch an existing, resolved blocklist and return its status and entry counts.
 
     Dry-run only reports missing fingerprints. Apply mode locks and re-reads the file before
     appending missing entries, then verifies coverage and preservation of contents and metadata.
     Propagate permission errors so the caller can elevate only this operation when needed.
     """
+
     before = target.stat()
     if not stat.S_ISREG(before.st_mode):
         raise ValueError(f'JVM certificate blocklist is not a regular file: {target}')
@@ -136,11 +148,13 @@ def updateBlocklist(target: Path, fingerprints: list[str], apply: bool = False) 
 
 
 def inspectRuntime(home: Path) -> dict:
-    """Inspect a selected Java executable and return its actual home, vendor, and version.
+    """
+    Inspect a selected Java executable and return its actual home, vendor, and version.
 
     Require Java 8+ and an absolute runtime home. Capture JVM diagnostics without exposing
     potentially secret-bearing JAVA_TOOL_OPTIONS in reports or inspection errors.
     """
+
     java = home / 'bin/java'
     inspection = subprocess.run(
         args=[str(java), '-XshowSettings:properties', '-version'],
@@ -172,11 +186,13 @@ def inspectRuntime(home: Path) -> dict:
 
 
 def resolveBlocklist(home: Path) -> Path:
-    """Resolve the runtime's single existing blocklist to a physical regular file.
+    """
+    Resolve the runtime's single existing blocklist to a physical regular file.
 
     Accept either vendor filename, but reject missing or ambiguous layouts instead of creating
     a file the JVM might not consult.
     """
+
     candidates = []
     for name in BLOCKLIST_NAMES:
         candidate = home / 'lib/security' / name
@@ -194,10 +210,12 @@ def resolveBlocklist(home: Path) -> Path:
 
 
 def defaultRoots(environment: dict, home: Path, platform: str) -> list[SearchRoot]:
-    """Build platform-specific JDK, IDE, version-manager, Gradle, and CI-cache search roots.
+    """
+    Build platform-specific JDK, IDE, version-manager, Gradle, and CI-cache search roots.
 
     Honor the user's configured installation directories without traversing the whole filesystem.
     """
+
     dataHome = Path(environment.get('XDG_DATA_HOME', str(home / '.local/share')))
     roots = [
         SearchRoot(Path(environment.get('SDKMAN_DIR', str(home / '.sdkman'))) / 'candidates/java'),
@@ -237,15 +255,20 @@ def defaultRoots(environment: dict, home: Path, platform: str) -> list[SearchRoo
 
 
 def scanRoot(root: SearchRoot, discovery: Discovery) -> None:
-    """Add one bounded directory scan's runtime homes and coverage details to discovery.
+    """
+    Add one bounded directory scan's runtime homes and coverage details to discovery.
 
     Follow directory aliases without revisiting inode cycles, recognize embedded app runtimes,
     and record access failures or traversal limits instead of implying complete coverage.
     """
+
     visited = set()
 
     def visit(directory: Path, depth: int) -> None:
-        """Visit a directory once within this root's depth and application-layout constraints."""
+        """
+        Visit a directory once within this root's depth and application-layout constraints.
+        """
+
         try:
             metadata = directory.stat()
             identity = (metadata.st_dev, metadata.st_ino)
@@ -300,11 +323,13 @@ def scanRoot(root: SearchRoot, discovery: Discovery) -> None:
 
 
 def discoverInstallations(environment: dict, home: Path, platform: str, extraRoots: list[Path]) -> Discovery:
-    """Discover candidates from configured homes, PATH, platform registries, and search roots.
+    """
+    Discover candidates from configured homes, PATH, platform registries, and search roots.
 
     Skip PATH stubs and shims without executing them. Treat caller-supplied extra roots as
     required and preserve discovery errors for the final report and exit status.
     """
+
     discovery = Discovery()
     for variable in ('JAVA_HOME', 'JDK_HOME'):
         if environment.get(variable):
@@ -343,11 +368,13 @@ def discoverInstallations(environment: dict, home: Path, platform: str, extraRoo
 
 
 def patchWithElevation(target: Path, fingerprints: list[str], apply: bool, nonInteractive: bool) -> dict:
-    """Inspect or patch a blocklist, retrying permission-denied writes through the sudo worker.
+    """
+    Inspect or patch a blocklist, retrying permission-denied writes through the sudo worker.
 
     Never elevate dry-run or JVM discovery. Suppress password prompts in CI, noninteractive
     mode, or without a terminal; otherwise allow sudo to request authorization for the update.
     """
+
     try:
         return updateBlocklist(target, fingerprints, apply)
     except PermissionError:
@@ -365,11 +392,13 @@ def patchWithElevation(target: Path, fingerprints: list[str], apply: bool, nonIn
 
 
 def run(homes: list[Path], fingerprints: list[str], apply: bool, nonInteractive: bool) -> list[dict]:
-    """Process candidate homes and return per-runtime results, continuing after individual failures.
+    """
+    Process candidate homes and return per-runtime results, continuing after individual failures.
 
     Deduplicate actual runtime homes and physical blocklist inodes so aliases do not repeat
     updates. Retain each failure in the results rather than reporting partial protection as success.
     """
+
     results = []
     runtimes = set()
     blocklists = {}
@@ -404,11 +433,13 @@ def run(homes: list[Path], fingerprints: list[str], apply: bool, nonInteractive:
 
 
 def main(argv=None) -> int:
-    """Run the selected CLI mode and return a nonzero status for any discovery or runtime failure.
+    """
+    Run the selected CLI mode and return a nonzero status for any discovery or runtime failure.
 
     Default to a dry-run of JAVA_HOME unless a home or system discovery is explicitly selected.
     Keep the private elevated worker limited to one absolute blocklist path, without running Java.
     """
+
     arguments = sys.argv[1:] if argv is None else argv
     parser = argparse.ArgumentParser(description=__doc__)
     selection = parser.add_mutually_exclusive_group()
