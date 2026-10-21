@@ -23,7 +23,6 @@
     "expensify-common": "2.0.195"
   },
   "devDependencies": {
-    "@types/bun": "1.4.3",
     "@types/node": "^25.9.4",
     "@typescript/native-preview": "7.0.0-dev.20260702.3",
     "eslint": "^9.39.4",

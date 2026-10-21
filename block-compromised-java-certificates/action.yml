@@ -9,15 +9,18 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Set up Bun
-      # v2
-      uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
-      with:
-        bun-version: '1.4.3'
-
     - name: Block compromised Java certificates
-      shell: bash
-      run: bun --no-env-file "$BLOCKLIST_ACTION_PATH/../scripts/blockCompromisedJavaCertificates.ts"
+      shell: python3 {0}
+      run: |
+        import os
+        import runpy
+        import sys
+
+        script = os.path.join(os.environ["BLOCKLIST_ACTION_PATH"], "..", "scripts", "blockCompromisedJavaCertificates.py")
+        sys.argv = [script, "--apply", "--non-interactive"]
+        if os.environ.get("BLOCKLIST_JAVA_HOME"):
+            sys.argv += ["--java-home", os.environ["BLOCKLIST_JAVA_HOME"]]
+        runpy.run_path(script, run_name="__main__")
       env:
         BLOCKLIST_ACTION_PATH: ${{ github.action_path }}
         BLOCKLIST_JAVA_HOME: ${{ inputs.java-home }}

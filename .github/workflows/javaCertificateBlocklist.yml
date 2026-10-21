@@ -5,8 +5,7 @@ on:
     types: [opened, synchronize]
     paths:
       - 'block-compromised-java-certificates/**'
-      - 'scripts/blockCompromisedJavaCertificates.ts'
-      - 'scripts/libs/JavaCertificateBlocklist.ts'
+      - 'scripts/blockCompromisedJavaCertificates.py'
       - 'tests/fixtures/java-blocklist/**'
       - 'tests/java-blocklist/**'
       - '.github/workflows/javaCertificateBlocklist.yml'
@@ -16,21 +15,24 @@ permissions:
 
 jobs:
   unit:
-    name: Bun unit tests
+    name: Python unit tests (${{ matrix.python }})
     runs-on: blacksmith-2vcpu-ubuntu-2404
+    strategy:
+      matrix:
+        python: ['3.9', '3.14']
     steps:
       - name: Checkout
         # v6.0.3
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
 
-      - name: Set up Bun
-        # v2
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+      - name: Set up Python for compatibility tests
+        # v6.0.0
+        uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c
         with:
-          bun-version: '1.4.3'
+          python-version: ${{ matrix.python }}
 
-      - name: Run Bun unit tests
-        run: bun test tests/java-blocklist
+      - name: Run Python unit tests
+        run: python -m unittest discover -s tests/java-blocklist -v
 
   verify:
     name: ${{ matrix.distribution }} ${{ matrix.java }} / ${{ matrix.os }}
@@ -87,6 +89,6 @@ jobs:
       - name: Verify repeat-run idempotence
         shell: bash
         run: |
-          result=$(bun --no-env-file scripts/blockCompromisedJavaCertificates.ts)
+          result=$(python3 scripts/blockCompromisedJavaCertificates.py --apply --non-interactive)
           echo "$result"
-          grep -F 'added 0 fingerprints.' <<< "$result"
+          grep -F 'already-protected:' <<< "$result"

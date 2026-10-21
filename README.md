@@ -131,7 +131,7 @@ Restores Composer download caches and optionally runs `composer install`. See [s
 
 ### `block-compromised-java-certificates`
 
-Protect the JVM selected by `actions/setup-java` before Java network operations, including on JDK cache hits. This composite action runs TypeScript directly with Bun and derives fingerprints from the 16 checked-in compromised eMudhra certificates. See [usage](./block-compromised-java-certificates/README.md).
+Protect the JVM selected by `actions/setup-java` before Java network operations, including on JDK cache hits. The same dependency-free Python script can discover and patch Java installations on developer laptops. See [usage](./block-compromised-java-certificates/README.md).
 
 ```yaml
 - uses: Expensify/GitHub-Actions/block-compromised-java-certificates@main
