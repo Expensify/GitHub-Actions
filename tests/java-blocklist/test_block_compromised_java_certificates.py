@@ -1,7 +1,6 @@
 """
 Exercise Java discovery and blocklist updates using isolated, synthetic installations.
 """
-
 import base64
 import contextlib
 import errno
@@ -30,12 +29,10 @@ class FixtureTest(unittest.TestCase):
     """
     Provide disposable filesystem fixtures and a non-root CLI harness.
     """
-
     def setUp(self):
         """
         Create a temporary fixture directory that is removed after each test.
         """
-
         self.temporary = tempfile.TemporaryDirectory(prefix='java-blocklist-')
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name).resolve()
@@ -44,7 +41,6 @@ class FixtureTest(unittest.TestCase):
         """
         Create a fake Java launcher and vendor blocklist with the requested runtime layout.
         """
-
         home = self.root / name
         runtime = runtimeHome or (home / 'jre' if specification == '1.8' else home)
         (home / 'bin').mkdir(parents=True)
@@ -68,7 +64,6 @@ class FixtureTest(unittest.TestCase):
         """
         Run the CLI as a simulated normal user and capture its status and output streams.
         """
-
         output, errors = io.StringIO(), io.StringIO()
         with mock.patch.object(target=subject.os, attribute='geteuid', return_value=1000):
             with contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors):
@@ -81,12 +76,10 @@ class CertificateTests(unittest.TestCase):
     """
     Check the committed certificate policy and rejection of invalid bundles.
     """
-
     def testCommittedSnapshot(self):
         """
         Verify the snapshot produces 16 unique uppercase certificate fingerprints.
         """
-
         self.assertEqual(len(FINGERPRINTS), 16)
         self.assertEqual(len(set(FINGERPRINTS)), 16)
         self.assertEqual(FINGERPRINTS[0], '42C4ACCD12C4F59597925E1A08A7A90102608543809308D50EC427E118BA1493')
@@ -97,7 +90,6 @@ class CertificateTests(unittest.TestCase):
         """
         Reject malformed, incomplete, duplicated, or unexpected certificate data.
         """
-
         certificates = subject.re.findall(
             pattern=r'-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----',
             string=BUNDLE,
@@ -118,12 +110,10 @@ class PropertyTests(unittest.TestCase):
     """
     Verify the supported Java Properties syntax and fail-closed parsing rules.
     """
-
     def testJavaPropertySeparators(self):
         """
         Accept literal property separators and whitespace recognized by Java.
         """
-
         for algorithm in ('Algorithm=SHA-256', 'Algorithm : SHA-256', '\tAlgorithm\fSHA-256'):
             for separator in ('', '=', ':ignored', ' ignored', '\tignored'):
                 content = f'{algorithm}\r\n  {FINGERPRINTS[0]}{separator}\r\n'.encode()
@@ -133,7 +123,6 @@ class PropertyTests(unittest.TestCase):
         """
         Exclude comments and keys that do not match uppercase certificate fingerprints.
         """
-
         content = (
             f'Algorithm=SHA-256\n# {FINGERPRINTS[0]}\n !{FINGERPRINTS[1]}\n'
             f'{FINGERPRINTS[2].lower()}\n{FINGERPRINTS[3][1:]}\n'
@@ -144,7 +133,6 @@ class PropertyTests(unittest.TestCase):
         """
         Keep non-Java Unicode line separators inside their original property lines.
         """
-
         content = f'Algorithm=SHA-256\n# Not a new line\x85{FINGERPRINTS[0]}\n'.encode('latin1')
         self.assertEqual(subject.blockedFingerprints(content), set())
 
@@ -152,7 +140,6 @@ class PropertyTests(unittest.TestCase):
         """
         Reject unsupported algorithms, overrides, byte-order marks, escapes, and continuations.
         """
-
         for content in (
             b'',
             b'Algorithm=SHA-512\n',
@@ -173,12 +160,10 @@ class UpdateTests(FixtureTest):
     """
     Check dry-run, append-only updates, metadata preservation, and idempotence.
     """
-
     def setUp(self):
         """
         Create an existing vendor blocklist with controlled contents and permissions.
         """
-
         super().setUp()
         self.target = self.root / 'vendor.certs'
         self.target.write_bytes(VENDOR)
@@ -188,7 +173,6 @@ class UpdateTests(FixtureTest):
         """
         Report missing entries without changing the blocklist bytes or modification time.
         """
-
         before = self.target.stat()
         result = subject.updateBlocklist(self.target, FINGERPRINTS)
         self.assertEqual(result, {'status': 'would-patch', 'missing': 16, 'added': 0})
@@ -199,7 +183,6 @@ class UpdateTests(FixtureTest):
         """
         Append all missing entries without replacing the file or disturbing its aliases.
         """
-
         before = self.target.stat()
         link = self.root / 'vendor link'
         link.symlink_to(self.target)
@@ -215,7 +198,6 @@ class UpdateTests(FixtureTest):
         """
         Verify an already-protected read-only blocklist without requesting write access.
         """
-
         subject.updateBlocklist(target=self.target, fingerprints=FINGERPRINTS, apply=True)
         self.target.chmod(0o400)
         before = self.target.stat()
@@ -229,7 +211,6 @@ class UpdateTests(FixtureTest):
         """
         Count active key-value entries but append hashes found only in comments or lowercase.
         """
-
         content = VENDOR + f'{FINGERPRINTS[0]}=\n#{FINGERPRINTS[1]}\n{FINGERPRINTS[2].lower()}\n'.encode()
         self.target.write_bytes(content)
         self.assertEqual(subject.updateBlocklist(self.target, FINGERPRINTS, True)['added'], 15)
@@ -238,7 +219,6 @@ class UpdateTests(FixtureTest):
         """
         Preserve original line endings and treat shell metacharacters in paths literally.
         """
-
         target = self.root / "vendor ' $(echo unsafe).certs"
         for ending in (b'', b'\r', b'\r\n'):
             original = b'Algorithm=SHA-256\r\n# Vendor comment' + ending
@@ -250,7 +230,6 @@ class UpdateTests(FixtureTest):
         """
         Leave malformed files untouched and never create a missing vendor blocklist.
         """
-
         for content in (b'Algorithm=SHA-512\n', b'Algorithm=SHA-256\nother=continued\\\n'):
             self.target.write_bytes(content)
             with self.assertRaises(ValueError):
@@ -267,12 +246,10 @@ class RuntimeTests(FixtureTest):
     """
     Check executable inspection, blocklist resolution, deduplication, and partial failures.
     """
-
     def testActualRuntimeHomeVersionsAndLayouts(self):
         """
         Resolve each reported runtime home across Java 8 and modern JDK layouts.
         """
-
         for version in ('1.8', '11', '17', '21', '25'):
             home, target = self.makeJava(f'jdk{version}', version)
             runtime = subject.inspectRuntime(home)
@@ -282,7 +259,6 @@ class RuntimeTests(FixtureTest):
         """
         Reject runtime directories with multiple blocklist candidates or none.
         """
-
         home, target = self.makeJava()
         (target.parent / 'blacklisted.certs').write_bytes(VENDOR)
         with self.assertRaises(ValueError):
@@ -297,7 +273,6 @@ class RuntimeTests(FixtureTest):
         """
         Hide captured secret-bearing diagnostics when Java inspection fails.
         """
-
         home, target = self.makeJava()
         java = home / 'bin/java'
         java.write_text("#!/bin/sh\necho 'JAVA_TOOL_OPTIONS: SECRET_SENTINEL' >&2\nexit 1\n")
@@ -310,7 +285,6 @@ class RuntimeTests(FixtureTest):
         """
         Reject old Java versions and incomplete properties without exposing diagnostics.
         """
-
         home, _ = self.makeJava(specification='1.7')
         with self.assertRaisesRegex(ValueError, 'Java 8'):
             subject.inspectRuntime(home)
@@ -325,7 +299,6 @@ class RuntimeTests(FixtureTest):
         """
         Inspect runtime aliases once and patch a shared physical blocklist only once.
         """
-
         home, target = self.makeJava('first')
         alias, _ = self.makeJava(name='alias', runtimeHome=home)
         self.assertEqual(len(subject.run([home, alias], FINGERPRINTS, False, True)), 1)
@@ -339,7 +312,6 @@ class RuntimeTests(FixtureTest):
         """
         Continue protecting valid installations after another candidate fails inspection.
         """
-
         home, target = self.makeJava()
         results = subject.run([self.root / 'absent', home], FINGERPRINTS, True, True)
         self.assertEqual([result['status'] for result in results], ['failed', 'patched'])
@@ -350,12 +322,10 @@ class DiscoveryTests(FixtureTest):
     """
     Check discovery providers, bounded traversal, skipped launchers, and access reporting.
     """
-
     def testKnownSourcesIncludeOverridesAndPlatformLocations(self):
         """
         Include configured manager directories and the expected platform-specific roots.
         """
-
         environment = {
             'SDKMAN_DIR': '/custom/sdkman',
             'ASDF_DATA_DIR': '/custom/asdf',
@@ -386,7 +356,6 @@ class DiscoveryTests(FixtureTest):
         """
         Find nested installations while deduplicating aliases and terminating symlink cycles.
         """
-
         home, _ = self.makeJava('manager/installs/java/25')
         (self.root / 'alias').symlink_to(target=home, target_is_directory=True)
         (self.root / 'cycle').symlink_to(target=self.root, target_is_directory=True)
@@ -399,7 +368,6 @@ class DiscoveryTests(FixtureTest):
         """
         Recognize embedded IDE runtimes, Gradle downloads, and CI tool-cache layouts.
         """
-
         home, _ = self.makeJava('Android Studio.app/Contents/jbr/Contents/Home')
         gradle, _ = self.makeJava('gradle/jdks/vendor-21/Contents/Home')
         cache, _ = self.makeJava('toolcache/Java_Temurin-Hotspot_jdk/25/x64')
@@ -411,7 +379,6 @@ class DiscoveryTests(FixtureTest):
         """
         Inspect every configured PATH launcher while excluding non-runtime shims.
         """
-
         first, _ = self.makeJava('first')
         second, _ = self.makeJava('second')
         shim = self.root / 'shims'
@@ -430,7 +397,6 @@ class DiscoveryTests(FixtureTest):
         """
         Distinguish absent optional roots from required-root and permission failures.
         """
-
         discovery = subject.Discovery()
         subject.scanRoot(subject.SearchRoot(self.root / 'optional'), discovery)
         self.assertEqual(discovery.errors, [])
@@ -446,7 +412,6 @@ class DiscoveryTests(FixtureTest):
         """
         Report directories beyond the traversal bound without claiming they were searched.
         """
-
         home, _ = self.makeJava('nested/deeper/jdk')
         discovery = subject.Discovery()
         subject.scanRoot(subject.SearchRoot(path=self.root, depth=1), discovery)
@@ -457,7 +422,6 @@ class DiscoveryTests(FixtureTest):
         """
         Read macOS registry metadata through java_home rather than executing its Java stub.
         """
-
         home, _ = self.makeJava()
         response = subprocess.CompletedProcess([], 0, plistlib.dumps([{'JVMHomePath': str(home)}]), b'')
         with mock.patch.object(target=subject, attribute='defaultRoots', return_value=[]):
@@ -472,12 +436,10 @@ class CliTests(FixtureTest):
     """
     Exercise CLI defaults, discovery scope, reporting, privilege boundaries, and import safety.
     """
-
     def testJavaHomeEnvironmentDefault(self):
         """
         Use JAVA_HOME when no explicit installation or discovery mode is supplied.
         """
-
         home, _ = self.makeJava()
         with mock.patch.dict(os.environ, {'JAVA_HOME': str(home)}):
             status, output, _ = self.invoke(['--apply', '--json'])
@@ -488,7 +450,6 @@ class CliTests(FixtureTest):
         """
         Patch all distinct fixture runtimes discovered under an explicit extra root.
         """
-
         first, firstTarget = self.makeJava('first', '1.8')
         second, secondTarget = self.makeJava('second')
         (self.root / 'alias').symlink_to(target=first, target_is_directory=True)
@@ -508,7 +469,6 @@ class CliTests(FixtureTest):
         """
         Require explicit apply mode before modifying a selected installation.
         """
-
         home, target = self.makeJava('jdk with spaces and $(echo unsafe)')
         status, output, _ = self.invoke(['--java-home', str(home), '--json'])
         self.assertEqual(status, 0)
@@ -522,7 +482,6 @@ class CliTests(FixtureTest):
         """
         Return failure for incomplete discovery even after successfully patching a found JVM.
         """
-
         home, target = self.makeJava()
         discovery = subject.Discovery(homes={home}, errors=['Unreadable search root'])
         with mock.patch.object(target=subject, attribute='discoverInstallations', return_value=discovery):
@@ -535,7 +494,6 @@ class CliTests(FixtureTest):
         """
         Return a nonzero status when discovery finds no installations to inspect.
         """
-
         with mock.patch.object(target=subject, attribute='discoverInstallations', return_value=subject.Discovery()):
             status, output, _ = self.invoke(['--all', '--json'])
         self.assertEqual(status, 1)
@@ -545,7 +503,6 @@ class CliTests(FixtureTest):
         """
         Reject whole-process root execution before inspecting discovered Java executables.
         """
-
         with mock.patch.object(target=subject.os, attribute='geteuid', return_value=0):
             with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
                 subject.main(['--all'])
@@ -554,7 +511,6 @@ class CliTests(FixtureTest):
         """
         Keep dry-run unprivileged and limit sudo retries to the isolated file-update worker.
         """
-
         target = self.root / 'blocklist'
         with mock.patch.object(target=subject, attribute='updateBlocklist', side_effect=PermissionError):
             with mock.patch.object(subject.subprocess, 'run') as run:
@@ -575,7 +531,6 @@ class CliTests(FixtureTest):
         """
         Reject extra worker arguments rather than let the private mode bypass a dry-run request.
         """
-
         target = self.root / 'vendor.certs'
         target.write_bytes(VENDOR)
         with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
@@ -586,7 +541,6 @@ class CliTests(FixtureTest):
         """
         Import the module without executing its CLI or producing output.
         """
-
         result = subprocess.run(
             args=[sys.executable, '-c', 'import blockCompromisedJavaCertificates'],
             cwd=subject.SCRIPT.parent,
