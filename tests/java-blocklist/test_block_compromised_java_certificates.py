@@ -61,6 +61,7 @@ class FixtureTest(unittest.TestCase):
         target = security / ('blacklisted.certs' if specification == '1.8' else 'blocked.certs')
         if not target.exists():
             target.write_bytes(VENDOR)
+
         return home, target
 
     def invoke(self, arguments):
@@ -72,6 +73,7 @@ class FixtureTest(unittest.TestCase):
         with mock.patch.object(target=subject.os, attribute='geteuid', return_value=1000):
             with contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors):
                 status = subject.main(arguments)
+
         return status, output.getvalue(), errors.getvalue()
 
 
@@ -105,6 +107,7 @@ class CertificateTests(unittest.TestCase):
             with self.subTest(bundle=bundle[:40]):
                 with self.assertRaises(ValueError):
                     subject.certificateFingerprints(bundle)
+
         badDer = base64.b64encode(b'bad').decode()
         bad = f'-----BEGIN CERTIFICATE-----\n{badDer}\n-----END CERTIFICATE-----'
         with self.assertRaises(ValueError):
@@ -253,6 +256,7 @@ class UpdateTests(FixtureTest):
             with self.assertRaises(ValueError):
                 subject.updateBlocklist(self.target, FINGERPRINTS, True)
             self.assertEqual(self.target.read_bytes(), content)
+
         missing = self.root / 'missing'
         with self.assertRaises(FileNotFoundError):
             subject.updateBlocklist(missing, FINGERPRINTS, True)
@@ -283,6 +287,7 @@ class RuntimeTests(FixtureTest):
         (target.parent / 'blacklisted.certs').write_bytes(VENDOR)
         with self.assertRaises(ValueError):
             subject.resolveBlocklist(home)
+
         target.unlink()
         (target.parent / 'blacklisted.certs').unlink()
         with self.assertRaises(ValueError):
@@ -309,6 +314,7 @@ class RuntimeTests(FixtureTest):
         home, _ = self.makeJava(specification='1.7')
         with self.assertRaisesRegex(ValueError, 'Java 8'):
             subject.inspectRuntime(home)
+
         response = subprocess.CompletedProcess([], 0, b'java.home = relative\n', b'SECRET_SENTINEL')
         with mock.patch.object(target=subject.subprocess, attribute='run', return_value=response):
             with self.assertRaises(ValueError) as raised:
@@ -554,6 +560,7 @@ class CliTests(FixtureTest):
             with mock.patch.object(subject.subprocess, 'run') as run:
                 with self.assertRaises(PermissionError):
                     subject.patchWithElevation(target, FINGERPRINTS, False, True)
+
                 run.assert_not_called()
                 run.return_value = subprocess.CompletedProcess([], 0, '{"status":"patched","added":16}')
                 result = subject.patchWithElevation(target, FINGERPRINTS, True, True)
