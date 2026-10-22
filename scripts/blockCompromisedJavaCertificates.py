@@ -93,7 +93,7 @@ def blockedFingerprints(content: bytes) -> set[str]:
     return fingerprints
 
 
-def appendBlocklist(target: Path, additions: bytes) -> None:
+def appendBlocklist(target: Path, additions: str) -> None:
     """
     Append normally, using sudo only if the write is denied.
 
@@ -101,11 +101,11 @@ def appendBlocklist(target: Path, additions: bytes) -> None:
     without a shell and discard its output so JSON reports remain clean.
     """
     try:
-        with target.open('ab') as output:
+        with target.open(mode='a', encoding='ascii') as output:
             output.write(additions)
     except PermissionError:
         command = ['sudo', '-n', 'tee', '-a', str(target)]
-        result = subprocess.run(args=command, input=additions, stdout=subprocess.DEVNULL, timeout=120)
+        result = subprocess.run(args=command, input=additions, encoding='ascii', stdout=subprocess.DEVNULL, timeout=120)
         if result.returncode:
             raise ValueError(f'Unable to append to {target} using noninteractive sudo; authorize separately and retry.')
 
@@ -127,9 +127,9 @@ def updateBlocklist(target: Path, fingerprints: list[str], apply: bool = False) 
     if not missing or not apply:
         return {'status': 'would-patch' if missing else 'already-protected', 'missing': len(missing), 'added': 0}
 
-    separator = b'' if original.endswith((b'\n', b'\r')) else b'\n'
-    additions = separator + ('\n'.join(missing) + '\n').encode('ascii')
-    appendBlocklist(target, additions)
+    separator = '' if original.endswith((b'\n', b'\r')) else '\n'
+    entries = '\n'.join(missing)
+    appendBlocklist(target, f'{separator}{entries}\n')
 
     if not set(fingerprints).issubset(blockedFingerprints(target.read_bytes())):
         raise ValueError('JVM certificate blocklist verification failed.')

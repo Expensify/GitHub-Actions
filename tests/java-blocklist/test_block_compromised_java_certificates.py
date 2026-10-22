@@ -75,7 +75,7 @@ class FixtureTest(unittest.TestCase):
         """
         Allow normal fixture reads while simulating a permission-denied append.
         """
-        if mode == 'ab':
+        if mode == 'a':
             raise PermissionError(errno.EACCES, 'Fixture append denied')
 
         return io.open(path, mode, *args, **kwargs)
@@ -274,11 +274,11 @@ class UpdateTests(FixtureTest):
         """
         Elevate only the missing-entry append, then verify the file through ordinary reads.
         """
-        def appendThroughSudo(args, input, stdout, timeout):
+        def appendThroughSudo(args, input, encoding, stdout, timeout):
             """
             Simulate tee writing its input without executing a privileged process.
             """
-            with open(self.target, 'ab') as output:
+            with open(file=self.target, mode='a', encoding=encoding) as output:
                 output.write(input)
 
             return subprocess.CompletedProcess(args, 0)
@@ -291,7 +291,8 @@ class UpdateTests(FixtureTest):
 
         sudo.assert_called_once()
         self.assertEqual(sudo.call_args.kwargs['args'], ['sudo', '-n', 'tee', '-a', str(self.target)])
-        self.assertEqual(sudo.call_args.kwargs['input'], ('\n'.join(FINGERPRINTS) + '\n').encode('ascii'))
+        self.assertEqual(sudo.call_args.kwargs['input'], '\n'.join(FINGERPRINTS) + '\n')
+        self.assertEqual(sudo.call_args.kwargs['encoding'], 'ascii')
         self.assertEqual(sudo.call_args.kwargs['stdout'], subprocess.DEVNULL)
         self.assertEqual(result['added'], len(FINGERPRINTS))
         self.assertTrue(set(FINGERPRINTS).issubset(subject.blockedFingerprints(self.target.read_bytes())))
@@ -316,7 +317,7 @@ class UpdateTests(FixtureTest):
         with mock.patch.object(target=subject.Path, attribute='open', side_effect=PermissionError):
             with mock.patch.object(target=subject.subprocess, attribute='run', return_value=response):
                 with self.assertRaisesRegex(ValueError, 'Unable to append'):
-                    subject.appendBlocklist(self.target, b'entries\n')
+                    subject.appendBlocklist(self.target, 'entries\n')
 
         self.assertEqual(self.target.read_bytes(), VENDOR)
 
@@ -341,7 +342,7 @@ class UpdateTests(FixtureTest):
                     sudo = stack.enter_context(
                         mock.patch.object(target=subject.subprocess, attribute='run', return_value=response)
                     )
-                    subject.appendBlocklist(self.target, b'entries\n')
+                    subject.appendBlocklist(self.target, 'entries\n')
 
                 self.assertEqual(sudo.call_args.kwargs['args'][:2], ['sudo', '-n'])
 
