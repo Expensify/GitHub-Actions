@@ -298,11 +298,18 @@ def scanRoot(root: SearchRoot, discovery: Discovery) -> None:
         """
         try:
             metadata = directory.stat()
+            if not stat.S_ISDIR(metadata.st_mode):
+                discovery.errors.append(f'Not a directory: {directory}')
+                return
+
             identity = (metadata.st_dev, metadata.st_ino)
-            if identity in visited or not stat.S_ISDIR(metadata.st_mode):
+            if identity in visited:
                 return
 
             visited.add(identity)
+            if depth == 0:
+                discovery.searched.append(str(directory))
+
             if (directory / 'bin/java').is_file():
                 discovery.homes.add(directory.resolve(strict=True))
                 return
@@ -338,24 +345,11 @@ def scanRoot(root: SearchRoot, discovery: Discovery) -> None:
 
                 visit(directory / name, depth + 1)
         except OSError as error:
-            discovery.errors.append(f'Cannot inspect {directory}: {error.strerror}')
+            if depth == 0 and not root.required and isinstance(error, FileNotFoundError):
+                discovery.skipped.append({'path': str(directory), 'reason': 'not present'})
+            else:
+                discovery.errors.append(f'Cannot inspect {directory}: {error.strerror}')
 
-    try:
-        if not stat.S_ISDIR(root.path.stat().st_mode):
-            discovery.errors.append(f'Search root is not a directory: {root.path}')
-            return
-    except FileNotFoundError:
-        if root.required:
-            discovery.errors.append(f'Search root does not exist: {root.path}')
-        else:
-            discovery.skipped.append({'path': str(root.path), 'reason': 'not present'})
-
-        return
-    except OSError as error:
-        discovery.errors.append(f'Cannot access search root {root.path}: {error.strerror}')
-        return
-
-    discovery.searched.append(str(root.path))
     visit(root.path, 0)
 
 

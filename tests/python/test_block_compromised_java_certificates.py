@@ -620,6 +620,42 @@ class DiscoveryTests(FixtureTest):
         self.assertNotIn(home, discovery.homes)
         self.assertTrue(any(item['reason'] == 'search depth limit' for item in discovery.skipped))
 
+    def testSearchRootIsValidatedOnce(self):
+        """
+        Use the traversal's directory validation instead of checking the root twice.
+        """
+        originalStat = subject.Path.stat
+        rootChecks = []
+
+        def trackStat(path, *args, **kwargs):
+            """
+            Count checks of the root without changing filesystem behavior.
+            """
+            if path == self.root:
+                rootChecks.append(path)
+
+            return originalStat(path, *args, **kwargs)
+
+        discovery = subject.Discovery()
+        with mock.patch.object(target=subject.Path, attribute='stat', autospec=True, side_effect=trackStat):
+            subject.scanRoot(subject.SearchRoot(self.root), discovery)
+
+        self.assertEqual(rootChecks, [self.root])
+        self.assertEqual(discovery.searched, [str(self.root)])
+        self.assertEqual(discovery.errors, [])
+
+    def testFileCannotBeSearchRoot(self):
+        """
+        Report a non-directory root instead of treating it as an application or empty search.
+        """
+        path = self.root / 'not-a-directory.app'
+        path.write_text('fixture')
+        discovery = subject.Discovery()
+        subject.scanRoot(subject.SearchRoot(path=path, required=True), discovery)
+        self.assertEqual(len(discovery.errors), 1)
+        self.assertIn('Not a directory', discovery.errors[0])
+        self.assertEqual(discovery.searched, [])
+
     def testMacRegistryUsesStructuredPlistAndDoesNotRunJavaStub(self):
         """
         Read macOS registry metadata through java_home rather than executing its Java stub.
