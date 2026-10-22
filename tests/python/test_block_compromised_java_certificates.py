@@ -577,6 +577,44 @@ class DiscoveryTests(FixtureTest):
         subject.scanRoot(subject.SearchRoot(self.root), discovery)
         self.assertEqual(discovery.homes, {home, gradle, cache})
 
+    def testDirectoryAliasesAreNotScannedAgain(self):
+        """
+        Traverse each resolved directory once even when aliases and cycles point to it.
+        """
+        home, _ = self.makeJava('manager/jdk')
+        (self.root / 'alias').symlink_to(target=self.root / 'manager', target_is_directory=True)
+        (self.root / 'cycle').symlink_to(target=self.root, target_is_directory=True)
+        scanned = []
+        originalScandir = os.scandir
+
+        def trackScandir(path):
+            """
+            Record actual directory targets while retaining normal traversal behavior.
+            """
+            scanned.append(Path(path).resolve(strict=True))
+            return originalScandir(path)
+
+        discovery = subject.Discovery()
+        with mock.patch.object(target=subject.os, attribute='scandir', side_effect=trackScandir):
+            subject.scanRoot(subject.SearchRoot(self.root), discovery)
+
+        self.assertEqual(discovery.homes, {home})
+        self.assertEqual(len(scanned), len(set(scanned)))
+        self.assertEqual(discovery.errors, [])
+
+    def testResolutionFailuresAreReported(self):
+        """
+        Report symlink resolution errors, including RuntimeError raised by older Python versions.
+        """
+        for error in (OSError(errno.ELOOP, 'Symlink loop'), RuntimeError('Symlink loop')):
+            with self.subTest(error=type(error).__name__):
+                discovery = subject.Discovery()
+                with mock.patch.object(target=subject.Path, attribute='resolve', side_effect=error):
+                    subject.scanRoot(subject.SearchRoot(path=self.root, required=True), discovery)
+
+                self.assertEqual(len(discovery.errors), 1)
+                self.assertEqual(discovery.searched, [])
+
     def testAllPathEntriesAndConfiguredHomeAreDiscoveredButShimsAreNotRun(self):
         """
         Inspect every configured PATH launcher while excluding non-runtime shims.
@@ -624,20 +662,20 @@ class DiscoveryTests(FixtureTest):
         """
         Use the traversal's directory validation instead of checking the root twice.
         """
-        originalStat = subject.Path.stat
+        originalIsDir = subject.Path.is_dir
         rootChecks = []
 
-        def trackStat(path, *args, **kwargs):
+        def trackIsDir(path, *args, **kwargs):
             """
             Count checks of the root without changing filesystem behavior.
             """
             if path == self.root:
                 rootChecks.append(path)
 
-            return originalStat(path, *args, **kwargs)
+            return originalIsDir(path, *args, **kwargs)
 
         discovery = subject.Discovery()
-        with mock.patch.object(target=subject.Path, attribute='stat', autospec=True, side_effect=trackStat):
+        with mock.patch.object(target=subject.Path, attribute='is_dir', autospec=True, side_effect=trackIsDir):
             subject.scanRoot(subject.SearchRoot(self.root), discovery)
 
         self.assertEqual(rootChecks, [self.root])

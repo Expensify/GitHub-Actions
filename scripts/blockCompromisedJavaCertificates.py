@@ -287,7 +287,7 @@ def scanRoot(root: SearchRoot, discovery: Discovery) -> None:
     """
     Add one bounded directory scan's runtime homes and coverage details to discovery.
 
-    Follow directory aliases without revisiting inode cycles, recognize embedded app runtimes,
+    Follow directory aliases without revisiting resolved paths, recognize embedded app runtimes,
     and record access failures or traversal limits instead of implying complete coverage.
     """
     visited = set()
@@ -297,21 +297,20 @@ def scanRoot(root: SearchRoot, discovery: Discovery) -> None:
         Visit a directory once within this root's depth and application-layout constraints.
         """
         try:
-            metadata = directory.stat()
-            if not stat.S_ISDIR(metadata.st_mode):
+            resolved = directory.resolve(strict=True)
+            if resolved in visited:
+                return
+
+            if not resolved.is_dir():
                 discovery.errors.append(f'Not a directory: {directory}')
                 return
 
-            identity = (metadata.st_dev, metadata.st_ino)
-            if identity in visited:
-                return
-
-            visited.add(identity)
+            visited.add(resolved)
             if depth == 0:
                 discovery.searched.append(str(directory))
 
             if (directory / 'bin/java').is_file():
-                discovery.homes.add(directory.resolve(strict=True))
+                discovery.homes.add(resolved)
                 return
 
             if directory.suffix == '.app':
@@ -344,11 +343,11 @@ def scanRoot(root: SearchRoot, discovery: Discovery) -> None:
                     continue
 
                 visit(directory / name, depth + 1)
-        except OSError as error:
+        except (OSError, RuntimeError) as error:
             if depth == 0 and not root.required and isinstance(error, FileNotFoundError):
                 discovery.skipped.append({'path': str(directory), 'reason': 'not present'})
             else:
-                discovery.errors.append(f'Cannot inspect {directory}: {error.strerror}')
+                discovery.errors.append(f'Cannot inspect {directory}: {error}')
 
     visit(root.path, 0)
 
