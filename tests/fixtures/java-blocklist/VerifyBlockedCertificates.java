@@ -32,8 +32,8 @@ public class VerifyBlockedCertificates {
                 throw new AssertionError("JVM does not block " + fingerprint);
             }
         }
-        if (certificates.size() != 16 || actual.size() != 16) {
-            throw new AssertionError("Expected 16 distinct committed certificates");
+        if (certificates.isEmpty() || actual.size() != certificates.size()) {
+            throw new AssertionError("Expected a nonempty bundle of distinct certificates");
         }
 
         // A normal trust anchor must still be accepted by the denylist check.
@@ -49,6 +49,7 @@ public class VerifyBlockedCertificates {
         if (!foundControl) {
             throw new AssertionError("No unaffected trust anchor passed the control check");
         }
-        System.out.println("Actual JVM blocks all 16 compromised certificates; unaffected-root control passed.");
+        System.out.println("Actual JVM blocks all " + certificates.size()
+                + " compromised certificates; unaffected-root control passed.");
     }
 }

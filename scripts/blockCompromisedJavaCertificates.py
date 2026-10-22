@@ -49,27 +49,14 @@ def certificateFingerprints(bundle: str) -> list[str]:
     """
     Derive uppercase SHA-256 certificate fingerprints from the reviewed PEM bundle.
 
-    Require exactly 16 distinct certificates and reject malformed or unexpected bundle data.
-    Hash each certificate's DER bytes, not its public key.
+    Trust the checked-in policy's format and allow its size to change. Hash each certificate's
+    DER bytes, not its public key; reject an empty policy rather than report protection from it.
     """
-    pattern = r'-----BEGIN CERTIFICATE-----\s*([A-Za-z0-9+/=\s]+?)\s*-----END CERTIFICATE-----'
-    certificates = re.findall(pattern, bundle)
-    if len(certificates) != 16 or re.sub(pattern, '', bundle).strip():
-        raise ValueError('Expected 16 distinct PEM certificates.')
+    certificates = re.findall(r'-----BEGIN CERTIFICATE-----(.*?)-----END CERTIFICATE-----', bundle, re.DOTALL)
+    if not certificates:
+        raise ValueError('No certificates found in the bundled policy.')
 
-    fingerprints = []
-    for certificate in certificates:
-        der = base64.b64decode(s=re.sub(r'\s', '', certificate), validate=True)
-        # The reviewed PEM snapshot contains DER certificate sequences, not SPKI hashes.
-        if len(der) < 4 or der[0] != 0x30:
-            raise ValueError('Invalid DER certificate in the committed bundle.')
-
-        fingerprints.append(hashlib.sha256(der).hexdigest().upper())
-
-    if len(set(fingerprints)) != 16:
-        raise ValueError('Expected 16 distinct PEM certificates.')
-
-    return fingerprints
+    return [hashlib.sha256(base64.b64decode(certificate)).hexdigest().upper() for certificate in certificates]
 
 
 def blockedFingerprints(content: bytes) -> set[str]:

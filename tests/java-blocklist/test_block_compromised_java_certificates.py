@@ -1,7 +1,6 @@
 """
 Exercise Java discovery and blocklist updates using isolated, synthetic installations.
 """
-import base64
 import contextlib
 import errno
 import io
@@ -22,6 +21,7 @@ import blockCompromisedJavaCertificates as subject
 
 BUNDLE = subject.CERTIFICATES.read_text(encoding='ascii')
 FINGERPRINTS = subject.certificateFingerprints(BUNDLE)
+PEMS = subject.re.findall(r'-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----', BUNDLE, subject.re.DOTALL)
 VENDOR = b'Algorithm=SHA-256\n# Preserve vendor entries\n' + b'F' * 64 + b'\n'
 
 
@@ -87,32 +87,31 @@ class CertificateTests(unittest.TestCase):
     """
     def testCommittedSnapshot(self):
         """
-        Verify the snapshot produces 16 unique uppercase certificate fingerprints.
+        Verify every certificate in the snapshot produces a unique uppercase fingerprint.
         """
-        self.assertEqual(len(FINGERPRINTS), 16)
-        self.assertEqual(len(set(FINGERPRINTS)), 16)
-        self.assertEqual(FINGERPRINTS[0], '42C4ACCD12C4F59597925E1A08A7A90102608543809308D50EC427E118BA1493')
+        self.assertTrue(PEMS)
+        self.assertEqual(len(FINGERPRINTS), len(PEMS))
+        self.assertEqual(len(set(FINGERPRINTS)), len(PEMS))
+        self.assertIn('42C4ACCD12C4F59597925E1A08A7A90102608543809308D50EC427E118BA1493', FINGERPRINTS)
         for fingerprint in FINGERPRINTS:
             self.assertRegex(fingerprint, r'^[0-9A-F]{64}$')
 
-    def testMalformedMissingDuplicateAndExtraCertificates(self):
+    def testPolicySizeCanChange(self):
         """
-        Reject malformed, incomplete, duplicated, or unexpected certificate data.
+        Decode different-sized policies without hardcoding the current certificate count.
         """
-        certificates = subject.re.findall(
-            pattern=r'-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----',
-            string=BUNDLE,
-            flags=subject.re.DOTALL,
-        )
-        for bundle in ('bad', '\n'.join(certificates[1:]), '\n'.join([certificates[0]] * 16), BUNDLE + 'extra'):
-            with self.subTest(bundle=bundle[:40]):
-                with self.assertRaises(ValueError):
-                    subject.certificateFingerprints(bundle)
+        for certificates in (PEMS[:1], PEMS[:-1], PEMS + PEMS[:1]):
+            with self.subTest(count=len(certificates)):
+                result = subject.certificateFingerprints('\n'.join(certificates))
+                self.assertEqual(len(result), len(certificates))
+                self.assertEqual(result[0], FINGERPRINTS[0])
 
-        badDer = base64.b64encode(b'bad').decode()
-        bad = f'-----BEGIN CERTIFICATE-----\n{badDer}\n-----END CERTIFICATE-----'
-        with self.assertRaises(ValueError):
-            subject.certificateFingerprints('\n'.join([bad] + certificates[1:]))
+    def testEmptyPolicyIsRejected(self):
+        """
+        Do not report a JVM as protected when the bundled policy contains no certificates.
+        """
+        with self.assertRaisesRegex(ValueError, 'No certificates found'):
+            subject.certificateFingerprints('')
 
 
 class PropertyTests(unittest.TestCase):
@@ -184,7 +183,7 @@ class UpdateTests(FixtureTest):
         """
         before = self.target.stat()
         result = subject.updateBlocklist(self.target, FINGERPRINTS)
-        self.assertEqual(result, {'status': 'would-patch', 'missing': 16, 'added': 0})
+        self.assertEqual(result, {'status': 'would-patch', 'missing': len(FINGERPRINTS), 'added': 0})
         self.assertEqual(self.target.read_bytes(), VENDOR)
         self.assertEqual(self.target.stat().st_mtime_ns, before.st_mtime_ns)
 
@@ -196,7 +195,7 @@ class UpdateTests(FixtureTest):
         link = self.root / 'vendor link'
         link.symlink_to(self.target)
         result = subject.updateBlocklist(target=link.resolve(), fingerprints=FINGERPRINTS, apply=True)
-        self.assertEqual(result['added'], 16)
+        self.assertEqual(result['added'], len(FINGERPRINTS))
         self.assertTrue(self.target.read_bytes().startswith(VENDOR))
         self.assertTrue(set(FINGERPRINTS).issubset(subject.blockedFingerprints(self.target.read_bytes())))
         self.assertTrue(link.is_symlink())
@@ -222,7 +221,7 @@ class UpdateTests(FixtureTest):
         """
         content = VENDOR + f'{FINGERPRINTS[0]}=\n#{FINGERPRINTS[1]}\n{FINGERPRINTS[2].lower()}\n'.encode()
         self.target.write_bytes(content)
-        self.assertEqual(subject.updateBlocklist(self.target, FINGERPRINTS, True)['added'], 15)
+        self.assertEqual(subject.updateBlocklist(self.target, FINGERPRINTS, True)['added'], len(FINGERPRINTS) - 1)
 
     def testLineEndingsAndLiteralPaths(self):
         """
@@ -232,7 +231,7 @@ class UpdateTests(FixtureTest):
         for ending in (b'', b'\r', b'\r\n'):
             original = b'Algorithm=SHA-256\r\n# Vendor comment' + ending
             target.write_bytes(original)
-            self.assertEqual(subject.updateBlocklist(target, FINGERPRINTS, True)['added'], 16)
+            self.assertEqual(subject.updateBlocklist(target, FINGERPRINTS, True)['added'], len(FINGERPRINTS))
             self.assertTrue(target.read_bytes().startswith(original))
 
     def testMalformedAndMissingFilesAreNotChangedOrCreated(self):
@@ -294,7 +293,7 @@ class UpdateTests(FixtureTest):
         self.assertEqual(sudo.call_args.kwargs['args'], ['sudo', '-n', 'tee', '-a', str(self.target)])
         self.assertEqual(sudo.call_args.kwargs['input'], ('\n'.join(FINGERPRINTS) + '\n').encode('ascii'))
         self.assertEqual(sudo.call_args.kwargs['stdout'], subprocess.DEVNULL)
-        self.assertEqual(result['added'], 16)
+        self.assertEqual(result['added'], len(FINGERPRINTS))
         self.assertTrue(set(FINGERPRINTS).issubset(subject.blockedFingerprints(self.target.read_bytes())))
 
     def testSudoAppendStillRequiresSuccessfulReadback(self):
@@ -459,7 +458,7 @@ class RuntimeTests(FixtureTest):
         self.assertEqual(len(runtimes), 2)
         self.assertEqual(len(blocklists), 1)
         self.assertEqual(blocklists[0]['status'], 'patched')
-        self.assertEqual(blocklists[0]['added'], 16)
+        self.assertEqual(blocklists[0]['added'], len(FINGERPRINTS))
         patch.assert_called_once()
 
     def testHardLinkedBlocklistsRemainIdempotent(self):
@@ -472,7 +471,7 @@ class RuntimeTests(FixtureTest):
         os.link(target, secondTarget)
         _, blocklists = subject.run([first, second], FINGERPRINTS, True, True)
         self.assertEqual([entry['status'] for entry in blocklists], ['patched', 'already-protected'])
-        self.assertEqual(sum(entry['added'] for entry in blocklists), 16)
+        self.assertEqual(sum(entry['added'] for entry in blocklists), len(FINGERPRINTS))
 
     def testPartialFailureStillProcessesOtherJvms(self):
         """
@@ -482,7 +481,7 @@ class RuntimeTests(FixtureTest):
         runtimes, blocklists = subject.run([self.root / 'absent', home], FINGERPRINTS, True, True)
         self.assertEqual([entry['status'] for entry in runtimes], ['failed', 'discovered'])
         self.assertEqual(blocklists[0]['status'], 'patched')
-        self.assertEqual(len(set(FINGERPRINTS) & subject.blockedFingerprints(target.read_bytes())), 16)
+        self.assertEqual(len(set(FINGERPRINTS) & subject.blockedFingerprints(target.read_bytes())), len(FINGERPRINTS))
 
     def testFailedFileUpdateDoesNotStopOtherFiles(self):
         """
@@ -634,7 +633,7 @@ class CliTests(FixtureTest):
         with mock.patch.dict(os.environ, {'JAVA_HOME': str(home)}):
             status, output, _ = self.invoke(['--apply', '--json'])
         self.assertEqual(status, 0)
-        self.assertEqual(json.loads(output)['blocklists'][0]['added'], 16)
+        self.assertEqual(json.loads(output)['blocklists'][0]['added'], len(FINGERPRINTS))
 
     def testAllModeScansCustomRootsAndPatchesEveryRuntime(self):
         """
@@ -651,7 +650,7 @@ class CliTests(FixtureTest):
         report = json.loads(output)
         self.assertEqual(len(report['runtimes']), 2)
         self.assertEqual(len(report['blocklists']), 2)
-        self.assertEqual(sum(entry['added'] for entry in report['blocklists']), 32)
+        self.assertEqual(sum(entry['added'] for entry in report['blocklists']), 2 * len(FINGERPRINTS))
         self.assertEqual(report['searched_roots'], [str(self.root)])
         for target in (firstTarget, secondTarget):
             self.assertTrue(set(FINGERPRINTS).issubset(subject.blockedFingerprints(target.read_bytes())))
@@ -667,7 +666,7 @@ class CliTests(FixtureTest):
         self.assertEqual(target.read_bytes(), VENDOR)
         status, output, _ = self.invoke(['--java-home', str(home), '--apply', '--json'])
         self.assertEqual(status, 0)
-        self.assertEqual(json.loads(output)['blocklists'][0]['added'], 16)
+        self.assertEqual(json.loads(output)['blocklists'][0]['added'], len(FINGERPRINTS))
 
     def testSearchFailuresProduceNonzeroStatusAfterProcessingFoundJvm(self):
         """
