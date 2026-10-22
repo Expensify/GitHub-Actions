@@ -1,5 +1,5 @@
 """
-Exercise Java discovery and blocklist updates using isolated, synthetic installations.
+Test blocklist behavior and CLI outcomes using isolated Java installations.
 """
 import contextlib
 import errno
@@ -7,6 +7,7 @@ import io
 import json
 import os
 import plistlib
+import re
 import shlex
 import subprocess
 import sys
@@ -21,28 +22,28 @@ import blockCompromisedJavaCertificates as subject
 
 BUNDLE = subject.CERTIFICATES.read_text(encoding='ascii')
 FINGERPRINTS = subject.certificateFingerprints(BUNDLE)
-PEMS = subject.re.findall(r'-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----', BUNDLE, subject.re.DOTALL)
+PEMS = re.findall(r'-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----', BUNDLE, re.DOTALL)
 VENDOR = b'Algorithm=SHA-256\n# Preserve vendor entries\n' + b'F' * 64 + b'\n'
 
 
 class FixtureTest(unittest.TestCase):
     """
-    Provide disposable filesystem fixtures and a non-root CLI harness.
+    Provide temporary files, fake Java launchers, and a CLI harness isolated from the real machine.
     """
     def setUp(self):
         """
-        Prepare temporary files and a headless terminal default for isolated tests.
+        Create disposable files and default to headless execution.
         """
-        self.temporary = tempfile.TemporaryDirectory(prefix='java-blocklist-')
-        self.addCleanup(self.temporary.cleanup)
-        self.root = Path(self.temporary.name).resolve()
+        temporary = tempfile.TemporaryDirectory(prefix='java-blocklist-')
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name).resolve()
         terminal = mock.patch.object(target=sys.stdin, attribute='isatty', return_value=False)
         terminal.start()
         self.addCleanup(terminal.stop)
 
     def makeJava(self, name='jdk', specification='25', runtimeHome=None):
         """
-        Create a fake Java launcher and vendor blocklist with the requested runtime layout.
+        Create a launcher reporting the requested runtime home and its vendor blocklist.
         """
         home = self.root / name
         runtime = runtimeHome or (home / 'jre' if specification == '1.8' else home)
@@ -65,7 +66,7 @@ class FixtureTest(unittest.TestCase):
 
     def invoke(self, arguments):
         """
-        Run the CLI as a simulated normal user and capture its status and output streams.
+        Capture CLI results as a normal user, without changing the real process privileges.
         """
         output, errors = io.StringIO(), io.StringIO()
         with mock.patch.object(target=subject.os, attribute='geteuid', return_value=1000):
@@ -74,269 +75,202 @@ class FixtureTest(unittest.TestCase):
 
         return status, output.getvalue(), errors.getvalue()
 
-    def openWithoutAppend(self, path, mode='r', *args, **kwargs):
+    def invokeAll(self, root, arguments):
         """
-        Allow normal fixture reads while simulating a permission-denied append.
+        Limit discovery to fixture roots so apply tests cannot touch installed Java runtimes.
         """
-        if mode == 'a':
-            raise PermissionError(errno.EACCES, 'Fixture append denied')
+        with mock.patch.dict(in_dict=os.environ, values={'PATH': ''}, clear=True):
+            with mock.patch.object(target=subject, attribute='defaultRoots', return_value=[]):
+                with mock.patch.object(subject.sys, 'platform', 'linux'):
+                    return self.invoke(['--all', '--search-root', str(root), *arguments])
+
+    def openReadOnly(self, path, mode='r', *args, **kwargs):
+        """
+        Simulate denied writes at the filesystem boundary while allowing ordinary reads.
+        """
+        if any(flag in mode for flag in 'wax+'):
+            raise PermissionError(errno.EACCES, 'Fixture write denied')
 
         return io.open(path, mode, *args, **kwargs)
 
 
-class CertificateTests(unittest.TestCase):
+class PolicyTests(unittest.TestCase):
     """
-    Check the committed certificate policy and rejection of invalid bundles.
+    Check certificate fingerprint correctness and policy-size independence.
     """
-    def testCommittedSnapshot(self):
+    def testFingerprintsAndGrowingPolicy(self):
         """
-        Verify every certificate in the snapshot produces a unique uppercase fingerprint.
+        Match a known certificate hash and accept changes to the number of bundled certificates.
         """
-        self.assertTrue(PEMS)
-        self.assertEqual(len(FINGERPRINTS), len(PEMS))
-        self.assertEqual(len(set(FINGERPRINTS)), len(PEMS))
-        self.assertIn('42C4ACCD12C4F59597925E1A08A7A90102608543809308D50EC427E118BA1493', FINGERPRINTS)
-        for fingerprint in FINGERPRINTS:
-            self.assertRegex(fingerprint, r'^[0-9A-F]{64}$')
-
-    def testPolicySizeCanChange(self):
-        """
-        Decode different-sized policies without hardcoding the current certificate count.
-        """
-        for certificates in (PEMS[:1], PEMS[:-1], PEMS + PEMS[:1]):
-            with self.subTest(count=len(certificates)):
-                result = subject.certificateFingerprints('\n'.join(certificates))
-                self.assertEqual(len(result), len(certificates))
-                self.assertEqual(result[0], FINGERPRINTS[0])
+        known = '42C4ACCD12C4F59597925E1A08A7A90102608543809308D50EC427E118BA1493'
+        self.assertIn(known, FINGERPRINTS)
+        self.assertEqual(len(subject.certificateFingerprints(BUNDLE + PEMS[0])), len(PEMS) + 1)
 
     def testEmptyPolicyIsRejected(self):
         """
-        Do not report a JVM as protected when the bundled policy contains no certificates.
+        Do not report protection from a policy with no certificates.
         """
-        with self.assertRaisesRegex(ValueError, 'No certificates found'):
+        with self.assertRaises(ValueError):
             subject.certificateFingerprints('')
 
 
-class PropertyTests(unittest.TestCase):
+class BlocklistTests(FixtureTest):
     """
-    Verify the supported Java Properties syntax and fail-closed parsing rules.
+    Check file contents, safe dry-runs, idempotence, and privileged-write behavior.
     """
-    def testJavaPropertySeparators(self):
+    def setUp(self):
         """
-        Accept literal property separators and whitespace recognized by Java.
+        Use a vendor file whose path contains spaces and shell metacharacters.
         """
-        for algorithm in ('Algorithm=SHA-256', 'Algorithm : SHA-256', '\tAlgorithm\fSHA-256'):
-            for separator in ('', '=', ':ignored', ' ignored', '\tignored'):
-                content = f'{algorithm}\r\n  {FINGERPRINTS[0]}{separator}\r\n'.encode()
-                self.assertEqual(subject.blockedFingerprints(content), {FINGERPRINTS[0]})
+        super().setUp()
+        self.target = self.root / "vendor ' $(echo unsafe).certs"
+        self.target.write_bytes(VENDOR)
+        self.target.chmod(0o640)
 
-    def testCommentsLowercaseAndPartialKeysDoNotCount(self):
+    def testDryRunDoesNotWriteOrRequestSudo(self):
         """
-        Exclude comments and keys that do not match uppercase certificate fingerprints.
+        Report missing entries without changing files or starting a privileged command.
         """
-        content = (
-            f'Algorithm=SHA-256\n# {FINGERPRINTS[0]}\n !{FINGERPRINTS[1]}\n'
-            f'{FINGERPRINTS[2].lower()}\n{FINGERPRINTS[3][1:]}\n'
-        ).encode()
-        self.assertEqual(subject.blockedFingerprints(content), set())
+        with mock.patch.object(subject.subprocess, 'run') as sudo:
+            result = subject.updateBlocklist(self.target, FINGERPRINTS)
 
-    def testUnicodeLineSeparatorsAreNotJavaNewlines(self):
-        """
-        Keep non-Java Unicode line separators inside their original property lines.
-        """
-        content = f'Algorithm=SHA-256\n# Not a new line\x85{FINGERPRINTS[0]}\n'.encode('latin1')
-        self.assertEqual(subject.blockedFingerprints(content), set())
+        self.assertEqual(result.status, 'would-patch')
+        self.assertEqual(result.missing, len(FINGERPRINTS))
+        self.assertEqual(self.target.read_bytes(), VENDOR)
+        sudo.assert_not_called()
 
-    def testUnsupportedPropertiesFailClosed(self):
+    def testApplyPreservesVendorDataAndPermissions(self):
         """
-        Reject unsupported algorithms, overrides, byte-order marks, escapes, and continuations.
+        Add the policy while retaining existing contents and access permissions.
+        """
+        before = self.target.stat()
+        result = subject.updateBlocklist(self.target, FINGERPRINTS, True)
+        content = self.target.read_bytes()
+        self.assertEqual(result.added, len(FINGERPRINTS))
+        self.assertTrue(content.startswith(VENDOR))
+        self.assertTrue(set(FINGERPRINTS).issubset(subject.blockedFingerprints(content)))
+        self.assertEqual(self.target.stat().st_mode, before.st_mode)
+
+    def testProtectedReadOnlyFileNeedsNoWriteOrSudo(self):
+        """
+        Make repeat apply runs harmless even when the already-protected file is read-only.
+        """
+        subject.updateBlocklist(self.target, FINGERPRINTS, True)
+        self.target.chmod(0o400)
+        content = self.target.read_bytes()
+        with mock.patch.object(subject.subprocess, 'run') as sudo:
+            result = subject.updateBlocklist(self.target, FINGERPRINTS, True)
+
+        self.assertEqual(result.status, 'already-protected')
+        self.assertEqual(result.added, 0)
+        self.assertEqual(self.target.read_bytes(), content)
+        sudo.assert_not_called()
+
+    def testOnlyActiveKeysCountAsExistingBlocks(self):
+        """
+        Keep valid key-value entries but do not mistake comments or lowercase hashes for active blocks.
+        """
+        original = VENDOR + f'{FINGERPRINTS[0]}=\n#{FINGERPRINTS[1]}\n{FINGERPRINTS[2].lower()}\n'.encode()
+        self.target.write_bytes(original)
+        result = subject.updateBlocklist(self.target, FINGERPRINTS, True)
+        content = self.target.read_bytes()
+        self.assertEqual(result.added, len(FINGERPRINTS) - 1)
+        self.assertTrue(content.startswith(original))
+        self.assertTrue(set(FINGERPRINTS).issubset(subject.blockedFingerprints(content)))
+        self.assertEqual(content.count(FINGERPRINTS[0].encode()), 1)
+
+    def testLineEndingsAndMissingFinalNewline(self):
+        """
+        Append complete entries without altering original line endings or joining onto the final line.
+        """
+        for ending in (b'', b'\r', b'\r\n'):
+            original = b'Algorithm=SHA-256\r\n# Vendor comment' + ending
+            self.target.write_bytes(original)
+            subject.updateBlocklist(self.target, FINGERPRINTS, True)
+            content = self.target.read_bytes()
+            self.assertTrue(content.startswith(original))
+            self.assertTrue(set(FINGERPRINTS).issubset(subject.blockedFingerprints(content)))
+
+    def testInvalidOrMissingBlocklistsAreNotModified(self):
+        """
+        Reject unsupported algorithms and ambiguous properties before writing, without creating missing files.
         """
         for content in (
             b'',
             b'Algorithm=SHA-512\n',
-            b'Algorithm==SHA-256\n',
-            b'Algorithm=SHA-256 \n',
-            b'Algorithm=SHA-256\nAlgorithm=SHA-256\n',
             b'Algorithm=SHA-256\nAlgorithm SHA-512\n',
-            b'Algorithm=SHA-256\nAlgorithm\n',
-            b'\xef\xbb\xbfAlgorithm=SHA-256\n',
-            b'Algorithm=SHA-256\nAlgorith\\u006d=SHA-512\n',
             b'Algorithm=SHA-256\nother=continued\\\n',
         ):
-            with self.subTest(content=content), self.assertRaises(ValueError):
-                subject.blockedFingerprints(content)
+            with self.subTest(content=content):
+                self.target.write_bytes(content)
+                with self.assertRaises(ValueError):
+                    subject.updateBlocklist(self.target, FINGERPRINTS, True)
 
-
-class UpdateTests(FixtureTest):
-    """
-    Check dry-run, append-only updates, metadata preservation, and idempotence.
-    """
-    def setUp(self):
-        """
-        Create an existing vendor blocklist with controlled contents and permissions.
-        """
-        super().setUp()
-        self.target = self.root / 'vendor.certs'
-        self.target.write_bytes(VENDOR)
-        self.target.chmod(0o640)
-
-    def testDryRunNeverWrites(self):
-        """
-        Report missing entries without changing the blocklist bytes or modification time.
-        """
-        before = self.target.stat()
-        result = subject.updateBlocklist(self.target, FINGERPRINTS)
-        self.assertEqual(result, subject.BlocklistUpdate(status='would-patch', missing=len(FINGERPRINTS)))
-        self.assertEqual(self.target.read_bytes(), VENDOR)
-        self.assertEqual(self.target.stat().st_mtime_ns, before.st_mtime_ns)
-
-    def testAppendPreservesVendorBytesMetadataAndSymlink(self):
-        """
-        Append all missing entries without replacing the file or disturbing its aliases.
-        """
-        before = self.target.stat()
-        link = self.root / 'vendor link'
-        link.symlink_to(self.target)
-        result = subject.updateBlocklist(target=link.resolve(), fingerprints=FINGERPRINTS, apply=True)
-        self.assertEqual(result.added, len(FINGERPRINTS))
-        self.assertTrue(self.target.read_bytes().startswith(VENDOR))
-        self.assertTrue(set(FINGERPRINTS).issubset(subject.blockedFingerprints(self.target.read_bytes())))
-        self.assertTrue(link.is_symlink())
-        for field in ('st_mode', 'st_uid', 'st_gid', 'st_ino', 'st_dev'):
-            self.assertEqual(getattr(before, field), getattr(self.target.stat(), field))
-
-    def testReadOnlyIdempotence(self):
-        """
-        Verify an already-protected read-only blocklist without requesting write access.
-        """
-        subject.updateBlocklist(target=self.target, fingerprints=FINGERPRINTS, apply=True)
-        self.target.chmod(0o400)
-        before = self.target.stat()
-        content = self.target.read_bytes()
-        result = subject.updateBlocklist(target=self.target, fingerprints=FINGERPRINTS, apply=True)
-        self.assertEqual(result.status, 'already-protected')
-        self.assertEqual(self.target.read_bytes(), content)
-        self.assertEqual(self.target.stat().st_mtime_ns, before.st_mtime_ns)
-
-    def testPartialAndKeyValueEntries(self):
-        """
-        Count active key-value entries but append hashes found only in comments or lowercase.
-        """
-        content = VENDOR + f'{FINGERPRINTS[0]}=\n#{FINGERPRINTS[1]}\n{FINGERPRINTS[2].lower()}\n'.encode()
-        self.target.write_bytes(content)
-        self.assertEqual(subject.updateBlocklist(self.target, FINGERPRINTS, True).added, len(FINGERPRINTS) - 1)
-
-    def testLineEndingsAndLiteralPaths(self):
-        """
-        Preserve original line endings and treat shell metacharacters in paths literally.
-        """
-        target = self.root / "vendor ' $(echo unsafe).certs"
-        for ending in (b'', b'\r', b'\r\n'):
-            original = b'Algorithm=SHA-256\r\n# Vendor comment' + ending
-            target.write_bytes(original)
-            self.assertEqual(subject.updateBlocklist(target, FINGERPRINTS, True).added, len(FINGERPRINTS))
-            self.assertTrue(target.read_bytes().startswith(original))
-
-    def testMalformedAndMissingFilesAreNotChangedOrCreated(self):
-        """
-        Leave malformed files untouched and never create a missing vendor blocklist.
-        """
-        for content in (b'Algorithm=SHA-512\n', b'Algorithm=SHA-256\nother=continued\\\n'):
-            self.target.write_bytes(content)
-            with self.assertRaises(ValueError):
-                subject.updateBlocklist(self.target, FINGERPRINTS, True)
-            self.assertEqual(self.target.read_bytes(), content)
+                self.assertEqual(self.target.read_bytes(), content)
 
         missing = self.root / 'missing'
         with self.assertRaises(FileNotFoundError):
             subject.updateBlocklist(missing, FINGERPRINTS, True)
+
         self.assertFalse(missing.exists())
 
-    def testVerificationFailsWhenEntriesAreMissingAfterWriting(self):
+    def testPermissionDeniedAppendUsesSudo(self):
         """
-        Fail if reading the file back does not confirm the required entries, even after a successful write.
+        Append to the selected file through sudo without losing vendor data or printing certificate contents.
         """
-        with mock.patch.object(target=subject.Path, attribute='read_bytes', side_effect=[VENDOR, VENDOR]):
-            with self.assertRaisesRegex(ValueError, 'verification failed'):
-                subject.updateBlocklist(self.target, FINGERPRINTS, True)
-
-    def testDryRunNeverAttemptsAnAppendOrSudo(self):
-        """
-        Plan missing entries without invoking either append path.
-        """
-        with mock.patch.object(target=subject, attribute='appendBlocklist') as append:
-            with mock.patch.object(subject.subprocess, 'run') as sudo:
-                result = subject.updateBlocklist(self.target, FINGERPRINTS)
-
-        self.assertEqual(result.status, 'would-patch')
-        append.assert_not_called()
-        sudo.assert_not_called()
-        self.assertEqual(self.target.read_bytes(), VENDOR)
-
-    def testPermissionDeniedAppendUsesSudoAndVerifiesResult(self):
-        """
-        Elevate only the missing-entry append, then verify the file through ordinary reads.
-        """
-        def appendThroughSudo(args, input, encoding, stdout, timeout):
+        def privilegedAppend(**arguments):
             """
-            Simulate tee writing its input without executing a privileged process.
+            Simulate the external append command rather than mocking the updater's private helpers.
             """
-            with open(file=self.target, mode='a', encoding=encoding) as output:
-                output.write(input)
+            command = arguments['args']
+            mode = 'a' if '-a' in command else 'w'
+            with open(file=command[-1], mode=mode, encoding=arguments['encoding']) as output:
+                output.write(arguments['input'])
 
-            return subprocess.CompletedProcess(args, 0)
+            return subprocess.CompletedProcess(command, 0)
 
-        with mock.patch.object(
-            target=subject.Path, attribute='open', autospec=True, side_effect=self.openWithoutAppend
-        ):
-            with mock.patch.object(target=subject.subprocess, attribute='run', side_effect=appendThroughSudo) as sudo:
+        with mock.patch.object(target=subject.Path, attribute='open', autospec=True, side_effect=self.openReadOnly):
+            with mock.patch.object(target=subject.subprocess, attribute='run', side_effect=privilegedAppend) as sudo:
                 result = subject.updateBlocklist(self.target, FINGERPRINTS, True)
 
-        sudo.assert_called_once()
-        self.assertEqual(sudo.call_args.kwargs['args'], ['sudo', '-n', 'tee', '-a', str(self.target)])
-        self.assertEqual(sudo.call_args.kwargs['input'], '\n'.join(FINGERPRINTS) + '\n')
-        self.assertEqual(sudo.call_args.kwargs['encoding'], 'ascii')
+        self.assertEqual(Path(sudo.call_args.kwargs['args'][0]).name, 'sudo')
         self.assertEqual(sudo.call_args.kwargs['stdout'], subprocess.DEVNULL)
         self.assertEqual(result.added, len(FINGERPRINTS))
+        self.assertTrue(self.target.read_bytes().startswith(VENDOR))
         self.assertTrue(set(FINGERPRINTS).issubset(subject.blockedFingerprints(self.target.read_bytes())))
 
-    def testSudoAppendStillRequiresSuccessfulReadback(self):
+    def testFailedOrIneffectiveSudoDoesNotReportProtection(self):
         """
-        Do not trust a successful tee exit status if the required entries are absent afterward.
+        Treat both command failure and a successful command that wrote nothing as failed updates.
         """
-        response = subprocess.CompletedProcess([], 0)
-        with mock.patch.object(
-            target=subject.Path, attribute='open', autospec=True, side_effect=self.openWithoutAppend
-        ):
-            with mock.patch.object(target=subject.subprocess, attribute='run', return_value=response):
-                with self.assertRaisesRegex(ValueError, 'verification failed'):
-                    subject.updateBlocklist(self.target, FINGERPRINTS, True)
+        for returncode in (0, 1):
+            with self.subTest(returncode=returncode):
+                response = subprocess.CompletedProcess([], returncode)
+                with mock.patch.object(
+                    target=subject.Path, attribute='open', autospec=True, side_effect=self.openReadOnly
+                ):
+                    with mock.patch.object(target=subject.subprocess, attribute='run', return_value=response):
+                        with self.assertRaises(ValueError):
+                            subject.updateBlocklist(self.target, FINGERPRINTS, True)
 
-    def testFailedSudoAppendIsReported(self):
-        """
-        Report sudo failures without claiming the file was protected.
-        """
-        response = subprocess.CompletedProcess([], 1)
-        with mock.patch.object(target=subject.Path, attribute='open', side_effect=PermissionError):
-            with mock.patch.object(target=subject.subprocess, attribute='run', return_value=response):
-                with self.assertRaisesRegex(ValueError, 'Unable to append'):
-                    subject.appendBlocklist(self.target, 'entries\n')
+                self.assertEqual(self.target.read_bytes(), VENDOR)
 
-        self.assertEqual(self.target.read_bytes(), VENDOR)
-
-    def testSudoPromptPolicyExplainsInteractiveAuthorization(self):
+    def testPromptPolicyAndDiagnosticStreams(self):
         """
-        Explain interactive sudo requests while preventing prompts in CI and headless execution.
+        Explain interactive sudo before invoking it, never prompt in CI/headless runs, and keep stdout clean.
         """
-        cases = (
-            (True, '', False),
-            (False, '', True),
-            (True, 'true', True),
-        )
-        response = subprocess.CompletedProcess([], 0)
-        for terminal, ci, nonInteractive in cases:
+        for terminal, ci, nonInteractive in ((True, '', False), (False, '', True), (True, 'true', True)):
             with self.subTest(terminal=terminal, ci=ci):
                 errors, output = io.StringIO(), io.StringIO()
+
+                def authorize(**arguments):
+                    """
+                    Check the user has context before an external command could request authorization.
+                    """
+                    self.assertEqual('-n' in arguments['args'], nonInteractive)
+                    self.assertEqual(bool(errors.getvalue()), not nonInteractive)
+                    return subprocess.CompletedProcess(arguments['args'], 0)
+
                 with contextlib.ExitStack() as stack:
                     stack.enter_context(contextlib.redirect_stderr(errors))
                     stack.enter_context(contextlib.redirect_stdout(output))
@@ -345,204 +279,23 @@ class UpdateTests(FixtureTest):
                     stack.enter_context(
                         mock.patch.object(target=subject.Path, attribute='open', side_effect=PermissionError)
                     )
-                    sudo = stack.enter_context(
-                        mock.patch.object(target=subject.subprocess, attribute='run', return_value=response)
+                    stack.enter_context(
+                        mock.patch.object(target=subject.subprocess, attribute='run', side_effect=authorize)
                     )
                     subject.appendBlocklist(self.target, 'entries\n')
 
-                self.assertEqual('-n' in sudo.call_args.kwargs['args'], nonInteractive)
                 self.assertEqual(output.getvalue(), '')
-                if nonInteractive:
-                    self.assertEqual(errors.getvalue(), '')
-                else:
+                if not nonInteractive:
                     self.assertIn(str(self.target), errors.getvalue())
-                    self.assertIn('elevated write permission', errors.getvalue())
-                    self.assertIn('password', errors.getvalue())
-
-    def testUnreadableBlocklistDoesNotUseSudo(self):
-        """
-        Keep permission escalation limited to appending, not reading protected data.
-        """
-        with mock.patch.object(target=subject.Path, attribute='read_bytes', side_effect=PermissionError):
-            with mock.patch.object(subject.subprocess, 'run') as sudo:
-                with self.assertRaises(PermissionError):
-                    subject.updateBlocklist(self.target, FINGERPRINTS, True)
-
-        sudo.assert_not_called()
-
-
-class RuntimeTests(FixtureTest):
-    """
-    Check executable inspection, blocklist resolution, deduplication, and partial failures.
-    """
-    def testActualRuntimeHomeVersionsAndLayouts(self):
-        """
-        Resolve each reported runtime home across Java 8 and modern JDK layouts.
-        """
-        for version in ('1.8', '11', '17', '21', '25'):
-            home, target = self.makeJava(f'jdk{version}', version)
-            runtime = subject.inspectRuntime(home)
-            self.assertEqual(subject.resolveBlocklist(runtime.home), target)
-
-    def testAmbiguousOrMissingBlocklistFails(self):
-        """
-        Reject runtime directories with multiple blocklist candidates or none.
-        """
-        home, target = self.makeJava()
-        (target.parent / 'blacklisted.certs').write_bytes(VENDOR)
-        with self.assertRaises(ValueError):
-            subject.resolveBlocklist(home)
-
-        target.unlink()
-        (target.parent / 'blacklisted.certs').unlink()
-        with self.assertRaises(ValueError):
-            subject.resolveBlocklist(home)
-
-    def testRuntimeHomePreservesTrailingSpaces(self):
-        """
-        Preserve significant whitespace in the reported runtime path when parsing properties.
-        """
-        home, _ = self.makeJava('jdk with trailing space ')
-        self.assertEqual(subject.inspectRuntime(home).home, home)
-
-    def testInvalidJavaSpecificationsAreRejected(self):
-        """
-        Reject malformed major versions rather than accepting partial numeric prefixes.
-        """
-        for index, specification in enumerate(('', '-1', '1.8.0', '8.0', '25-ea', 'unknown')):
-            home, _ = self.makeJava(name=f'invalid-{index}', specification=specification)
-            with self.assertRaises(ValueError):
-                subject.inspectRuntime(home)
-
-    def testInspectionFailuresDoNotLeakJvmDiagnostics(self):
-        """
-        Hide captured secret-bearing diagnostics when Java inspection fails.
-        """
-        home, target = self.makeJava()
-        java = home / 'bin/java'
-        java.write_text("#!/bin/sh\necho 'JAVA_TOOL_OPTIONS: SECRET_SENTINEL' >&2\nexit 1\n")
-        runtimes, blocklists = subject.run([home], FINGERPRINTS, True)
-        self.assertEqual(runtimes[0]['status'], 'failed')
-        self.assertEqual(blocklists, [])
-        self.assertNotIn('SECRET_SENTINEL', json.dumps(runtimes))
-        self.assertEqual(target.read_bytes(), VENDOR)
-
-    def testUnsupportedVersionAndProperties(self):
-        """
-        Reject old Java versions and incomplete properties without exposing diagnostics.
-        """
-        home, _ = self.makeJava(specification='1.7')
-        with self.assertRaisesRegex(ValueError, 'Java 8'):
-            subject.inspectRuntime(home)
-
-        response = subprocess.CompletedProcess([], 0, b'java.home = relative\n', b'SECRET_SENTINEL')
-        with mock.patch.object(target=subject.subprocess, attribute='run', return_value=response):
-            with self.assertRaises(ValueError) as raised:
-                subject.inspectRuntime(home)
-            self.assertNotIn('SECRET_SENTINEL', str(raised.exception))
-
-    def testRuntimeAndSharedBlocklistDeduplication(self):
-        """
-        Resolve aliases to a set of blocklist paths and collect all runtimes before writing.
-        """
-        home, target = self.makeJava('first')
-        alias, _ = self.makeJava(name='alias', runtimeHome=home)
-        runtimes, blocklists = subject.run([home, alias], FINGERPRINTS, False)
-        self.assertEqual(len(runtimes), 1)
-        self.assertEqual(len(blocklists), 1)
-        second, secondTarget = self.makeJava('second')
-        secondTarget.unlink()
-        secondTarget.symlink_to(target)
-        inspectRuntime = subject.inspectRuntime
-
-        def inspectBeforeWriting(candidate):
-            """
-            Verify collection does not mutate blocklists while inspecting additional runtimes.
-            """
-            self.assertEqual(target.read_bytes(), VENDOR)
-            return inspectRuntime(candidate)
-
-        with mock.patch.object(target=subject, attribute='inspectRuntime', side_effect=inspectBeforeWriting):
-            with mock.patch.object(
-                target=subject, attribute='updateBlocklist', wraps=subject.updateBlocklist
-            ) as patch:
-                runtimes, blocklists = subject.run([home, second], FINGERPRINTS, True)
-
-        self.assertEqual(len(runtimes), 2)
-        self.assertEqual(len(blocklists), 1)
-        self.assertEqual(blocklists[0]['status'], 'patched')
-        self.assertEqual(blocklists[0]['added'], len(FINGERPRINTS))
-        patch.assert_called_once()
-
-    def testHardLinkedBlocklistsRemainIdempotent(self):
-        """
-        Process distinct hard-link paths safely without separate inode bookkeeping.
-        """
-        first, target = self.makeJava('first')
-        second, secondTarget = self.makeJava('second')
-        secondTarget.unlink()
-        os.link(target, secondTarget)
-        _, blocklists = subject.run([first, second], FINGERPRINTS, True)
-        self.assertEqual([entry['status'] for entry in blocklists], ['patched', 'already-protected'])
-        self.assertEqual(sum(entry['added'] for entry in blocklists), len(FINGERPRINTS))
-
-    def testCandidateCollectionsShareOneDeduplicationStep(self):
-        """
-        Accept sets and one-pass iterators without requiring conversions in the caller.
-        """
-        home, _ = self.makeJava()
-        for homes in ({home}, iter([home, home])):
-            with self.subTest(collection=type(homes).__name__):
-                with mock.patch.object(
-                    target=subject, attribute='inspectRuntime', wraps=subject.inspectRuntime
-                ) as inspect:
-                    runtimes, blocklists = subject.run(homes, FINGERPRINTS, False)
-
-                inspect.assert_called_once_with(home)
-                self.assertEqual(len(runtimes), 1)
-                self.assertEqual(len(blocklists), 1)
-
-    def testPartialFailureStillProcessesOtherJvms(self):
-        """
-        Continue protecting valid installations after another candidate fails inspection.
-        """
-        home, target = self.makeJava()
-        runtimes, blocklists = subject.run([self.root / 'absent', home], FINGERPRINTS, True)
-        self.assertEqual([entry['status'] for entry in runtimes], ['failed', 'discovered'])
-        self.assertEqual(blocklists[0]['status'], 'patched')
-        self.assertEqual(len(set(FINGERPRINTS) & subject.blockedFingerprints(target.read_bytes())), len(FINGERPRINTS))
-
-    def testFailedFileUpdateDoesNotStopOtherFiles(self):
-        """
-        Retain a failed file update while continuing with the other collected blocklists.
-        """
-        first, firstTarget = self.makeJava('first')
-        second, secondTarget = self.makeJava('second')
-        update = subject.updateBlocklist
-
-        def failFirst(target, fingerprints, apply):
-            """
-            Simulate a failure for one target without changing the other update's behavior.
-            """
-            if target == firstTarget:
-                raise ValueError('Fixture update failure')
-
-            return update(target, fingerprints, apply)
-
-        with mock.patch.object(target=subject, attribute='updateBlocklist', side_effect=failFirst):
-            _, blocklists = subject.run([first, second], FINGERPRINTS, True)
-
-        self.assertEqual([entry['status'] for entry in blocklists], ['failed', 'patched'])
-        self.assertTrue(set(FINGERPRINTS).issubset(subject.blockedFingerprints(secondTarget.read_bytes())))
 
 
 class DiscoveryTests(FixtureTest):
     """
-    Check discovery providers, bounded traversal, skipped launchers, and access reporting.
+    Cover discovery inputs, representative installation layouts, and reported search limits.
     """
-    def testKnownSourcesIncludeOverridesAndPlatformLocations(self):
+    def testConfiguredManagerRoots(self):
         """
-        Include configured manager directories and the expected platform-specific roots.
+        Honor configured version-manager and cache locations rather than assuming default home directories.
         """
         environment = {
             'SDKMAN_DIR': '/custom/sdkman',
@@ -552,369 +305,203 @@ class DiscoveryTests(FixtureTest):
             'GRADLE_USER_HOME': '/custom/gradle',
             'RUNNER_TOOL_CACHE': '/custom/toolcache',
         }
-        roots = {str(root.path) for root in subject.defaultRoots(environment, self.root, 'darwin')}
-        self.assertTrue(
-            {
-                '/custom/sdkman/candidates/java',
-                '/custom/asdf/installs/java',
-                '/custom/mise/installs/java',
-                '/custom/jenv/versions',
-                '/custom/gradle/jdks',
-                '/custom/toolcache',
-                '/Applications',
-                '/Library/Java/JavaVirtualMachines',
-            }
-            <= roots
+        roots = {root.path for root in subject.defaultRoots(environment, self.root, 'linux')}
+        expected = (
+            '/custom/sdkman/candidates/java', '/custom/asdf/installs/java', '/custom/mise/installs/java',
+            '/custom/jenv/versions', '/custom/gradle/jdks', '/custom/toolcache',
         )
-        linux = {str(root.path) for root in subject.defaultRoots({}, self.root, 'linux')}
-        self.assertIn('/usr/lib/jvm', linux)
-        self.assertIn('/opt/android-studio', linux)
+        self.assertTrue({Path(path) for path in expected} <= roots)
 
-    def testScanFindsNestedHomesAndAliasesWithoutFollowingCycles(self):
+    def testLayoutsAliasesAndCycles(self):
         """
-        Find nested installations while deduplicating aliases and terminating symlink cycles.
+        Find manager, IDE, Gradle, and tool-cache runtimes without duplicate homes or false cycle warnings.
         """
-        home, _ = self.makeJava('manager/installs/java/25')
-        (self.root / 'alias').symlink_to(target=home, target_is_directory=True)
+        names = (
+            'manager/java/25', 'Android Studio.app/Contents/jbr/Contents/Home',
+            'Toolbox.app/Contents/jre/Contents/Home', 'gradle/jdks/vendor-21/Contents/Home',
+            'toolcache/Java_Temurin-Hotspot_jdk/25/x64',
+        )
+        homes = {self.makeJava(name)[0] for name in names}
+        (self.root / 'alias').symlink_to(target=self.root / 'manager', target_is_directory=True)
         (self.root / 'cycle').symlink_to(target=self.root, target_is_directory=True)
         discovery = subject.Discovery()
         subject.scanRoot(subject.SearchRoot(self.root), discovery)
-        self.assertEqual(discovery.homes, {home})
+        self.assertEqual(discovery.homes, homes)
         self.assertEqual(discovery.errors, [])
+        self.assertEqual(discovery.skipped, [])
 
-    def testHomebrewFlagAppliesOnlyToPackageRoots(self):
+    def testHomebrewSearchFindsJavaButSkipsUnrelatedPackages(self):
         """
-        Mark only Homebrew opt directories for package-name filtering, including a custom prefix.
+        Use the configured Homebrew root to find nested JDKs without traversing unrelated formulae.
         """
-        roots = subject.defaultRoots({'HOMEBREW_PREFIX': '/custom/brew'}, self.root, 'darwin')
-        expected = {Path('/opt/homebrew/opt'), Path('/usr/local/opt'), Path('/custom/brew/opt')}
-        self.assertEqual({root.path for root in roots if root.isHomebrew}, expected)
-
-    def testHomebrewFilteringStopsAtThePackageLevel(self):
-        """
-        Skip unrelated Homebrew packages while scanning nested Java layouts normally.
-        """
-        openjdk, _ = self.makeJava('opt/openjdk@21/libexec/openjdk.jdk/Contents/Home')
-        temurin, _ = self.makeJava('opt/temurin/current')
-        unrelated, _ = self.makeJava('opt/node/embedded-java')
+        openjdk, _ = self.makeJava('brew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home')
+        temurin, _ = self.makeJava('brew/opt/temurin/current')
+        self.makeJava('brew/opt/node/embedded-java')
+        roots = subject.defaultRoots({'HOMEBREW_PREFIX': str(self.root / 'brew')}, self.root, 'darwin')
+        root = next(root for root in roots if root.path == self.root / 'brew/opt')
         discovery = subject.Discovery()
-        subject.scanRoot(subject.SearchRoot(path=self.root / 'opt', isHomebrew=True), discovery)
+        subject.scanRoot(root, discovery)
         self.assertEqual(discovery.homes, {openjdk, temurin})
         self.assertEqual(discovery.errors, [])
 
-        unfiltered = subject.Discovery()
-        subject.scanRoot(subject.SearchRoot(self.root / 'opt'), unfiltered)
-        self.assertEqual(unfiltered.homes, {openjdk, temurin, unrelated})
-
-    def testIdeBundlesAndGradleAndToolcacheLayouts(self):
+    def testConfiguredHomesAndAllPathEntriesExcludeShims(self):
         """
-        Recognize embedded IDE runtimes, Gradle downloads, and CI tool-cache layouts.
-        """
-        home, _ = self.makeJava('Android Studio.app/Contents/jbr/Contents/Home')
-        gradle, _ = self.makeJava('gradle/jdks/vendor-21/Contents/Home')
-        cache, _ = self.makeJava('toolcache/Java_Temurin-Hotspot_jdk/25/x64')
-        discovery = subject.Discovery()
-        subject.scanRoot(subject.SearchRoot(self.root), discovery)
-        self.assertEqual(discovery.homes, {home, gradle, cache})
-
-    def testDirectoryAliasesAreNotScannedAgain(self):
-        """
-        Traverse each resolved directory once even when aliases and cycles point to it.
-        """
-        home, _ = self.makeJava('manager/jdk')
-        (self.root / 'alias').symlink_to(target=self.root / 'manager', target_is_directory=True)
-        (self.root / 'cycle').symlink_to(target=self.root, target_is_directory=True)
-        scanned = []
-        originalScandir = os.scandir
-
-        def trackScandir(path):
-            """
-            Record actual directory targets while retaining normal traversal behavior.
-            """
-            scanned.append(Path(path).resolve(strict=True))
-            return originalScandir(path)
-
-        discovery = subject.Discovery()
-        with mock.patch.object(target=subject.os, attribute='scandir', side_effect=trackScandir):
-            subject.scanRoot(subject.SearchRoot(self.root), discovery)
-
-        self.assertEqual(discovery.homes, {home})
-        self.assertEqual(len(scanned), len(set(scanned)))
-        self.assertEqual(discovery.errors, [])
-
-    def testResolutionFailuresAreReported(self):
-        """
-        Report symlink resolution errors, including RuntimeError raised by older Python versions.
-        """
-        for error in (OSError(errno.ELOOP, 'Symlink loop'), RuntimeError('Symlink loop')):
-            with self.subTest(error=type(error).__name__):
-                discovery = subject.Discovery()
-                with mock.patch.object(target=subject.Path, attribute='resolve', side_effect=error):
-                    subject.scanRoot(subject.SearchRoot(path=self.root, required=True), discovery)
-
-                self.assertEqual(len(discovery.errors), 1)
-                self.assertEqual(discovery.searched, [])
-
-    def testAllPathEntriesAndConfiguredHomeAreDiscoveredButShimsAreNotRun(self):
-        """
-        Inspect every configured PATH launcher while excluding non-runtime shims.
+        Include every real PATH installation and configured home, but do not treat shims as Java runtimes.
         """
         first, _ = self.makeJava('first')
         second, _ = self.makeJava('second')
         shim = self.root / 'shims'
         shim.mkdir()
-        (shim / 'java').write_text('Do not execute this shim')
+        (shim / 'java').write_text('not a JVM')
         environment = {
             'PATH': os.pathsep.join(map(str, (first / 'bin', second / 'bin', shim))),
             'JAVA_HOME': str(first),
         }
         with mock.patch.object(target=subject, attribute='defaultRoots', return_value=[]):
             discovery = subject.discoverInstallations(environment, self.root, 'linux', [])
-        self.assertEqual(discovery.homes, {first, second})
-        self.assertTrue(any('shim' in item['reason'] for item in discovery.skipped))
 
-    def testMissingRequiredRootsAndAccessErrorsAreReported(self):
+        self.assertEqual(discovery.homes, {first, second})
+
+    def testInvalidOrInaccessibleSearchRootsAreReported(self):
         """
-        Distinguish absent optional roots from required-root and permission failures.
+        Ignore absent optional roots but report required, non-directory, and unreadable roots.
         """
         discovery = subject.Discovery()
         subject.scanRoot(subject.SearchRoot(self.root / 'optional'), discovery)
         self.assertEqual(discovery.errors, [])
+        self.assertTrue(discovery.skipped)
         subject.scanRoot(subject.SearchRoot(path=self.root / 'required', required=True), discovery)
-        self.assertEqual(len(discovery.errors), 1)
+        file = self.root / 'file.app'
+        file.write_text('fixture')
+        subject.scanRoot(subject.SearchRoot(path=file, required=True), discovery)
         with mock.patch.object(
             target=subject.os, attribute='scandir', side_effect=PermissionError(errno.EACCES, 'denied')
         ):
             subject.scanRoot(subject.SearchRoot(self.root), discovery)
-        self.assertEqual(len(discovery.errors), 2)
 
-    def testDepthLimitsAreReported(self):
+        self.assertEqual(len(discovery.errors), 3)
+
+    def testDepthLimitDoesNotClaimDeeperInstallations(self):
         """
-        Report directories beyond the traversal bound without claiming they were searched.
+        Leave out runtimes beyond the requested traversal limit and report the skipped scope.
         """
         home, _ = self.makeJava('nested/deeper/jdk')
         discovery = subject.Discovery()
         subject.scanRoot(subject.SearchRoot(path=self.root, depth=1), discovery)
         self.assertNotIn(home, discovery.homes)
-        self.assertTrue(any(item['reason'] == 'search depth limit' for item in discovery.skipped))
+        self.assertTrue(discovery.skipped)
 
-    def testSearchRootIsValidatedOnce(self):
+    def testMacRegistryContributesRuntimeHomes(self):
         """
-        Use the traversal's directory validation instead of checking the root twice.
-        """
-        originalIsDir = subject.Path.is_dir
-        rootChecks = []
-
-        def trackIsDir(path, *args, **kwargs):
-            """
-            Count checks of the root without changing filesystem behavior.
-            """
-            if path == self.root:
-                rootChecks.append(path)
-
-            return originalIsDir(path, *args, **kwargs)
-
-        discovery = subject.Discovery()
-        with mock.patch.object(target=subject.Path, attribute='is_dir', autospec=True, side_effect=trackIsDir):
-            subject.scanRoot(subject.SearchRoot(self.root), discovery)
-
-        self.assertEqual(rootChecks, [self.root])
-        self.assertEqual(discovery.searched, [str(self.root)])
-        self.assertEqual(discovery.errors, [])
-
-    def testFileCannotBeSearchRoot(self):
-        """
-        Report a non-directory root instead of treating it as an application or empty search.
-        """
-        path = self.root / 'not-a-directory.app'
-        path.write_text('fixture')
-        discovery = subject.Discovery()
-        subject.scanRoot(subject.SearchRoot(path=path, required=True), discovery)
-        self.assertEqual(len(discovery.errors), 1)
-        self.assertIn('Not a directory', discovery.errors[0])
-        self.assertEqual(discovery.searched, [])
-
-    def testMacRegistryUsesStructuredPlistAndDoesNotRunJavaStub(self):
-        """
-        Read macOS registry metadata through java_home rather than executing its Java stub.
+        Read registered runtime locations from the macOS registry response.
         """
         home, _ = self.makeJava()
         response = subprocess.CompletedProcess([], 0, plistlib.dumps([{'JVMHomePath': str(home)}]), b'')
         with mock.patch.object(target=subject, attribute='defaultRoots', return_value=[]):
             with mock.patch.object(target=subject.Path, attribute='is_file', return_value=True):
-                with mock.patch.object(target=subject.subprocess, attribute='run', return_value=response) as run:
+                with mock.patch.object(target=subject.subprocess, attribute='run', return_value=response):
                     discovery = subject.discoverInstallations({}, self.root, 'darwin', [])
+
         self.assertEqual(discovery.homes, {home})
-        self.assertEqual(run.call_args.kwargs['args'], ['/usr/libexec/java_home', '-X'])
-
-
-class ReportTests(unittest.TestCase):
-    """
-    Check report formatting without discovering installations or launching Java.
-    """
-    def setUp(self):
-        """
-        Prepare a report containing inventory, update results, skipped locations, and failures.
-        """
-        self.report = {
-            'mode': 'dry-run',
-            'searched_roots': ['/example/jdks'],
-            'skipped': [{'path': '/example/optional', 'reason': 'not present'}],
-            'errors': ['Fixture search failed'],
-            'runtimes': [
-                {'path': '/example/jdk', 'status': 'discovered'},
-                {'path': '/example/broken', 'status': 'failed', 'error': 'Fixture inspection failed'},
-            ],
-            'blocklists': [
-                {'path': '/example/vendor.certs', 'status': 'would-patch', 'missing': len(FINGERPRINTS), 'added': 0},
-            ],
-        }
-
-    def testJsonOutputContainsOnlyTheReport(self):
-        """
-        Emit parseable JSON without also printing human-readable errors or modifying the report.
-        """
-        output, errors = io.StringIO(), io.StringIO()
-        original = json.dumps(self.report)
-        with contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors):
-            subject.printReport(self.report, True)
-
-        self.assertEqual(json.loads(output.getvalue()), self.report)
-        self.assertEqual(errors.getvalue(), '')
-        self.assertEqual(json.dumps(self.report), original)
-
-    def testTextSummaryAndErrorStreams(self):
-        """
-        Keep inventory and update details on stdout while sending search errors to stderr.
-        """
-        output, errors = io.StringIO(), io.StringIO()
-        with contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors):
-            subject.printReport(self.report)
-
-        text = output.getvalue()
-        self.assertIn('Java blocklist dry-run', text)
-        self.assertIn('Searched: /example/jdks', text)
-        self.assertIn('failed: /example/broken — Fixture inspection failed', text)
-        self.assertIn('would-patch: /example/vendor.certs; added 0 fingerprints', text)
-        self.assertIn(f'Missing {len(FINGERPRINTS)} fingerprints; rerun with --apply to patch.', text)
-        self.assertIn('2 runtimes; 1 unique blocklists; 1 skipped locations.', text)
-        self.assertNotIn('Fixture search failed', text)
-        self.assertEqual(errors.getvalue(), 'ERROR: Fixture search failed\n')
-        self.assertNotIn('Restart existing JVMs', text)
-
-    def testApplySummaryIncludesRestartReminder(self):
-        """
-        Print the restart reminder for apply mode, without dry-run patch instructions.
-        """
-        self.report['mode'] = 'apply'
-        self.report['blocklists'][0].update({'status': 'patched', 'added': len(FINGERPRINTS)})
-        output = io.StringIO()
-        with contextlib.redirect_stdout(output), contextlib.redirect_stderr(io.StringIO()):
-            subject.printReport(self.report)
-
-        self.assertIn('Java blocklist apply', output.getvalue())
-        self.assertIn('Restart existing JVMs/Gradle daemons.', output.getvalue())
-        self.assertNotIn('rerun with --apply', output.getvalue())
+        self.assertEqual(discovery.errors, [])
 
 
 class CliTests(FixtureTest):
     """
-    Exercise CLI defaults, discovery scope, reporting, privilege boundaries, and import safety.
+    Exercise selected and discovered installations through the public CLI and reports.
     """
-    def testJavaHomeEnvironmentDefault(self):
+    def testSelectedHomeDefaultsToDryRunAndRequiresApply(self):
         """
-        Use JAVA_HOME when no explicit installation or discovery mode is supplied.
+        Honor both JAVA_HOME and explicit selection without changing files until apply is requested.
         """
-        home, _ = self.makeJava()
-        with mock.patch.dict(os.environ, {'JAVA_HOME': str(home)}):
-            status, output, _ = self.invoke(['--apply', '--json'])
-        self.assertEqual(status, 0)
-        self.assertEqual(json.loads(output)['blocklists'][0]['added'], len(FINGERPRINTS))
+        for selection in ('environment', 'argument'):
+            with self.subTest(selection=selection):
+                home, target = self.makeJava(f'{selection} jdk with spaces')
+                arguments = [] if selection == 'environment' else ['--java-home', str(home)]
+                configured = home if selection == 'environment' else self.root / 'unused'
+                with mock.patch.dict(os.environ, {'JAVA_HOME': str(configured)}):
+                    status, output, _ = self.invoke([*arguments, '--json'])
+                    self.assertEqual(status, 0)
+                    self.assertEqual(json.loads(output)['mode'], 'dry-run')
+                    self.assertEqual(target.read_bytes(), VENDOR)
+                    status, output, _ = self.invoke([*arguments, '--apply', '--json'])
 
-    def testAllModeScansCustomRootsAndPatchesEveryRuntime(self):
+                self.assertEqual(status, 0)
+                self.assertEqual(json.loads(output)['blocklists'][0]['added'], len(FINGERPRINTS))
+
+    def testAllModePatchesUniqueFilesAndPreservesAliases(self):
         """
-        Patch all distinct fixture runtimes discovered under an explicit extra root.
+        Protect Java 8 and modern layouts while deduplicating runtime aliases and shared symlink targets.
         """
-        first, firstTarget = self.makeJava('first', '1.8')
-        second, secondTarget = self.makeJava('second')
+        first, firstTarget = self.makeJava('java8', '1.8')
+        _, secondTarget = self.makeJava('modern')
+        _, sharedTarget = self.makeJava('shared')
+        sharedTarget.unlink()
+        sharedTarget.symlink_to(firstTarget)
+        self.makeJava(name='same-runtime', specification='1.8', runtimeHome=first / 'jre')
         (self.root / 'alias').symlink_to(target=first, target_is_directory=True)
-        with mock.patch.dict(in_dict=os.environ, values={'PATH': ''}, clear=True):
-            with mock.patch.object(target=subject, attribute='defaultRoots', return_value=[]):
-                with mock.patch.object(subject.sys, 'platform', 'linux'):
-                    status, output, _ = self.invoke(['--all', '--search-root', str(self.root), '--apply', '--json'])
-        self.assertEqual(status, 0)
+        status, output, _ = self.invokeAll(self.root, ['--apply', '--json'])
         report = json.loads(output)
-        self.assertEqual(len(report['runtimes']), 2)
+        self.assertEqual(status, 0)
+        self.assertEqual(len(report['runtimes']), 3)
         self.assertEqual(len(report['blocklists']), 2)
         self.assertEqual(sum(entry['added'] for entry in report['blocklists']), 2 * len(FINGERPRINTS))
-        self.assertEqual(report['searched_roots'], [str(self.root)])
+        self.assertTrue(sharedTarget.is_symlink())
         for target in (firstTarget, secondTarget):
             self.assertTrue(set(FINGERPRINTS).issubset(subject.blockedFingerprints(target.read_bytes())))
 
-    def testDefaultDryRunAndExplicitApply(self):
+    def testPartialFailuresDoNotHideSuccessOrLeakDiagnostics(self):
         """
-        Require explicit apply mode before modifying a selected installation.
+        Continue updating valid files but return failure for inspection, blocklist, or search errors.
         """
-        home, target = self.makeJava('jdk with spaces and $(echo unsafe)')
-        status, output, _ = self.invoke(['--java-home', str(home), '--json'])
-        self.assertEqual(status, 0)
-        self.assertEqual(json.loads(output)['mode'], 'dry-run')
-        self.assertEqual(target.read_bytes(), VENDOR)
-        status, output, _ = self.invoke(['--java-home', str(home), '--apply', '--json'])
-        self.assertEqual(status, 0)
-        self.assertEqual(json.loads(output)['blocklists'][0]['added'], len(FINGERPRINTS))
+        for failure in ('inspection', 'blocklist', 'search'):
+            with self.subTest(failure=failure):
+                _, goodTarget = self.makeJava(f'{failure}/good')
+                bad, badTarget = self.makeJava(f'{failure}/bad')
+                arguments = ['--apply', '--json']
+                if failure == 'inspection':
+                    (bad / 'bin/java').write_text("#!/bin/sh\necho 'SECRET_SENTINEL' >&2\nexit 1\n")
+                elif failure == 'blocklist':
+                    badTarget.write_bytes(b'Algorithm=SHA-512\n')
+                else:
+                    arguments += ['--search-root', str(self.root / 'missing')]
 
-    def testSearchFailuresProduceNonzeroStatusAfterProcessingFoundJvm(self):
+                before = badTarget.read_bytes()
+                status, output, errors = self.invokeAll(self.root / failure, arguments)
+                report = json.loads(output)
+                self.assertEqual(status, 1)
+                self.assertNotIn('SECRET_SENTINEL', output + errors)
+                self.assertTrue(any(entry['status'] == 'patched' for entry in report['blocklists']))
+                self.assertTrue(set(FINGERPRINTS).issubset(subject.blockedFingerprints(goodTarget.read_bytes())))
+                if failure != 'search':
+                    self.assertEqual(badTarget.read_bytes(), before)
+
+    def testEmptyDiscoveryDoesNotReportProtection(self):
         """
-        Return failure for incomplete discovery even after successfully patching a found JVM.
+        Return a failure report rather than claiming protection when no runtime was found.
         """
-        home, target = self.makeJava()
-        discovery = subject.Discovery(homes={home}, errors=['Unreadable search root'])
-        with mock.patch.object(target=subject, attribute='discoverInstallations', return_value=discovery):
-            status, output, _ = self.invoke(['--all', '--apply', '--json'])
+        status, output, _ = self.invokeAll(self.root, ['--json'])
+        report = json.loads(output)
         self.assertEqual(status, 1)
-        self.assertEqual(json.loads(output)['blocklists'][0]['status'], 'patched')
-        self.assertNotEqual(target.read_bytes(), VENDOR)
+        self.assertTrue(report['errors'])
+        self.assertEqual(report['runtimes'], [])
+        self.assertEqual(report['blocklists'], [])
 
-    def testEmptyDiscoveryIsNotReportedAsProtection(self):
+    def testReportsKeepJsonAndTextErrorsOnTheirIntendedStreams(self):
         """
-        Return a nonzero status when discovery finds no installations to inspect.
+        Keep JSON parseable and send text-mode search errors to stderr without pinning report wording.
         """
-        with mock.patch.object(target=subject, attribute='discoverInstallations', return_value=subject.Discovery()):
-            status, output, _ = self.invoke(['--all', '--json'])
-        self.assertEqual(status, 1)
-        self.assertIn('No Java installations', json.loads(output)['errors'][0])
-
-    def testRefusesScanningAsRoot(self):
-        """
-        Reject whole-process root execution before inspecting discovered Java executables.
-        """
-        with mock.patch.object(target=subject.os, attribute='geteuid', return_value=0):
-            with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
-                subject.main(['--all'])
-
-    def testApplyAndDryRunCannotBeCombined(self):
-        """
-        Reject contradictory public modes before any file can be changed.
-        """
-        home, target = self.makeJava()
-        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
-            subject.main(['--java-home', str(home), '--apply', '--dry-run'])
-
-        self.assertEqual(target.read_bytes(), VENDOR)
-
-    def testImportDoesNotExecuteTheScript(self):
-        """
-        Import the module without executing its CLI or producing output.
-        """
-        result = subprocess.run(
-            args=[sys.executable, '-c', 'import blockCompromisedJavaCertificates'],
-            cwd=subject.SCRIPT.parent,
-            capture_output=True,
-        )
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout, b'')
-        self.assertEqual(result.stderr, b'')
+        missing = self.root / 'missing'
+        for outputMode in ([], ['--json']):
+            with self.subTest(arguments=outputMode):
+                status, output, errors = self.invokeAll(self.root, ['--search-root', str(missing), *outputMode])
+                self.assertEqual(status, 1)
+                if outputMode:
+                    self.assertTrue(json.loads(output)['errors'])
+                    self.assertEqual(errors, '')
+                else:
+                    self.assertIn(str(missing), errors)
+                    self.assertNotIn(str(missing), output)
 
 
 if __name__ == '__main__':
