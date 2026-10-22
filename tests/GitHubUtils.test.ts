@@ -392,21 +392,82 @@ describe('GitHubUtils', () => {
     });
 
     describe('getTeamMemberLogins', () => {
-        it('returns the fetched team login set', async () => {
+        it('batches unique candidate searches across teams and rejects fuzzy and differently cased matches', async () => {
+            let calls = 0;
+            const gitHubUtils = createGitHubUtils(
+                createMockClient(async (query, variables) => {
+                    calls++;
+                    assert.match(query, /team0: team\(slug: \$teamSlug0\)/);
+                    assert.match(query, /team1: team\(slug: \$teamSlug1\)/);
+                    assert.match(query, /member0: members\(first: 1, query: \$member0\)/);
+                    assert.match(query, /member1: members\(first: 1, query: \$member1\)/);
+                    assert.doesNotMatch(query, /pageInfo|after:/);
+                    assert.deepEqual(variables, {
+                        organization: 'Expensify',
+                        member0: 'AndrewGable',
+                        member1: 'outsider',
+                        teamSlug0: 'expensify-expensify',
+                        teamSlug1: 'writers',
+                    });
+                    return {
+                        organization: {
+                            team0: {
+                                member0: {nodes: [{login: 'AndrewGable'}]},
+                                member1: {nodes: [{login: 'outsider-other'}]},
+                            },
+                            team1: {
+                                member0: {nodes: []},
+                                member1: {nodes: [{login: 'Outsider'}]},
+                            },
+                        },
+                    };
+                }),
+            );
+            assert.deepEqual(
+                await gitHubUtils.getTeamMemberLogins(['expensify-expensify', 'writers', 'expensify-expensify'], ['AndrewGable', 'outsider', 'AndrewGable']),
+                new Set(['AndrewGable']),
+            );
+            assert.equal(calls, 1);
+        });
+
+        it('skips the API when there are no teams or candidates', async () => {
+            const gitHubUtils = createGitHubUtils(
+                createMockClient(async () => {
+                    throw new Error('Unexpected API call');
+                }),
+            );
+            assert.deepEqual(await gitHubUtils.getTeamMemberLogins(['team'], []), new Set());
+            assert.deepEqual(await gitHubUtils.getTeamMemberLogins([], ['alice']), new Set());
+        });
+
+        it('fails closed for missing organizations, teams, or search results', async () => {
+            for (const response of [{organization: null}, {organization: {team0: null}}, {organization: {team0: {}}}, {organization: {team0: {member0: null}}}]) {
+                const gitHubUtils = createGitHubUtils(createMockClient(async () => response));
+                await assert.rejects(() => gitHubUtils.getTeamMemberLogins(['team'], ['alice']));
+            }
+        });
+
+        it('propagates API failures', async () => {
+            const gitHubUtils = createGitHubUtils(
+                createMockClient(async () => {
+                    throw new Error('Forbidden');
+                }),
+            );
+            await assert.rejects(() => gitHubUtils.getTeamMemberLogins(['team'], ['alice']), /Forbidden/);
+        });
+
+        it('returns only exact candidate logins', async () => {
             const gitHubUtils = createGitHubUtils(
                 createMockClient(async () => ({
                     organization: {
-                        team: {
-                            members: {
-                                pageInfo: {hasNextPage: false, endCursor: null},
-                                nodes: [{login: 'AndrewGable'}],
-                            },
+                        team0: {
+                            member0: {nodes: [{login: 'AndrewGable'}]},
                         },
                     },
                 })),
             );
 
-            const logins = await gitHubUtils.getTeamMemberLogins('expensify-expensify');
+            const logins = await gitHubUtils.getTeamMemberLogins(['expensify-expensify'], ['AndrewGable']);
 
             // GitHub logins are case-sensitive, so this is a direct set lookup, not a case-insensitive match.
             assert.equal(logins.has('AndrewGable'), true);
