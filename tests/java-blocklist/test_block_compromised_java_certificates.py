@@ -287,7 +287,7 @@ class UpdateTests(FixtureTest):
             target=subject.Path, attribute='open', autospec=True, side_effect=self.openWithoutAppend
         ):
             with mock.patch.object(target=subject.subprocess, attribute='run', side_effect=appendThroughSudo) as sudo:
-                result = subject.updateBlocklist(self.target, FINGERPRINTS, True, True)
+                result = subject.updateBlocklist(self.target, FINGERPRINTS, True)
 
         sudo.assert_called_once()
         self.assertEqual(sudo.call_args.kwargs['args'], ['sudo', '-n', 'tee', '-a', str(self.target)])
@@ -306,7 +306,7 @@ class UpdateTests(FixtureTest):
         ):
             with mock.patch.object(target=subject.subprocess, attribute='run', return_value=response):
                 with self.assertRaisesRegex(ValueError, 'verification failed'):
-                    subject.updateBlocklist(self.target, FINGERPRINTS, True, True)
+                    subject.updateBlocklist(self.target, FINGERPRINTS, True)
 
     def testFailedSudoAppendIsReported(self):
         """
@@ -316,23 +316,22 @@ class UpdateTests(FixtureTest):
         with mock.patch.object(target=subject.Path, attribute='open', side_effect=PermissionError):
             with mock.patch.object(target=subject.subprocess, attribute='run', return_value=response):
                 with self.assertRaisesRegex(ValueError, 'Unable to append'):
-                    subject.appendBlocklist(self.target, b'entries\n', True)
+                    subject.appendBlocklist(self.target, b'entries\n')
 
         self.assertEqual(self.target.read_bytes(), VENDOR)
 
-    def testSudoPromptPolicy(self):
+    def testSudoNeverPrompts(self):
         """
-        Allow prompts only for interactive laptop runs, never CI or noninteractive execution.
+        Use sudo -n regardless of terminal availability or whether the script runs in CI.
         """
         cases = (
-            (False, True, '', False),
-            (True, True, '', True),
-            (False, False, '', True),
-            (False, True, 'true', True),
+            (True, ''),
+            (False, ''),
+            (True, 'true'),
         )
         response = subprocess.CompletedProcess([], 0)
-        for nonInteractive, terminal, ci, noPrompt in cases:
-            with self.subTest(nonInteractive=nonInteractive, terminal=terminal, ci=ci):
+        for terminal, ci in cases:
+            with self.subTest(terminal=terminal, ci=ci):
                 with contextlib.ExitStack() as stack:
                     stack.enter_context(mock.patch.dict(os.environ, {'CI': ci}))
                     stack.enter_context(mock.patch.object(target=sys.stdin, attribute='isatty', return_value=terminal))
@@ -342,9 +341,9 @@ class UpdateTests(FixtureTest):
                     sudo = stack.enter_context(
                         mock.patch.object(target=subject.subprocess, attribute='run', return_value=response)
                     )
-                    subject.appendBlocklist(self.target, b'entries\n', nonInteractive)
+                    subject.appendBlocklist(self.target, b'entries\n')
 
-                self.assertEqual('-n' in sudo.call_args.kwargs['args'], noPrompt)
+                self.assertEqual(sudo.call_args.kwargs['args'][:2], ['sudo', '-n'])
 
     def testUnreadableBlocklistDoesNotUseSudo(self):
         """
@@ -353,7 +352,7 @@ class UpdateTests(FixtureTest):
         with mock.patch.object(target=subject.Path, attribute='read_bytes', side_effect=PermissionError):
             with mock.patch.object(subject.subprocess, 'run') as sudo:
                 with self.assertRaises(PermissionError):
-                    subject.updateBlocklist(self.target, FINGERPRINTS, True, True)
+                    subject.updateBlocklist(self.target, FINGERPRINTS, True)
 
         sudo.assert_not_called()
 
@@ -408,7 +407,7 @@ class RuntimeTests(FixtureTest):
         home, target = self.makeJava()
         java = home / 'bin/java'
         java.write_text("#!/bin/sh\necho 'JAVA_TOOL_OPTIONS: SECRET_SENTINEL' >&2\nexit 1\n")
-        runtimes, blocklists = subject.run([home], FINGERPRINTS, True, True)
+        runtimes, blocklists = subject.run([home], FINGERPRINTS, True)
         self.assertEqual(runtimes[0]['status'], 'failed')
         self.assertEqual(blocklists, [])
         self.assertNotIn('SECRET_SENTINEL', json.dumps(runtimes))
@@ -434,7 +433,7 @@ class RuntimeTests(FixtureTest):
         """
         home, target = self.makeJava('first')
         alias, _ = self.makeJava(name='alias', runtimeHome=home)
-        runtimes, blocklists = subject.run([home, alias], FINGERPRINTS, False, True)
+        runtimes, blocklists = subject.run([home, alias], FINGERPRINTS, False)
         self.assertEqual(len(runtimes), 1)
         self.assertEqual(len(blocklists), 1)
         second, secondTarget = self.makeJava('second')
@@ -453,7 +452,7 @@ class RuntimeTests(FixtureTest):
             with mock.patch.object(
                 target=subject, attribute='updateBlocklist', wraps=subject.updateBlocklist
             ) as patch:
-                runtimes, blocklists = subject.run([home, second], FINGERPRINTS, True, True)
+                runtimes, blocklists = subject.run([home, second], FINGERPRINTS, True)
 
         self.assertEqual(len(runtimes), 2)
         self.assertEqual(len(blocklists), 1)
@@ -469,7 +468,7 @@ class RuntimeTests(FixtureTest):
         second, secondTarget = self.makeJava('second')
         secondTarget.unlink()
         os.link(target, secondTarget)
-        _, blocklists = subject.run([first, second], FINGERPRINTS, True, True)
+        _, blocklists = subject.run([first, second], FINGERPRINTS, True)
         self.assertEqual([entry['status'] for entry in blocklists], ['patched', 'already-protected'])
         self.assertEqual(sum(entry['added'] for entry in blocklists), len(FINGERPRINTS))
 
@@ -478,7 +477,7 @@ class RuntimeTests(FixtureTest):
         Continue protecting valid installations after another candidate fails inspection.
         """
         home, target = self.makeJava()
-        runtimes, blocklists = subject.run([self.root / 'absent', home], FINGERPRINTS, True, True)
+        runtimes, blocklists = subject.run([self.root / 'absent', home], FINGERPRINTS, True)
         self.assertEqual([entry['status'] for entry in runtimes], ['failed', 'discovered'])
         self.assertEqual(blocklists[0]['status'], 'patched')
         self.assertEqual(len(set(FINGERPRINTS) & subject.blockedFingerprints(target.read_bytes())), len(FINGERPRINTS))
@@ -491,17 +490,17 @@ class RuntimeTests(FixtureTest):
         second, secondTarget = self.makeJava('second')
         update = subject.updateBlocklist
 
-        def failFirst(target, fingerprints, apply, nonInteractive):
+        def failFirst(target, fingerprints, apply):
             """
             Simulate a failure for one target without changing the other update's behavior.
             """
             if target == firstTarget:
                 raise ValueError('Fixture update failure')
 
-            return update(target, fingerprints, apply, nonInteractive)
+            return update(target, fingerprints, apply)
 
         with mock.patch.object(target=subject, attribute='updateBlocklist', side_effect=failFirst):
-            _, blocklists = subject.run([first, second], FINGERPRINTS, True, True)
+            _, blocklists = subject.run([first, second], FINGERPRINTS, True)
 
         self.assertEqual([entry['status'] for entry in blocklists], ['failed', 'patched'])
         self.assertTrue(set(FINGERPRINTS).issubset(subject.blockedFingerprints(secondTarget.read_bytes())))

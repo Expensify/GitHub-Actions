@@ -80,6 +80,6 @@ jobs:
       - name: Verify repeat-run idempotence
         shell: bash
         run: |
-          result=$(python3 scripts/blockCompromisedJavaCertificates.py --apply --non-interactive)
+          result=$(python3 scripts/blockCompromisedJavaCertificates.py --apply)
           echo "$result"
           grep -F 'already-protected:' <<< "$result"

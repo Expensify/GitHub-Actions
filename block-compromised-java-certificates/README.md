@@ -19,7 +19,7 @@ Patch the selected JVM's certificate blocklist **after Java setup/cache restorat
 - Inspects the selected executable's actual `java.home`, vendor, and runtime version. Discovers `lib/security/blocked.certs` or `lib/security/blacklisted.certs` there, including the Java 8 nested JRE layout and distro symlinks.
 - Appends only missing fingerprints from the [checked-in certificates](./compromised-java-certificates.pem).
 - Merges into existing files, preserving existing blocklist entries. Verifies the resulting file and is idempotent.
-- Uses `sudo tee -a` only if a normal append is denied. CI uses noninteractive sudo; Java discovery and final verification are never elevated.
+- Uses `sudo -n tee -a` only if a normal append is denied. It never prompts for a password; Java discovery and final verification are never elevated.
 - Fails the job loudly if patching the blocklist fails.
 
 ## Developer laptops
@@ -35,6 +35,6 @@ Discovery checks `JAVA_HOME`, `JDK_HOME`, all Java entries on `PATH`, the macOS 
 
 Searches are bounded (normally six directory levels); they do not scan the entire filesystem. Add custom or deeper locations with `--all --search-root /path/to/jdks`. Arbitrary locations, archives, inaccessible directories, other users' homes, containers, and VMs require separate coverage. `--json` includes searched roots, skipped locations, a `runtimes` inventory, and per-file results in `blocklists`. Any search/access/patch failure produces a nonzero exit, while other discovered files are still processed.
 
-Dry-run is the default and never modifies blocklists or requests sudo. Run as your normal user; apply mode can prompt for permission to update individual files. Use `--non-interactive` to fail rather than prompt, as the composite action does. To target one installation, use `--java-home /path/to/jdk` instead of `--all` (or set `JAVA_HOME`).
+Dry-run is the default and never modifies blocklists or requests sudo. Run as your normal user; apply mode never prompts for a password. If a privileged append fails, authorize sudo separately (for example, with `sudo -v`) and rerun; the script does not do that automatically. To target one installation, use `--java-home /path/to/jdk` instead of `--all` (or set `JAVA_HOME`).
 
 Restart existing JVMs, IDEs, and Gradle daemons after patching. Rerun after JDK installations or updates, including newly downloaded Gradle toolchains. The blocklist protects standard JVM certificate validation, not custom TLS implementations that bypass it.

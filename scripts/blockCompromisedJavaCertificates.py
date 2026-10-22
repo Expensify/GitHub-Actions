@@ -93,33 +93,24 @@ def blockedFingerprints(content: bytes) -> set[str]:
     return fingerprints
 
 
-def appendBlocklist(target: Path, additions: bytes, nonInteractive: bool) -> None:
+def appendBlocklist(target: Path, additions: bytes) -> None:
     """
     Append normally, using sudo only if the write is denied.
 
-    Pass the append data directly to tee without a shell. Allow a password prompt only when
-    running interactively outside CI; discard tee's output so JSON reports remain clean.
+    Always use noninteractive sudo, even in a terminal. Pass append data directly to tee
+    without a shell and discard its output so JSON reports remain clean.
     """
     try:
         with target.open('ab') as output:
             output.write(additions)
     except PermissionError:
-        command = ['sudo']
-        if nonInteractive or not sys.stdin.isatty() or os.environ.get('CI'):
-            command.append('-n')
-
-        command += ['tee', '-a', str(target)]
+        command = ['sudo', '-n', 'tee', '-a', str(target)]
         result = subprocess.run(args=command, input=additions, stdout=subprocess.DEVNULL, timeout=120)
         if result.returncode:
-            raise ValueError(f'Unable to append to {target} using sudo.')
+            raise ValueError(f'Unable to append to {target} using noninteractive sudo; authorize separately and retry.')
 
 
-def updateBlocklist(
-    target: Path,
-    fingerprints: list[str],
-    apply: bool = False,
-    nonInteractive: bool = False,
-) -> dict:
+def updateBlocklist(target: Path, fingerprints: list[str], apply: bool = False) -> dict:
     """
     Inspect or patch an existing, resolved blocklist and return its status and entry counts.
 
@@ -138,7 +129,7 @@ def updateBlocklist(
 
     separator = b'' if original.endswith((b'\n', b'\r')) else b'\n'
     additions = separator + ('\n'.join(missing) + '\n').encode('ascii')
-    appendBlocklist(target, additions, nonInteractive)
+    appendBlocklist(target, additions)
 
     if not set(fingerprints).issubset(blockedFingerprints(target.read_bytes())):
         raise ValueError('JVM certificate blocklist verification failed.')
@@ -387,7 +378,7 @@ def discoverInstallations(environment: dict, home: Path, platform: str, extraRoo
     return discovery
 
 
-def run(homes: list[Path], fingerprints: list[str], apply: bool, nonInteractive: bool) -> tuple[list[dict], list[dict]]:
+def run(homes: list[Path], fingerprints: list[str], apply: bool) -> tuple[list[dict], list[dict]]:
     """
     Collect unique blocklist paths, then update each file and return runtime and file results.
 
@@ -425,7 +416,7 @@ def run(homes: list[Path], fingerprints: list[str], apply: bool, nonInteractive:
     for target in sorted(blocklists):
         entry = {'path': str(target)}
         try:
-            entry.update(updateBlocklist(target, fingerprints, apply, nonInteractive))
+            entry.update(updateBlocklist(target, fingerprints, apply))
         except (OSError, ValueError, subprocess.SubprocessError) as error:
             entry.update({'status': 'failed', 'error': str(error)})
 
@@ -449,7 +440,6 @@ def main(argv=None) -> int:
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument('--apply', action='store_true', help='Apply missing blocks (default: dry-run)')
     mode.add_argument('--dry-run', action='store_true', help='Report changes without writing or requesting sudo')
-    parser.add_argument('--non-interactive', action='store_true', help='Never prompt for a sudo password')
     parser.add_argument('--json', action='store_true', help='Print the inventory and results as JSON')
     args = parser.parse_args(argv)
     if sys.version_info < (3, 9) or sys.platform not in ('darwin', 'linux'):
@@ -472,7 +462,7 @@ def main(argv=None) -> int:
 
         discovery = Discovery(homes={Path(selected).expanduser().absolute()})
 
-    runtimes, blocklists = run(list(discovery.homes), fingerprints, args.apply, args.non_interactive)
+    runtimes, blocklists = run(list(discovery.homes), fingerprints, args.apply)
     if not runtimes:
         discovery.errors.append('No Java installations found in the searched locations.')
 

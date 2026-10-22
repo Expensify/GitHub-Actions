@@ -17,7 +17,7 @@ runs:
         import sys
 
         script = os.path.join(os.environ["BLOCKLIST_ACTION_PATH"], "..", "scripts", "blockCompromisedJavaCertificates.py")
-        sys.argv = [script, "--apply", "--non-interactive"]
+        sys.argv = [script, "--apply"]
         if os.environ.get("BLOCKLIST_JAVA_HOME"):
             sys.argv += ["--java-home", os.environ["BLOCKLIST_JAVA_HOME"]]
         runpy.run_path(script, run_name="__main__")
