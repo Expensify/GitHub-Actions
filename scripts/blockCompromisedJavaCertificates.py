@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import argparse
 import base64
-import fcntl
 import hashlib
 import json
 import os
@@ -111,48 +110,27 @@ def updateBlocklist(target: Path, fingerprints: list[str], apply: bool = False) 
     """
     Inspect or patch an existing, resolved blocklist and return its status and entry counts.
 
-    Dry-run only reports missing fingerprints. Apply mode locks and re-reads the file before
-    appending missing entries, then verifies coverage and preservation of contents and metadata.
+    Dry-run only reports missing fingerprints. Apply mode appends missing entries to the
+    existing file, then reads it back to verify coverage.
     Propagate permission errors so the caller can elevate only this operation when needed.
     """
-    before = target.stat()
-    if not stat.S_ISREG(before.st_mode):
+    if not stat.S_ISREG(target.stat().st_mode):
         raise ValueError(f'JVM certificate blocklist is not a regular file: {target}')
 
     original = target.read_bytes()
-    missing = set(fingerprints) - blockedFingerprints(original)
+    existing = blockedFingerprints(original)
+    missing = [fingerprint for fingerprint in fingerprints if fingerprint not in existing]
     if not missing or not apply:
         return {'status': 'would-patch' if missing else 'already-protected', 'missing': len(missing), 'added': 0}
 
-    # Never create or replace a vendor file. Lock and re-read before appending, retaining its inode and symlinks.
-    descriptor = os.open(target, os.O_RDWR | os.O_APPEND | os.O_NOFOLLOW)
-    with os.fdopen(descriptor, 'a+b') as output:
-        fcntl.flock(output, fcntl.LOCK_EX)
-        opened = os.fstat(output.fileno())
-        if (opened.st_dev, opened.st_ino) != (before.st_dev, before.st_ino):
-            raise ValueError('JVM certificate blocklist changed before the update.')
+    separator = b'' if original.endswith((b'\n', b'\r')) else b'\n'
+    with target.open('ab') as output:
+        output.write(separator + ('\n'.join(missing) + '\n').encode('ascii'))
 
-        output.seek(0)
-        original = output.read()
-        existing = blockedFingerprints(original)
-        missing = [fingerprint for fingerprint in fingerprints if fingerprint not in existing]
-        if missing:
-            separator = b'' if original.endswith((b'\n', b'\r')) else b'\n'
-            output.write(separator + ('\n'.join(missing) + '\n').encode('ascii'))
-            output.flush()
-            os.fsync(output.fileno())
+    if not set(fingerprints).issubset(blockedFingerprints(target.read_bytes())):
+        raise ValueError('JVM certificate blocklist verification failed.')
 
-        output.seek(0)
-        updated = output.read()
-        after = target.stat()
-        if not updated.startswith(original) or not set(fingerprints).issubset(blockedFingerprints(updated)):
-            raise ValueError('JVM certificate blocklist verification failed.')
-
-        fields = ('st_mode', 'st_uid', 'st_gid', 'st_dev', 'st_ino')
-        if any(getattr(before, name) != getattr(after, name) for name in fields):
-            raise ValueError('JVM certificate blocklist metadata changed.')
-
-    return {'status': 'patched' if missing else 'already-protected', 'missing': len(missing), 'added': len(missing)}
+    return {'status': 'patched', 'missing': len(missing), 'added': len(missing)}
 
 
 def inspectRuntime(home: Path) -> dict:

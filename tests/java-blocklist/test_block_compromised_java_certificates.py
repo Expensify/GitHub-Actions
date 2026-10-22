@@ -241,6 +241,14 @@ class UpdateTests(FixtureTest):
             subject.updateBlocklist(missing, FINGERPRINTS, True)
         self.assertFalse(missing.exists())
 
+    def testVerificationFailsWhenEntriesAreMissingAfterWriting(self):
+        """
+        Fail if reading the file back does not confirm the required entries, even after a successful write.
+        """
+        with mock.patch.object(target=subject.Path, attribute='read_bytes', side_effect=[VENDOR, VENDOR]):
+            with self.assertRaisesRegex(ValueError, 'verification failed'):
+                subject.updateBlocklist(self.target, FINGERPRINTS, True)
+
 
 class RuntimeTests(FixtureTest):
     """
