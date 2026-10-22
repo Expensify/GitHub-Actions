@@ -16,6 +16,7 @@ jobs:
   verify:
     name: ${{ matrix.distribution }} ${{ matrix.java }} / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    # The existing action-ref validator recognizes local actions only under .github.
     defaults:
       run:
         working-directory: .github/actions/under-test
@@ -52,7 +53,6 @@ jobs:
         uses: ./.github/actions/under-test/block-compromised-java-certificates
 
       - name: Verify the actual JVM rejects every compromised certificate
-        shell: bash
         env:
           JAVA_MAJOR: ${{ matrix.java }}
         run: |
@@ -66,7 +66,6 @@ jobs:
             block-compromised-java-certificates/compromised-java-certificates.pem
 
       - name: Verify repeat-run idempotence
-        shell: bash
         run: |
           result=$(python3 scripts/blockCompromisedJavaCertificates.py --apply)
           echo "$result"
