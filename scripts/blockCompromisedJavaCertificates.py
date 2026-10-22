@@ -449,6 +449,42 @@ def run(homes: Iterable[Path], fingerprints: list[str], apply: bool) -> tuple[li
     return runtimes, results
 
 
+def printReport(report: dict, asJson: bool = False) -> None:
+    """
+    Print an inventory report as JSON or as a human-readable summary.
+
+    Keep JSON on stdout and text-mode search errors on stderr. Include the restart reminder
+    only for apply runs; reporting does not determine or change the CLI exit status.
+    """
+    if asJson:
+        print(json.dumps(obj=report, indent=2))
+        return
+
+    print(f'Java blocklist {report["mode"]} (discovery is limited to the reported search locations).')
+    for root in report['searched_roots']:
+        print(f'Searched: {root}')
+
+    for runtime in report['runtimes']:
+        if runtime['status'] == 'failed':
+            print(f'failed: {runtime["path"]} — {runtime["error"]}')
+
+    for entry in report['blocklists']:
+        detail = f' — {entry["error"]}' if 'error' in entry else ''
+        print(f'{entry["status"]}: {entry["path"]}{detail}; added {entry.get("added", 0)} fingerprints')
+        if entry['status'] == 'would-patch':
+            print(f'  Missing {entry["missing"]} fingerprints; rerun with --apply to patch.')
+
+    for error in report['errors']:
+        print(f'ERROR: {error}', file=sys.stderr)
+
+    print(
+        f'{len(report["runtimes"])} runtimes; {len(report["blocklists"])} unique blocklists; '
+        f'{len(report["skipped"])} skipped locations.'
+    )
+    if report['mode'] == 'apply':
+        print('Restart existing JVMs/Gradle daemons. Rerun after JDK installations or updates.')
+
+
 def main(argv=None) -> int:
     """
     Run the selected CLI mode and return a nonzero status for any discovery or runtime failure.
@@ -498,32 +534,7 @@ def main(argv=None) -> int:
         'runtimes': runtimes,
         'blocklists': blocklists,
     }
-    if args.json:
-        print(json.dumps(obj=report, indent=2))
-    else:
-        print(f'Java blocklist {report["mode"]} (discovery is limited to the reported search locations).')
-        for root in discovery.searched:
-            print(f'Searched: {root}')
-
-        for runtime in runtimes:
-            if runtime['status'] == 'failed':
-                print(f'failed: {runtime["path"]} — {runtime["error"]}')
-
-        for entry in blocklists:
-            detail = f' — {entry["error"]}' if 'error' in entry else ''
-            print(f'{entry["status"]}: {entry["path"]}{detail}; added {entry.get("added", 0)} fingerprints')
-            if entry['status'] == 'would-patch':
-                print(f'  Missing {entry["missing"]} fingerprints; rerun with --apply to patch.')
-
-        for error in discovery.errors:
-            print(f'ERROR: {error}', file=sys.stderr)
-
-        print(
-            f'{len(runtimes)} runtimes; {len(blocklists)} unique blocklists; '
-            f'{len(discovery.skipped)} skipped locations.'
-        )
-        if args.apply:
-            print('Restart existing JVMs/Gradle daemons. Rerun after JDK installations or updates.')
+    printReport(report, args.json)
 
     return int(bool(discovery.errors or any(entry['status'] == 'failed' for entry in runtimes + blocklists)))
 

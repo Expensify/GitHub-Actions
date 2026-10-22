@@ -724,6 +724,75 @@ class DiscoveryTests(FixtureTest):
         self.assertEqual(run.call_args.kwargs['args'], ['/usr/libexec/java_home', '-X'])
 
 
+class ReportTests(unittest.TestCase):
+    """
+    Check report formatting without discovering installations or launching Java.
+    """
+    def setUp(self):
+        """
+        Prepare a report containing inventory, update results, skipped locations, and failures.
+        """
+        self.report = {
+            'mode': 'dry-run',
+            'searched_roots': ['/example/jdks'],
+            'skipped': [{'path': '/example/optional', 'reason': 'not present'}],
+            'errors': ['Fixture search failed'],
+            'runtimes': [
+                {'path': '/example/jdk', 'status': 'discovered'},
+                {'path': '/example/broken', 'status': 'failed', 'error': 'Fixture inspection failed'},
+            ],
+            'blocklists': [
+                {'path': '/example/vendor.certs', 'status': 'would-patch', 'missing': len(FINGERPRINTS), 'added': 0},
+            ],
+        }
+
+    def testJsonOutputContainsOnlyTheReport(self):
+        """
+        Emit parseable JSON without also printing human-readable errors or modifying the report.
+        """
+        output, errors = io.StringIO(), io.StringIO()
+        original = json.dumps(self.report)
+        with contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors):
+            subject.printReport(self.report, True)
+
+        self.assertEqual(json.loads(output.getvalue()), self.report)
+        self.assertEqual(errors.getvalue(), '')
+        self.assertEqual(json.dumps(self.report), original)
+
+    def testTextSummaryAndErrorStreams(self):
+        """
+        Keep inventory and update details on stdout while sending search errors to stderr.
+        """
+        output, errors = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors):
+            subject.printReport(self.report)
+
+        text = output.getvalue()
+        self.assertIn('Java blocklist dry-run', text)
+        self.assertIn('Searched: /example/jdks', text)
+        self.assertIn('failed: /example/broken — Fixture inspection failed', text)
+        self.assertIn('would-patch: /example/vendor.certs; added 0 fingerprints', text)
+        self.assertIn(f'Missing {len(FINGERPRINTS)} fingerprints; rerun with --apply to patch.', text)
+        self.assertIn('2 runtimes; 1 unique blocklists; 1 skipped locations.', text)
+        self.assertNotIn('Fixture search failed', text)
+        self.assertEqual(errors.getvalue(), 'ERROR: Fixture search failed\n')
+        self.assertNotIn('Restart existing JVMs', text)
+
+    def testApplySummaryIncludesRestartReminder(self):
+        """
+        Print the restart reminder for apply mode, without dry-run patch instructions.
+        """
+        self.report['mode'] = 'apply'
+        self.report['blocklists'][0].update({'status': 'patched', 'added': len(FINGERPRINTS)})
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output), contextlib.redirect_stderr(io.StringIO()):
+            subject.printReport(self.report)
+
+        self.assertIn('Java blocklist apply', output.getvalue())
+        self.assertIn('Restart existing JVMs/Gradle daemons.', output.getvalue())
+        self.assertNotIn('rerun with --apply', output.getvalue())
+
+
 class CliTests(FixtureTest):
     """
     Exercise CLI defaults, discovery scope, reporting, privilege boundaries, and import safety.
