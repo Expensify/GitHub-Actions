@@ -292,9 +292,10 @@ class RuntimeTests(FixtureTest):
         home, target = self.makeJava()
         java = home / 'bin/java'
         java.write_text("#!/bin/sh\necho 'JAVA_TOOL_OPTIONS: SECRET_SENTINEL' >&2\nexit 1\n")
-        results = subject.run([home], FINGERPRINTS, True, True)
-        self.assertEqual(results[0]['status'], 'failed')
-        self.assertNotIn('SECRET_SENTINEL', json.dumps(results))
+        runtimes, blocklists = subject.run([home], FINGERPRINTS, True, True)
+        self.assertEqual(runtimes[0]['status'], 'failed')
+        self.assertEqual(blocklists, [])
+        self.assertNotIn('SECRET_SENTINEL', json.dumps(runtimes))
         self.assertEqual(target.read_bytes(), VENDOR)
 
     def testUnsupportedVersionAndProperties(self):
@@ -313,25 +314,81 @@ class RuntimeTests(FixtureTest):
 
     def testRuntimeAndSharedBlocklistDeduplication(self):
         """
-        Inspect runtime aliases once and patch a shared physical blocklist only once.
+        Resolve aliases to a set of blocklist paths and collect all runtimes before writing.
         """
         home, target = self.makeJava('first')
         alias, _ = self.makeJava(name='alias', runtimeHome=home)
-        self.assertEqual(len(subject.run([home, alias], FINGERPRINTS, False, True)), 1)
+        runtimes, blocklists = subject.run([home, alias], FINGERPRINTS, False, True)
+        self.assertEqual(len(runtimes), 1)
+        self.assertEqual(len(blocklists), 1)
+        second, secondTarget = self.makeJava('second')
+        secondTarget.unlink()
+        secondTarget.symlink_to(target)
+        inspectRuntime = subject.inspectRuntime
+
+        def inspectBeforeWriting(candidate):
+            """
+            Verify collection does not mutate blocklists while inspecting additional runtimes.
+            """
+            self.assertEqual(target.read_bytes(), VENDOR)
+            return inspectRuntime(candidate)
+
+        with mock.patch.object(target=subject, attribute='inspectRuntime', side_effect=inspectBeforeWriting):
+            with mock.patch.object(
+                target=subject, attribute='patchWithElevation', wraps=subject.patchWithElevation
+            ) as patch:
+                runtimes, blocklists = subject.run([home, second], FINGERPRINTS, True, True)
+
+        self.assertEqual(len(runtimes), 2)
+        self.assertEqual(len(blocklists), 1)
+        self.assertEqual(blocklists[0]['status'], 'patched')
+        self.assertEqual(blocklists[0]['added'], 16)
+        patch.assert_called_once()
+
+    def testHardLinkedBlocklistsRemainIdempotent(self):
+        """
+        Process distinct hard-link paths safely without separate inode bookkeeping.
+        """
+        first, target = self.makeJava('first')
         second, secondTarget = self.makeJava('second')
         secondTarget.unlink()
         os.link(target, secondTarget)
-        results = subject.run([home, second], FINGERPRINTS, True, True)
-        self.assertEqual([result['status'] for result in results], ['patched', 'shared-blocklist'])
+        _, blocklists = subject.run([first, second], FINGERPRINTS, True, True)
+        self.assertEqual([entry['status'] for entry in blocklists], ['patched', 'already-protected'])
+        self.assertEqual(sum(entry['added'] for entry in blocklists), 16)
 
     def testPartialFailureStillProcessesOtherJvms(self):
         """
         Continue protecting valid installations after another candidate fails inspection.
         """
         home, target = self.makeJava()
-        results = subject.run([self.root / 'absent', home], FINGERPRINTS, True, True)
-        self.assertEqual([result['status'] for result in results], ['failed', 'patched'])
+        runtimes, blocklists = subject.run([self.root / 'absent', home], FINGERPRINTS, True, True)
+        self.assertEqual([entry['status'] for entry in runtimes], ['failed', 'discovered'])
+        self.assertEqual(blocklists[0]['status'], 'patched')
         self.assertEqual(len(set(FINGERPRINTS) & subject.blockedFingerprints(target.read_bytes())), 16)
+
+    def testFailedFileUpdateDoesNotStopOtherFiles(self):
+        """
+        Retain a failed file update while continuing with the other collected blocklists.
+        """
+        first, firstTarget = self.makeJava('first')
+        second, secondTarget = self.makeJava('second')
+        update = subject.patchWithElevation
+
+        def failFirst(target, fingerprints, apply, nonInteractive):
+            """
+            Simulate a failure for one target without changing the other update's behavior.
+            """
+            if target == firstTarget:
+                raise ValueError('Fixture update failure')
+
+            return update(target, fingerprints, apply, nonInteractive)
+
+        with mock.patch.object(target=subject, attribute='patchWithElevation', side_effect=failFirst):
+            _, blocklists = subject.run([first, second], FINGERPRINTS, True, True)
+
+        self.assertEqual([entry['status'] for entry in blocklists], ['failed', 'patched'])
+        self.assertTrue(set(FINGERPRINTS).issubset(subject.blockedFingerprints(secondTarget.read_bytes())))
 
 
 class DiscoveryTests(FixtureTest):
@@ -460,7 +517,7 @@ class CliTests(FixtureTest):
         with mock.patch.dict(os.environ, {'JAVA_HOME': str(home)}):
             status, output, _ = self.invoke(['--apply', '--json'])
         self.assertEqual(status, 0)
-        self.assertEqual(json.loads(output)['runtimes'][0]['added'], 16)
+        self.assertEqual(json.loads(output)['blocklists'][0]['added'], 16)
 
     def testAllModeScansCustomRootsAndPatchesEveryRuntime(self):
         """
@@ -476,7 +533,8 @@ class CliTests(FixtureTest):
         self.assertEqual(status, 0)
         report = json.loads(output)
         self.assertEqual(len(report['runtimes']), 2)
-        self.assertEqual(sum(entry['added'] for entry in report['runtimes']), 32)
+        self.assertEqual(len(report['blocklists']), 2)
+        self.assertEqual(sum(entry['added'] for entry in report['blocklists']), 32)
         self.assertEqual(report['searched_roots'], [str(self.root)])
         for target in (firstTarget, secondTarget):
             self.assertTrue(set(FINGERPRINTS).issubset(subject.blockedFingerprints(target.read_bytes())))
@@ -492,7 +550,7 @@ class CliTests(FixtureTest):
         self.assertEqual(target.read_bytes(), VENDOR)
         status, output, _ = self.invoke(['--java-home', str(home), '--apply', '--json'])
         self.assertEqual(status, 0)
-        self.assertEqual(json.loads(output)['runtimes'][0]['added'], 16)
+        self.assertEqual(json.loads(output)['blocklists'][0]['added'], 16)
 
     def testSearchFailuresProduceNonzeroStatusAfterProcessingFoundJvm(self):
         """
@@ -503,7 +561,7 @@ class CliTests(FixtureTest):
         with mock.patch.object(target=subject, attribute='discoverInstallations', return_value=discovery):
             status, output, _ = self.invoke(['--all', '--apply', '--json'])
         self.assertEqual(status, 1)
-        self.assertEqual(json.loads(output)['runtimes'][0]['status'], 'patched')
+        self.assertEqual(json.loads(output)['blocklists'][0]['status'], 'patched')
         self.assertNotEqual(target.read_bytes(), VENDOR)
 
     def testEmptyDiscoveryIsNotReportedAsProtection(self):

@@ -422,24 +422,24 @@ def patchWithElevation(target: Path, fingerprints: list[str], apply: bool, nonIn
         return json.loads(result.stdout)
 
 
-def run(homes: list[Path], fingerprints: list[str], apply: bool, nonInteractive: bool) -> list[dict]:
+def run(homes: list[Path], fingerprints: list[str], apply: bool, nonInteractive: bool) -> tuple[list[dict], list[dict]]:
     """
-    Process candidate homes and return per-runtime results, continuing after individual failures.
+    Collect unique blocklist paths, then update each file and return runtime and file results.
 
-    Deduplicate actual runtime homes and physical blocklist inodes so aliases do not repeat
-    updates. Retain each failure in the results rather than reporting partial protection as success.
+    Resolve runtime and file aliases before writing. Retain individual inspection and update
+    failures so other discovered files can still be processed without reporting partial success.
     """
-    results = []
-    runtimes = set()
-    blocklists = {}
+    runtimes = []
+    runtimeHomes = set()
+    blocklists = set()
     for home in sorted(set(homes)):
-        entry = {'path': str(home)}
+        entry = {'path': str(home), 'status': 'discovered'}
         try:
             runtime = inspectRuntime(home)
-            if runtime['home'] in runtimes:
+            if runtime['home'] in runtimeHomes:
                 continue
 
-            runtimes.add(runtime['home'])
+            runtimeHomes.add(runtime['home'])
             target = resolveBlocklist(runtime['home'])
             entry.update(
                 {
@@ -449,20 +449,24 @@ def run(homes: list[Path], fingerprints: list[str], apply: bool, nonInteractive:
                     'blocklist': str(target),
                 }
             )
-            metadata = target.stat()
-            identity = (metadata.st_dev, metadata.st_ino)
-            if identity in blocklists:
-                entry.update({'status': 'shared-blocklist', 'shared_with': blocklists[identity], 'added': 0})
-            else:
-                entry.update(patchWithElevation(target, fingerprints, apply, nonInteractive))
-                blocklists[identity] = str(home)
+            blocklists.add(target)
         except (OSError, ValueError, subprocess.SubprocessError) as error:
             # TimeoutExpired contains the command but no captured JVM diagnostics in str(error).
             entry.update({'status': 'failed', 'error': str(error)})
 
+        runtimes.append(entry)
+
+    results = []
+    for target in sorted(blocklists):
+        entry = {'path': str(target)}
+        try:
+            entry.update(patchWithElevation(target, fingerprints, apply, nonInteractive))
+        except (OSError, ValueError, subprocess.SubprocessError) as error:
+            entry.update({'status': 'failed', 'error': str(error)})
+
         results.append(entry)
 
-    return results
+    return runtimes, results
 
 
 def main(argv=None) -> int:
@@ -512,8 +516,8 @@ def main(argv=None) -> int:
 
         discovery = Discovery(homes={Path(selected).expanduser().absolute()})
 
-    results = run(list(discovery.homes), fingerprints, args.apply, args.non_interactive)
-    if not results:
+    runtimes, blocklists = run(list(discovery.homes), fingerprints, args.apply, args.non_interactive)
+    if not runtimes:
         discovery.errors.append('No Java installations found in the searched locations.')
 
     report = {
@@ -521,7 +525,8 @@ def main(argv=None) -> int:
         'searched_roots': discovery.searched,
         'skipped': discovery.skipped,
         'errors': discovery.errors,
-        'runtimes': results,
+        'runtimes': runtimes,
+        'blocklists': blocklists,
     }
     if args.json:
         print(json.dumps(obj=report, indent=2))
@@ -530,20 +535,27 @@ def main(argv=None) -> int:
         for root in discovery.searched:
             print(f'Searched: {root}')
 
-        for entry in results:
-            detail = entry.get('error', entry.get('blocklist', ''))
-            print(f'{entry["status"]}: {entry["path"]} — {detail}; added {entry.get("added", 0)} fingerprints')
+        for runtime in runtimes:
+            if runtime['status'] == 'failed':
+                print(f'failed: {runtime["path"]} — {runtime["error"]}')
+
+        for entry in blocklists:
+            detail = f' — {entry["error"]}' if 'error' in entry else ''
+            print(f'{entry["status"]}: {entry["path"]}{detail}; added {entry.get("added", 0)} fingerprints')
             if entry['status'] == 'would-patch':
                 print(f'  Missing {entry["missing"]} fingerprints; rerun with --apply to patch.')
 
         for error in discovery.errors:
             print(f'ERROR: {error}', file=sys.stderr)
 
-        print(f'{len(results)} runtimes; {len(discovery.skipped)} skipped locations (details available with --json).')
+        print(
+            f'{len(runtimes)} runtimes; {len(blocklists)} unique blocklists; '
+            f'{len(discovery.skipped)} skipped locations.'
+        )
         if args.apply:
             print('Restart existing JVMs/Gradle daemons. Rerun after JDK installations or updates.')
 
-    return int(bool(discovery.errors or any(entry['status'] == 'failed' for entry in results)))
+    return int(bool(discovery.errors or any(entry['status'] == 'failed' for entry in runtimes + blocklists)))
 
 
 if __name__ == '__main__':
