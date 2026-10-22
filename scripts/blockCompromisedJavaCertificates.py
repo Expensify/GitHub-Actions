@@ -14,8 +14,9 @@ import re
 import stat
 import subprocess
 import sys
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
+from typing import Literal
 
 SCRIPT = Path(__file__).resolve()
 # The certificate source is https://emudhra.we-have-a-problem.com/impacted-intermediates.json (reviewed snapshot).
@@ -43,6 +44,26 @@ class Discovery:
     searched: list[str] = field(default_factory=list)
     skipped: list[dict] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class BlocklistUpdate:
+    """
+    Describe the outcome of inspecting or updating one blocklist file.
+    """
+    status: Literal['would-patch', 'already-protected', 'patched']
+    missing: int
+    added: int = 0
+
+
+@dataclass(frozen=True)
+class JavaRuntime:
+    """
+    Hold the actual runtime home, vendor, and version reported by a Java executable.
+    """
+    home: Path
+    vendor: str
+    version: str
 
 
 def certificateFingerprints(bundle: str) -> list[str]:
@@ -110,7 +131,7 @@ def appendBlocklist(target: Path, additions: str) -> None:
             raise ValueError(f'Unable to append to {target} using noninteractive sudo; authorize separately and retry.')
 
 
-def updateBlocklist(target: Path, fingerprints: list[str], apply: bool = False) -> dict:
+def updateBlocklist(target: Path, fingerprints: list[str], apply: bool = False) -> BlocklistUpdate:
     """
     Inspect or patch an existing, resolved blocklist and return its status and entry counts.
 
@@ -125,7 +146,7 @@ def updateBlocklist(target: Path, fingerprints: list[str], apply: bool = False) 
     existing = blockedFingerprints(original)
     missing = [fingerprint for fingerprint in fingerprints if fingerprint not in existing]
     if not missing or not apply:
-        return {'status': 'would-patch' if missing else 'already-protected', 'missing': len(missing), 'added': 0}
+        return BlocklistUpdate(status='would-patch' if missing else 'already-protected', missing=len(missing))
 
     separator = '' if original.endswith((b'\n', b'\r')) else '\n'
     entries = '\n'.join(missing)
@@ -134,10 +155,10 @@ def updateBlocklist(target: Path, fingerprints: list[str], apply: bool = False) 
     if not set(fingerprints).issubset(blockedFingerprints(target.read_bytes())):
         raise ValueError('JVM certificate blocklist verification failed.')
 
-    return {'status': 'patched', 'missing': len(missing), 'added': len(missing)}
+    return BlocklistUpdate(status='patched', missing=len(missing), added=len(missing))
 
 
-def inspectRuntime(home: Path) -> dict:
+def inspectRuntime(home: Path) -> JavaRuntime:
     """
     Inspect a selected Java executable and return its actual home, vendor, and version.
 
@@ -172,11 +193,11 @@ def inspectRuntime(home: Path) -> dict:
     if int(majorVersion) < 8:
         raise ValueError(f'Java 8 or newer is required: {home}')
 
-    return {
-        'home': runtimeHome.resolve(strict=True),
-        'vendor': properties['java.vendor'],
-        'version': properties['java.runtime.version'],
-    }
+    return JavaRuntime(
+        home=runtimeHome.resolve(strict=True),
+        vendor=properties['java.vendor'],
+        version=properties['java.runtime.version'],
+    )
 
 
 def resolveBlocklist(home: Path) -> Path:
@@ -392,16 +413,16 @@ def run(homes: list[Path], fingerprints: list[str], apply: bool) -> tuple[list[d
         entry = {'path': str(home), 'status': 'discovered'}
         try:
             runtime = inspectRuntime(home)
-            if runtime['home'] in runtimeHomes:
+            if runtime.home in runtimeHomes:
                 continue
 
-            runtimeHomes.add(runtime['home'])
-            target = resolveBlocklist(runtime['home'])
+            runtimeHomes.add(runtime.home)
+            target = resolveBlocklist(runtime.home)
             entry.update(
                 {
-                    'runtime_home': str(runtime['home']),
-                    'vendor': runtime['vendor'],
-                    'version': runtime['version'],
+                    'runtime_home': str(runtime.home),
+                    'vendor': runtime.vendor,
+                    'version': runtime.version,
                     'blocklist': str(target),
                 }
             )
@@ -416,7 +437,7 @@ def run(homes: list[Path], fingerprints: list[str], apply: bool) -> tuple[list[d
     for target in sorted(blocklists):
         entry = {'path': str(target)}
         try:
-            entry.update(updateBlocklist(target, fingerprints, apply))
+            entry.update(asdict(updateBlocklist(target, fingerprints, apply)))
         except (OSError, ValueError, subprocess.SubprocessError) as error:
             entry.update({'status': 'failed', 'error': str(error)})
 

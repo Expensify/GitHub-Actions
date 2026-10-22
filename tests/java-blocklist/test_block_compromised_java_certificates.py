@@ -183,7 +183,7 @@ class UpdateTests(FixtureTest):
         """
         before = self.target.stat()
         result = subject.updateBlocklist(self.target, FINGERPRINTS)
-        self.assertEqual(result, {'status': 'would-patch', 'missing': len(FINGERPRINTS), 'added': 0})
+        self.assertEqual(result, subject.BlocklistUpdate(status='would-patch', missing=len(FINGERPRINTS)))
         self.assertEqual(self.target.read_bytes(), VENDOR)
         self.assertEqual(self.target.stat().st_mtime_ns, before.st_mtime_ns)
 
@@ -195,7 +195,7 @@ class UpdateTests(FixtureTest):
         link = self.root / 'vendor link'
         link.symlink_to(self.target)
         result = subject.updateBlocklist(target=link.resolve(), fingerprints=FINGERPRINTS, apply=True)
-        self.assertEqual(result['added'], len(FINGERPRINTS))
+        self.assertEqual(result.added, len(FINGERPRINTS))
         self.assertTrue(self.target.read_bytes().startswith(VENDOR))
         self.assertTrue(set(FINGERPRINTS).issubset(subject.blockedFingerprints(self.target.read_bytes())))
         self.assertTrue(link.is_symlink())
@@ -211,7 +211,7 @@ class UpdateTests(FixtureTest):
         before = self.target.stat()
         content = self.target.read_bytes()
         result = subject.updateBlocklist(target=self.target, fingerprints=FINGERPRINTS, apply=True)
-        self.assertEqual(result['status'], 'already-protected')
+        self.assertEqual(result.status, 'already-protected')
         self.assertEqual(self.target.read_bytes(), content)
         self.assertEqual(self.target.stat().st_mtime_ns, before.st_mtime_ns)
 
@@ -221,7 +221,7 @@ class UpdateTests(FixtureTest):
         """
         content = VENDOR + f'{FINGERPRINTS[0]}=\n#{FINGERPRINTS[1]}\n{FINGERPRINTS[2].lower()}\n'.encode()
         self.target.write_bytes(content)
-        self.assertEqual(subject.updateBlocklist(self.target, FINGERPRINTS, True)['added'], len(FINGERPRINTS) - 1)
+        self.assertEqual(subject.updateBlocklist(self.target, FINGERPRINTS, True).added, len(FINGERPRINTS) - 1)
 
     def testLineEndingsAndLiteralPaths(self):
         """
@@ -231,7 +231,7 @@ class UpdateTests(FixtureTest):
         for ending in (b'', b'\r', b'\r\n'):
             original = b'Algorithm=SHA-256\r\n# Vendor comment' + ending
             target.write_bytes(original)
-            self.assertEqual(subject.updateBlocklist(target, FINGERPRINTS, True)['added'], len(FINGERPRINTS))
+            self.assertEqual(subject.updateBlocklist(target, FINGERPRINTS, True).added, len(FINGERPRINTS))
             self.assertTrue(target.read_bytes().startswith(original))
 
     def testMalformedAndMissingFilesAreNotChangedOrCreated(self):
@@ -265,7 +265,7 @@ class UpdateTests(FixtureTest):
             with mock.patch.object(subject.subprocess, 'run') as sudo:
                 result = subject.updateBlocklist(self.target, FINGERPRINTS)
 
-        self.assertEqual(result['status'], 'would-patch')
+        self.assertEqual(result.status, 'would-patch')
         append.assert_not_called()
         sudo.assert_not_called()
         self.assertEqual(self.target.read_bytes(), VENDOR)
@@ -294,7 +294,7 @@ class UpdateTests(FixtureTest):
         self.assertEqual(sudo.call_args.kwargs['input'], '\n'.join(FINGERPRINTS) + '\n')
         self.assertEqual(sudo.call_args.kwargs['encoding'], 'ascii')
         self.assertEqual(sudo.call_args.kwargs['stdout'], subprocess.DEVNULL)
-        self.assertEqual(result['added'], len(FINGERPRINTS))
+        self.assertEqual(result.added, len(FINGERPRINTS))
         self.assertTrue(set(FINGERPRINTS).issubset(subject.blockedFingerprints(self.target.read_bytes())))
 
     def testSudoAppendStillRequiresSuccessfulReadback(self):
@@ -369,7 +369,7 @@ class RuntimeTests(FixtureTest):
         for version in ('1.8', '11', '17', '21', '25'):
             home, target = self.makeJava(f'jdk{version}', version)
             runtime = subject.inspectRuntime(home)
-            self.assertEqual(subject.resolveBlocklist(runtime['home']), target)
+            self.assertEqual(subject.resolveBlocklist(runtime.home), target)
 
     def testAmbiguousOrMissingBlocklistFails(self):
         """
@@ -390,7 +390,7 @@ class RuntimeTests(FixtureTest):
         Preserve significant whitespace in the reported runtime path when parsing properties.
         """
         home, _ = self.makeJava('jdk with trailing space ')
-        self.assertEqual(subject.inspectRuntime(home)['home'], home)
+        self.assertEqual(subject.inspectRuntime(home).home, home)
 
     def testInvalidJavaSpecificationsAreRejected(self):
         """
