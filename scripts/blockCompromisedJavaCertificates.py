@@ -32,7 +32,7 @@ class SearchRoot:
     path: Path
     depth: int = 6
     required: bool = False
-    kind: str = 'runtime'
+    isHomebrew: bool = False
 
 
 @dataclass
@@ -260,7 +260,7 @@ def defaultRoots(environment: dict, home: Path, platform: str) -> list[SearchRoo
         ]
 
         for prefix in sorted({'/opt/homebrew', '/usr/local', environment.get('HOMEBREW_PREFIX', '/opt/homebrew')}):
-            roots.append(SearchRoot(path=Path(prefix) / 'opt', kind='homebrew'))
+            roots.append(SearchRoot(path=Path(prefix) / 'opt', isHomebrew=True))
     else:
         roots += [
             SearchRoot(Path(name))
@@ -339,7 +339,7 @@ def scanRoot(root: SearchRoot, discovery: Discovery) -> None:
                 if name in ('.git', 'node_modules'):
                     continue
 
-                if depth == 0 and root.kind == 'homebrew' and not name.startswith(('openjdk', 'temurin', 'zulu')):
+                if depth == 0 and root.isHomebrew and not name.startswith(('openjdk', 'temurin', 'zulu')):
                     continue
 
                 visit(directory / name, depth + 1)

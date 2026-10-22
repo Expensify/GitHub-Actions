@@ -582,6 +582,30 @@ class DiscoveryTests(FixtureTest):
         self.assertEqual(discovery.homes, {home})
         self.assertEqual(discovery.errors, [])
 
+    def testHomebrewFlagAppliesOnlyToPackageRoots(self):
+        """
+        Mark only Homebrew opt directories for package-name filtering, including a custom prefix.
+        """
+        roots = subject.defaultRoots({'HOMEBREW_PREFIX': '/custom/brew'}, self.root, 'darwin')
+        expected = {Path('/opt/homebrew/opt'), Path('/usr/local/opt'), Path('/custom/brew/opt')}
+        self.assertEqual({root.path for root in roots if root.isHomebrew}, expected)
+
+    def testHomebrewFilteringStopsAtThePackageLevel(self):
+        """
+        Skip unrelated Homebrew packages while scanning nested Java layouts normally.
+        """
+        openjdk, _ = self.makeJava('opt/openjdk@21/libexec/openjdk.jdk/Contents/Home')
+        temurin, _ = self.makeJava('opt/temurin/current')
+        unrelated, _ = self.makeJava('opt/node/embedded-java')
+        discovery = subject.Discovery()
+        subject.scanRoot(subject.SearchRoot(path=self.root / 'opt', isHomebrew=True), discovery)
+        self.assertEqual(discovery.homes, {openjdk, temurin})
+        self.assertEqual(discovery.errors, [])
+
+        unfiltered = subject.Discovery()
+        subject.scanRoot(subject.SearchRoot(self.root / 'opt'), unfiltered)
+        self.assertEqual(unfiltered.homes, {openjdk, temurin, unrelated})
+
     def testIdeBundlesAndGradleAndToolcacheLayouts(self):
         """
         Recognize embedded IDE runtimes, Gradle downloads, and CI tool-cache layouts.
