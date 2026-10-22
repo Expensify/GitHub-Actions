@@ -19,7 +19,7 @@ Patch the selected JVM's certificate blocklist **after Java setup/cache restorat
 - Inspects the selected executable's actual `java.home`, vendor, and runtime version. Discovers `lib/security/blocked.certs` or `lib/security/blacklisted.certs` there, including the Java 8 nested JRE layout and distro symlinks.
 - Appends only missing fingerprints from the [checked-in certificates](./compromised-java-certificates.pem).
 - Merges into existing files, preserving existing blocklist entries. Verifies the resulting file and is idempotent.
-- Uses noninteractive `sudo` on Linux/macOS only if file access requires it. Java discovery is never elevated.
+- Uses `sudo tee -a` only if a normal append is denied. CI uses noninteractive sudo; Java discovery and final verification are never elevated.
 - Fails the job loudly if patching the blocklist fails.
 
 ## Developer laptops

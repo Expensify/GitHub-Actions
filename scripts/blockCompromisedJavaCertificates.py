@@ -106,13 +106,39 @@ def blockedFingerprints(content: bytes) -> set[str]:
     return fingerprints
 
 
-def updateBlocklist(target: Path, fingerprints: list[str], apply: bool = False) -> dict:
+def appendBlocklist(target: Path, additions: bytes, nonInteractive: bool) -> None:
+    """
+    Append normally, using sudo only if the write is denied.
+
+    Pass the append data directly to tee without a shell. Allow a password prompt only when
+    running interactively outside CI; discard tee's output so JSON reports remain clean.
+    """
+    try:
+        with target.open('ab') as output:
+            output.write(additions)
+    except PermissionError:
+        command = ['sudo']
+        if nonInteractive or not sys.stdin.isatty() or os.environ.get('CI'):
+            command.append('-n')
+
+        command += ['tee', '-a', str(target)]
+        result = subprocess.run(args=command, input=additions, stdout=subprocess.DEVNULL, timeout=120)
+        if result.returncode:
+            raise ValueError(f'Unable to append to {target} using sudo.')
+
+
+def updateBlocklist(
+    target: Path,
+    fingerprints: list[str],
+    apply: bool = False,
+    nonInteractive: bool = False,
+) -> dict:
     """
     Inspect or patch an existing, resolved blocklist and return its status and entry counts.
 
     Dry-run only reports missing fingerprints. Apply mode appends missing entries to the
     existing file, then reads it back to verify coverage.
-    Propagate permission errors so the caller can elevate only this operation when needed.
+    Only the append can request sudo; reading and final verification stay unprivileged.
     """
     if not stat.S_ISREG(target.stat().st_mode):
         raise ValueError(f'JVM certificate blocklist is not a regular file: {target}')
@@ -124,8 +150,8 @@ def updateBlocklist(target: Path, fingerprints: list[str], apply: bool = False) 
         return {'status': 'would-patch' if missing else 'already-protected', 'missing': len(missing), 'added': 0}
 
     separator = b'' if original.endswith((b'\n', b'\r')) else b'\n'
-    with target.open('ab') as output:
-        output.write(separator + ('\n'.join(missing) + '\n').encode('ascii'))
+    additions = separator + ('\n'.join(missing) + '\n').encode('ascii')
+    appendBlocklist(target, additions, nonInteractive)
 
     if not set(fingerprints).issubset(blockedFingerprints(target.read_bytes())):
         raise ValueError('JVM certificate blocklist verification failed.')
@@ -374,32 +400,6 @@ def discoverInstallations(environment: dict, home: Path, platform: str, extraRoo
     return discovery
 
 
-def patchWithElevation(target: Path, fingerprints: list[str], apply: bool, nonInteractive: bool) -> dict:
-    """
-    Inspect or patch a blocklist, retrying permission-denied writes through the sudo worker.
-
-    Never elevate dry-run or JVM discovery. Suppress password prompts in CI, noninteractive
-    mode, or without a terminal; otherwise allow sudo to request authorization for the update.
-    """
-    try:
-        return updateBlocklist(target, fingerprints, apply)
-    except PermissionError:
-        if not apply:
-            raise
-
-        command = ['sudo']
-        if nonInteractive or not sys.stdin.isatty() or os.environ.get('CI'):
-            command.append('-n')
-
-        # Isolated Python ignores PYTHONPATH and user site packages when elevated. Java is never executed here.
-        command += [sys.executable, '-I', str(SCRIPT), '--update-blocklist', str(target)]
-        result = subprocess.run(args=command, stdout=subprocess.PIPE, text=True, timeout=120)
-        if result.returncode:
-            raise ValueError(f'Unable to update {target} using sudo.')
-
-        return json.loads(result.stdout)
-
-
 def run(homes: list[Path], fingerprints: list[str], apply: bool, nonInteractive: bool) -> tuple[list[dict], list[dict]]:
     """
     Collect unique blocklist paths, then update each file and return runtime and file results.
@@ -438,7 +438,7 @@ def run(homes: list[Path], fingerprints: list[str], apply: bool, nonInteractive:
     for target in sorted(blocklists):
         entry = {'path': str(target)}
         try:
-            entry.update(patchWithElevation(target, fingerprints, apply, nonInteractive))
+            entry.update(updateBlocklist(target, fingerprints, apply, nonInteractive))
         except (OSError, ValueError, subprocess.SubprocessError) as error:
             entry.update({'status': 'failed', 'error': str(error)})
 
@@ -452,9 +452,8 @@ def main(argv=None) -> int:
     Run the selected CLI mode and return a nonzero status for any discovery or runtime failure.
 
     Default to a dry-run of JAVA_HOME unless a home or system discovery is explicitly selected.
-    Keep the private elevated worker limited to one absolute blocklist path, without running Java.
+    Keep discovery unprivileged; only individual append operations can request sudo.
     """
-    arguments = sys.argv[1:] if argv is None else argv
     parser = argparse.ArgumentParser(description=__doc__)
     selection = parser.add_mutually_exclusive_group()
     selection.add_argument('--all', action='store_true', help='Discover installed JVMs in known locations')
@@ -465,19 +464,11 @@ def main(argv=None) -> int:
     mode.add_argument('--dry-run', action='store_true', help='Report changes without writing or requesting sudo')
     parser.add_argument('--non-interactive', action='store_true', help='Never prompt for a sudo password')
     parser.add_argument('--json', action='store_true', help='Print the inventory and results as JSON')
-    parser.add_argument('--update-blocklist', type=Path, help=argparse.SUPPRESS)
-    args = parser.parse_args(arguments)
+    args = parser.parse_args(argv)
     if sys.version_info < (3, 9) or sys.platform not in ('darwin', 'linux'):
         parser.error('Python 3.9+ on Linux or macOS is required.')
 
     fingerprints = certificateFingerprints(CERTIFICATES.read_text(encoding='ascii'))
-
-    if args.update_blocklist is not None:
-        if len(arguments) != 2 or arguments[0] != '--update-blocklist' or not args.update_blocklist.is_absolute():
-            parser.error('The internal file updater requires one absolute blocklist path.')
-
-        print(json.dumps(updateBlocklist(target=args.update_blocklist, fingerprints=fingerprints, apply=True)))
-        return 0
 
     if os.geteuid() == 0:
         parser.error('Run as your normal user, not with sudo; only individual file updates will be elevated.')

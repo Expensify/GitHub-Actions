@@ -71,6 +71,15 @@ class FixtureTest(unittest.TestCase):
 
         return status, output.getvalue(), errors.getvalue()
 
+    def openWithoutAppend(self, path, mode='r', *args, **kwargs):
+        """
+        Allow normal fixture reads while simulating a permission-denied append.
+        """
+        if mode == 'ab':
+            raise PermissionError(errno.EACCES, 'Fixture append denied')
+
+        return io.open(path, mode, *args, **kwargs)
+
 
 class CertificateTests(unittest.TestCase):
     """
@@ -249,6 +258,106 @@ class UpdateTests(FixtureTest):
             with self.assertRaisesRegex(ValueError, 'verification failed'):
                 subject.updateBlocklist(self.target, FINGERPRINTS, True)
 
+    def testDryRunNeverAttemptsAnAppendOrSudo(self):
+        """
+        Plan missing entries without invoking either append path.
+        """
+        with mock.patch.object(target=subject, attribute='appendBlocklist') as append:
+            with mock.patch.object(subject.subprocess, 'run') as sudo:
+                result = subject.updateBlocklist(self.target, FINGERPRINTS)
+
+        self.assertEqual(result['status'], 'would-patch')
+        append.assert_not_called()
+        sudo.assert_not_called()
+        self.assertEqual(self.target.read_bytes(), VENDOR)
+
+    def testPermissionDeniedAppendUsesSudoAndVerifiesResult(self):
+        """
+        Elevate only the missing-entry append, then verify the file through ordinary reads.
+        """
+        def appendThroughSudo(args, input, stdout, timeout):
+            """
+            Simulate tee writing its input without executing a privileged process.
+            """
+            with open(self.target, 'ab') as output:
+                output.write(input)
+
+            return subprocess.CompletedProcess(args, 0)
+
+        with mock.patch.object(
+            target=subject.Path, attribute='open', autospec=True, side_effect=self.openWithoutAppend
+        ):
+            with mock.patch.object(target=subject.subprocess, attribute='run', side_effect=appendThroughSudo) as sudo:
+                result = subject.updateBlocklist(self.target, FINGERPRINTS, True, True)
+
+        sudo.assert_called_once()
+        self.assertEqual(sudo.call_args.kwargs['args'], ['sudo', '-n', 'tee', '-a', str(self.target)])
+        self.assertEqual(sudo.call_args.kwargs['input'], ('\n'.join(FINGERPRINTS) + '\n').encode('ascii'))
+        self.assertEqual(sudo.call_args.kwargs['stdout'], subprocess.DEVNULL)
+        self.assertEqual(result['added'], 16)
+        self.assertTrue(set(FINGERPRINTS).issubset(subject.blockedFingerprints(self.target.read_bytes())))
+
+    def testSudoAppendStillRequiresSuccessfulReadback(self):
+        """
+        Do not trust a successful tee exit status if the required entries are absent afterward.
+        """
+        response = subprocess.CompletedProcess([], 0)
+        with mock.patch.object(
+            target=subject.Path, attribute='open', autospec=True, side_effect=self.openWithoutAppend
+        ):
+            with mock.patch.object(target=subject.subprocess, attribute='run', return_value=response):
+                with self.assertRaisesRegex(ValueError, 'verification failed'):
+                    subject.updateBlocklist(self.target, FINGERPRINTS, True, True)
+
+    def testFailedSudoAppendIsReported(self):
+        """
+        Report sudo failures without claiming the file was protected.
+        """
+        response = subprocess.CompletedProcess([], 1)
+        with mock.patch.object(target=subject.Path, attribute='open', side_effect=PermissionError):
+            with mock.patch.object(target=subject.subprocess, attribute='run', return_value=response):
+                with self.assertRaisesRegex(ValueError, 'Unable to append'):
+                    subject.appendBlocklist(self.target, b'entries\n', True)
+
+        self.assertEqual(self.target.read_bytes(), VENDOR)
+
+    def testSudoPromptPolicy(self):
+        """
+        Allow prompts only for interactive laptop runs, never CI or noninteractive execution.
+        """
+        cases = (
+            (False, True, '', False),
+            (True, True, '', True),
+            (False, False, '', True),
+            (False, True, 'true', True),
+        )
+        response = subprocess.CompletedProcess([], 0)
+        for nonInteractive, terminal, ci, noPrompt in cases:
+            with self.subTest(nonInteractive=nonInteractive, terminal=terminal, ci=ci):
+                with contextlib.ExitStack() as stack:
+                    stack.enter_context(mock.patch.dict(os.environ, {'CI': ci}))
+                    stack.enter_context(mock.patch.object(target=sys.stdin, attribute='isatty', return_value=terminal))
+                    stack.enter_context(
+                        mock.patch.object(target=subject.Path, attribute='open', side_effect=PermissionError)
+                    )
+                    sudo = stack.enter_context(
+                        mock.patch.object(target=subject.subprocess, attribute='run', return_value=response)
+                    )
+                    subject.appendBlocklist(self.target, b'entries\n', nonInteractive)
+
+                self.assertEqual('-n' in sudo.call_args.kwargs['args'], noPrompt)
+
+    def testUnreadableBlocklistDoesNotUseSudo(self):
+        """
+        Keep permission escalation limited to appending, not reading protected data.
+        """
+        with mock.patch.object(target=subject.Path, attribute='read_bytes', side_effect=PermissionError):
+            with mock.patch.object(subject.subprocess, 'run') as sudo:
+                with self.assertRaises(PermissionError):
+                    subject.updateBlocklist(self.target, FINGERPRINTS, True, True)
+
+        sudo.assert_not_called()
+
 
 class RuntimeTests(FixtureTest):
     """
@@ -343,7 +452,7 @@ class RuntimeTests(FixtureTest):
 
         with mock.patch.object(target=subject, attribute='inspectRuntime', side_effect=inspectBeforeWriting):
             with mock.patch.object(
-                target=subject, attribute='patchWithElevation', wraps=subject.patchWithElevation
+                target=subject, attribute='updateBlocklist', wraps=subject.updateBlocklist
             ) as patch:
                 runtimes, blocklists = subject.run([home, second], FINGERPRINTS, True, True)
 
@@ -381,7 +490,7 @@ class RuntimeTests(FixtureTest):
         """
         first, firstTarget = self.makeJava('first')
         second, secondTarget = self.makeJava('second')
-        update = subject.patchWithElevation
+        update = subject.updateBlocklist
 
         def failFirst(target, fingerprints, apply, nonInteractive):
             """
@@ -392,7 +501,7 @@ class RuntimeTests(FixtureTest):
 
             return update(target, fingerprints, apply, nonInteractive)
 
-        with mock.patch.object(target=subject, attribute='patchWithElevation', side_effect=failFirst):
+        with mock.patch.object(target=subject, attribute='updateBlocklist', side_effect=failFirst):
             _, blocklists = subject.run([first, second], FINGERPRINTS, True, True)
 
         self.assertEqual([entry['status'] for entry in blocklists], ['failed', 'patched'])
@@ -589,34 +698,14 @@ class CliTests(FixtureTest):
             with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
                 subject.main(['--all'])
 
-    def testDryRunNeverElevatesAndApplyElevatesOnlyFileUpdate(self):
+    def testApplyAndDryRunCannotBeCombined(self):
         """
-        Keep dry-run unprivileged and limit sudo retries to the isolated file-update worker.
+        Reject contradictory public modes before any file can be changed.
         """
-        target = self.root / 'blocklist'
-        with mock.patch.object(target=subject, attribute='updateBlocklist', side_effect=PermissionError):
-            with mock.patch.object(subject.subprocess, 'run') as run:
-                with self.assertRaises(PermissionError):
-                    subject.patchWithElevation(target, FINGERPRINTS, False, True)
-
-                run.assert_not_called()
-                run.return_value = subprocess.CompletedProcess([], 0, '{"status":"patched","added":16}')
-                result = subject.patchWithElevation(target, FINGERPRINTS, True, True)
-        command = run.call_args.kwargs['args']
-        self.assertEqual(command[:2], ['sudo', '-n'])
-        self.assertIn('-I', command)
-        self.assertEqual(command[-2:], ['--update-blocklist', str(target)])
-        self.assertNotIn('--all', command)
-        self.assertEqual(result['added'], 16)
-
-    def testInternalWorkerCannotOverrideDryRun(self):
-        """
-        Reject extra worker arguments rather than let the private mode bypass a dry-run request.
-        """
-        target = self.root / 'vendor.certs'
-        target.write_bytes(VENDOR)
+        home, target = self.makeJava()
         with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
-            subject.main(['--update-blocklist', str(target), '--dry-run'])
+            subject.main(['--java-home', str(home), '--apply', '--dry-run'])
+
         self.assertEqual(target.read_bytes(), VENDOR)
 
     def testImportDoesNotExecuteTheScript(self):
