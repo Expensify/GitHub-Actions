@@ -15,6 +15,10 @@ yarn-debug.log
 yarn-error.log
 dist/
 
+# Python
+__pycache__/
+*.py[cod]
+
 # Ignore actionlint binary and any leftover directories related to installing it
 actionlint*
 !scripts/actionlint.sh

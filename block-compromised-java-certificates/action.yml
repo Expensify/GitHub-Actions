@@ -1,0 +1,26 @@
+name: Block compromised Java certificates
+description: Patch and verify the selected JVM's certificate blocklist before Java network operations
+
+inputs:
+  java-home:
+    description: JDK or JRE to protect; defaults to JAVA_HOME set by actions/setup-java
+    required: false
+
+runs:
+  using: composite
+  steps:
+    - name: Block compromised Java certificates
+      shell: python
+      run: |
+        import os
+        import runpy
+        import sys
+
+        script = os.path.join(os.environ["BLOCKLIST_ACTION_PATH"], "..", "scripts", "blockCompromisedJavaCertificates.py")
+        sys.argv = [script, "--apply"]
+        if os.environ.get("BLOCKLIST_JAVA_HOME"):
+            sys.argv += ["--java-home", os.environ["BLOCKLIST_JAVA_HOME"]]
+        runpy.run_path(script, run_name="__main__")
+      env:
+        BLOCKLIST_ACTION_PATH: ${{ github.action_path }}
+        BLOCKLIST_JAVA_HOME: ${{ inputs.java-home }}

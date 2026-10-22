@@ -129,6 +129,14 @@ Restores Composer download caches and optionally runs `composer install`. See [s
     dev: false
 ```
 
+### `block-compromised-java-certificates`
+
+Protect the JVM selected by `actions/setup-java` before Java network operations, including on JDK cache hits. The same dependency-free Python script can discover and patch Java installations on developer laptops. See [usage](./block-compromised-java-certificates/README.md).
+
+```yaml
+- uses: Expensify/GitHub-Actions/block-compromised-java-certificates@main
+```
+
 ## Rulesets
 
 GitHub [org-level rulesets](https://docs.github.com/en/enterprise-cloud@latest/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets#require-workflows-to-pass-before-merging) can be configured to run a workflow check against pull requests in all repos in the org. This is a very powerful feature, but there are some caveats and best practices to be aware of when enabling a ruleset.
