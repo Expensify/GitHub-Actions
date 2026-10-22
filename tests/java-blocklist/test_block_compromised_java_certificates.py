@@ -269,6 +269,22 @@ class RuntimeTests(FixtureTest):
         with self.assertRaises(ValueError):
             subject.resolveBlocklist(home)
 
+    def testRuntimeHomePreservesTrailingSpaces(self):
+        """
+        Preserve significant whitespace in the reported runtime path when parsing properties.
+        """
+        home, _ = self.makeJava('jdk with trailing space ')
+        self.assertEqual(subject.inspectRuntime(home)['home'], home)
+
+    def testInvalidJavaSpecificationsAreRejected(self):
+        """
+        Reject malformed major versions rather than accepting partial numeric prefixes.
+        """
+        for index, specification in enumerate(('', '-1', '1.8.0', '8.0', '25-ea', 'unknown')):
+            home, _ = self.makeJava(name=f'invalid-{index}', specification=specification)
+            with self.assertRaises(ValueError):
+                subject.inspectRuntime(home)
+
     def testInspectionFailuresDoNotLeakJvmDiagnostics(self):
         """
         Hide captured secret-bearing diagnostics when Java inspection fails.

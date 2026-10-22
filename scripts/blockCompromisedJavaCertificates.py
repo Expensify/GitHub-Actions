@@ -172,22 +172,22 @@ def inspectRuntime(home: Path) -> dict:
         # JAVA_TOOL_OPTIONS diagnostics can contain secrets. Never forward raw JVM output, even on failure.
         raise ValueError(f'Cannot inspect the selected JVM: {home}')
 
+    required = ('java.home', 'java.specification.version', 'java.vendor', 'java.runtime.version')
     properties = {}
     for line in (inspection.stdout + b'\n' + inspection.stderr).decode(encoding='utf-8', errors='replace').splitlines():
-        match = re.fullmatch(r'\s*(java\.[\w.]+) = (.+)', line)
-        if match:
-            properties[match[1]] = match[2]
+        key, separator, value = line.lstrip().partition(' = ')
+        if separator and key in required and value:
+            properties[key] = value
 
-    required = ('java.home', 'java.specification.version', 'java.vendor', 'java.runtime.version')
     if any(name not in properties for name in required):
         raise ValueError(f'The selected JVM did not report all required properties: {home}')
 
     runtimeHome = Path(properties['java.home'])
-    specification = properties['java.specification.version']
-    if not runtimeHome.is_absolute() or not re.fullmatch(r'(?:1\.)?\d+', specification):
+    majorVersion = properties['java.specification.version'].removeprefix('1.')
+    if not runtimeHome.is_absolute() or not majorVersion.isdecimal():
         raise ValueError(f'Unsupported JVM properties: {home}')
 
-    if int(re.sub(r'^1\.', '', specification)) < 8:
+    if int(majorVersion) < 8:
         raise ValueError(f'Java 8 or newer is required: {home}')
 
     return {
