@@ -10,7 +10,7 @@ runs:
   using: composite
   steps:
     - name: Block compromised Java certificates
-      shell: python3 {0}
+      shell: python
       run: |
         import os
         import runpy
