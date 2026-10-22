@@ -5,6 +5,7 @@ on:
     types: [opened, synchronize]
     paths:
       - '**/*.py'
+      - 'block-compromised-java-certificates/action.yml'
       - 'block-compromised-java-certificates/compromised-java-certificates.pem'
       - '.github/workflows/pythonTests.yml'
 

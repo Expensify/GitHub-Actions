@@ -6,7 +6,9 @@ on:
     paths:
       - 'block-compromised-java-certificates/**'
       - 'scripts/blockCompromisedJavaCertificates.py'
+      - 'scripts/restrictGradleJava.py'
       - 'tests/fixtures/java-blocklist/**'
+      - 'tests/fixtures/gradle-blocklist/**'
       - '.github/workflows/javaCertificateBlocklistTests.yml'
 
 permissions:
@@ -70,3 +72,105 @@ jobs:
           result=$(python3 scripts/blockCompromisedJavaCertificates.py --apply)
           echo "$result"
           grep -F 'already-protected:' <<< "$result"
+
+  verify-gradle:
+    name: Restricted Gradle ${{ matrix.gradle }}
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    defaults:
+      run:
+        working-directory: .github/actions/under-test
+    strategy:
+      fail-fast: false
+      matrix:
+        gradle: ['8.9', '9.3.1']
+    steps:
+      - name: Checkout
+        # v6.0.3
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          path: .github/actions/under-test
+
+      - name: Install another JDK
+        id: other-java
+        # v5.2.0
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Select the JDK to protect
+        id: protected-java
+        # v5.2.0
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@50e97c2cd7a37755bbfafc9c5b7cafaece252f6e
+        with:
+          gradle-version: ${{ matrix.gradle }}
+          cache-disabled: 'true'
+
+      - name: Seed stale settings in a custom Gradle user home
+        env:
+          OTHER_JAVA_HOME: ${{ steps.other-java.outputs.java-home }}
+        run: |
+          export GRADLE_USER_HOME="$RUNNER_TEMP/protected gradle"
+          echo "GRADLE_USER_HOME=$GRADLE_USER_HOME" >> "$GITHUB_ENV"
+          echo "OTHER_JAVA_HOME=$OTHER_JAVA_HOME" >> "$GITHUB_ENV"
+          mkdir -p "$GRADLE_USER_HOME"
+          cat > "$GRADLE_USER_HOME/gradle.properties" <<EOF
+          existing.property=keep-me
+          org.gradle.java.home=$OTHER_JAVA_HOME
+          org.gradle.java.installations.auto-detect=true
+          org.gradle.java.installations.auto-download=true
+          org.gradle.java.installations.fromEnv=OTHER_JAVA_HOME
+          org.gradle.java.installations.paths=$OTHER_JAVA_HOME
+          EOF
+          printf 'unfinished=continuation\134' >> "$GRADLE_USER_HOME/gradle.properties"
+          cp "$GRADLE_USER_HOME/gradle.properties" "$RUNNER_TEMP/original-gradle.properties"
+
+      - name: Protect the selected JDK without Gradle opt-in
+        uses: ./.github/actions/under-test/block-compromised-java-certificates
+
+      - name: Verify Gradle settings remain unchanged by default
+        run: cmp "$RUNNER_TEMP/original-gradle.properties" "$GRADLE_USER_HOME/gradle.properties"
+
+      - name: Protect and restrict the selected JDK
+        uses: ./.github/actions/under-test/block-compromised-java-certificates
+        with:
+          java-home: ${{ steps.protected-java.outputs.java-home }}
+          restrict-gradle: 'true'
+
+      - name: Snapshot Gradle configuration
+        run: cp "$GRADLE_USER_HOME/gradle.properties" "$RUNNER_TEMP/protected-gradle.properties"
+
+      - name: Reapply protection and restrictions
+        uses: ./.github/actions/under-test/block-compromised-java-certificates
+        with:
+          restrict-gradle: 'true'
+
+      - name: Verify Gradle selection and idempotence
+        run: |
+          cmp "$RUNNER_TEMP/protected-gradle.properties" "$GRADLE_USER_HOME/gradle.properties"
+          gradle --offline --no-daemon -p tests/fixtures/gradle-blocklist verifyProtectedToolchain
+          if gradle --offline --no-daemon -p tests/fixtures/gradle-blocklist resolveUnprotectedToolchain > "$RUNNER_TEMP/unprotected-toolchain.log" 2>&1; then
+            cat "$RUNNER_TEMP/unprotected-toolchain.log"
+            echo 'Gradle selected an unprotected JDK.' >&2
+            exit 1
+          fi
+          cat "$RUNNER_TEMP/unprotected-toolchain.log"
+          grep -E 'languageVersion=17|Java 17' "$RUNNER_TEMP/unprotected-toolchain.log"
+
+      - name: Verify incompatible daemon JVM criteria fail
+        run: |
+          mkdir -p tests/fixtures/gradle-blocklist/gradle
+          echo 'toolchainVersion=17' > tests/fixtures/gradle-blocklist/gradle/gradle-daemon-jvm.properties
+          if gradle --offline --no-daemon -p tests/fixtures/gradle-blocklist verifyProtectedToolchain > "$RUNNER_TEMP/unprotected-daemon.log" 2>&1; then
+            cat "$RUNNER_TEMP/unprotected-daemon.log"
+            echo 'Gradle selected an unprotected daemon JVM.' >&2
+            exit 1
+          fi
+          cat "$RUNNER_TEMP/unprotected-daemon.log"
+          grep -E 'languageVersion=17|Java 17' "$RUNNER_TEMP/unprotected-daemon.log"

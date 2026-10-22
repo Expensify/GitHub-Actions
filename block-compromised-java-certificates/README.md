@@ -8,7 +8,10 @@ Patch the selected JVM's certificate blocklist **after Java setup/cache restorat
     distribution: temurin
     java-version: '25'
 
+# If using gradle/actions/setup-gradle, run it here so its cache restoration finishes first.
 - uses: Expensify/GitHub-Actions/block-compromised-java-certificates@main
+  with:
+    restrict-gradle: 'true'
 
 - run: ./gradlew build
 ```
@@ -21,6 +24,21 @@ Patch the selected JVM's certificate blocklist **after Java setup/cache restorat
 - Merges into existing files, preserving existing blocklist entries. Verifies the resulting file and is idempotent.
 - Uses `sudo tee -a` only if a normal append is denied. Interactive runs explain why elevated permission is needed before sudo can prompt; CI and headless runs never prompt. Java discovery and final verification are never elevated.
 - Fails the job loudly if patching the blocklist fails.
+
+## Gradle builds
+
+Set `restrict-gradle: 'true'` to configure Gradle **after the selected JVM is successfully protected**. It defaults to `'false'` and is intended for CI builds that use one JDK. The action writes an overriding block to `$GRADLE_USER_HOME/gradle.properties`, or `$HOME/.gradle/gradle.properties` when `GRADLE_USER_HOME` is unset:
+
+- Selects the protected JDK with `org.gradle.java.home`.
+- Disables toolchain auto-detection and auto-download.
+- Clears additional environment-provided toolchain locations and restricts installation paths to the protected JDK.
+- Preserves unrelated file contents and permissions; repeating the same configuration is a no-op.
+
+`JAVA_HOME` must select the protected JDK, including when the `java-home` input is supplied. This keeps the Gradle launcher on the same JVM; the action does not switch `JAVA_HOME` or `PATH`. Run it after Java setup and **all Gradle cache restoration**, before any Gradle command. Reapply if a later step replaces the JDK, changes the Gradle user home, or overwrites these properties. Restart existing Gradle daemons before resuming builds.
+
+The selected JDK must satisfy the build's Java/toolchain requirements and any `gradle/gradle-daemon-jvm.properties` criteria. A build requiring another JDK will fail rather than select/download an unprotected installation. Multi-JDK builds should explicitly provision and protect their required runtimes and configure their own toolchain policy. Explicit command-line/property overrides, a different `--gradle-user-home`, and custom Java launches can bypass this configuration; it is not a sandbox for arbitrary build code.
+
+See Gradle's [toolchain configuration](https://docs.gradle.org/current/userguide/toolchains.html#sec:auto_detection) and [daemon JVM criteria](https://docs.gradle.org/current/userguide/gradle_daemon.html#sec:daemon_jvm_criteria).
 
 ## Developer laptops
 
