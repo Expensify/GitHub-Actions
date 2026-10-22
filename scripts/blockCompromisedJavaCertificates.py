@@ -241,9 +241,9 @@ def defaultRoots(environment: dict, home: Path, platform: str) -> list[SearchRoo
         roots += [
             SearchRoot(Path('/Library/Java/JavaVirtualMachines')),
             SearchRoot(home / 'Library/Java/JavaVirtualMachines'),
-            SearchRoot(path=Path('/Applications'), kind='apps'),
-            SearchRoot(path=home / 'Applications', kind='apps'),
-            SearchRoot(path=home / 'Library/Application Support/JetBrains/Toolbox/apps', depth=8, kind='apps'),
+            SearchRoot(Path('/Applications')),
+            SearchRoot(home / 'Applications'),
+            SearchRoot(path=home / 'Library/Application Support/JetBrains/Toolbox/apps', depth=8),
         ]
 
         for prefix in sorted({'/opt/homebrew', '/usr/local', environment.get('HOMEBREW_PREFIX', '/opt/homebrew')}):
