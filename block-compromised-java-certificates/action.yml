@@ -5,6 +5,10 @@ inputs:
   java-home:
     description: JDK or JRE to protect; defaults to JAVA_HOME set by actions/setup-java
     required: false
+  restrict-gradle:
+    description: Restrict Gradle to the protected JDK; JAVA_HOME must select the same JDK
+    required: false
+    default: 'false'
 
 runs:
   using: composite
@@ -20,6 +24,19 @@ runs:
         sys.argv = [script, "--apply"]
         if os.environ.get("BLOCKLIST_JAVA_HOME"):
             sys.argv += ["--java-home", os.environ["BLOCKLIST_JAVA_HOME"]]
+        runpy.run_path(script, run_name="__main__")
+      env:
+        BLOCKLIST_ACTION_PATH: ${{ github.action_path }}
+        BLOCKLIST_JAVA_HOME: ${{ inputs.java-home }}
+
+    - name: Restrict Gradle to the protected JDK
+      if: ${{ inputs.restrict-gradle == 'true' }}
+      shell: python
+      run: |
+        import os
+        import runpy
+
+        script = os.path.join(os.environ["BLOCKLIST_ACTION_PATH"], "..", "scripts", "restrictGradleJava.py")
         runpy.run_path(script, run_name="__main__")
       env:
         BLOCKLIST_ACTION_PATH: ${{ github.action_path }}

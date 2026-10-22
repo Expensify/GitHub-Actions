@@ -1,0 +1,30 @@
+plugins {
+    id 'java'
+}
+
+tasks.register('verifyProtectedToolchain') {
+    doLast {
+        def protectedHome = new File(System.getenv('JAVA_HOME')).canonicalFile
+        assert new File(System.getProperty('java.home')).canonicalFile == protectedHome
+        assert project.findProperty('existing.property') == 'keep-me'
+        assert project.findProperty('org.gradle.java.installations.auto-detect') == 'false'
+        assert project.findProperty('org.gradle.java.installations.auto-download') == 'false'
+        assert project.findProperty('org.gradle.java.installations.fromEnv') == ''
+        assert new File(project.findProperty('org.gradle.java.installations.paths')).canonicalFile == protectedHome
+
+        def launcher = javaToolchains.launcherFor {
+            languageVersion = JavaLanguageVersion.of(21)
+        }.get()
+        assert launcher.metadata.installationPath.asFile.canonicalFile == protectedHome
+        println "Protected toolchain: ${protectedHome}"
+    }
+}
+
+// Java 17 is installed in CI but must not be selected through stale properties or auto-detection.
+tasks.register('resolveUnprotectedToolchain') {
+    doLast {
+        javaToolchains.launcherFor {
+            languageVersion = JavaLanguageVersion.of(17)
+        }.get()
+    }
+}
