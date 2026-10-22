@@ -31,11 +31,14 @@ class FixtureTest(unittest.TestCase):
     """
     def setUp(self):
         """
-        Create a temporary fixture directory that is removed after each test.
+        Prepare temporary files and a headless terminal default for isolated tests.
         """
         self.temporary = tempfile.TemporaryDirectory(prefix='java-blocklist-')
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name).resolve()
+        terminal = mock.patch.object(target=sys.stdin, attribute='isatty', return_value=False)
+        terminal.start()
+        self.addCleanup(terminal.stop)
 
     def makeJava(self, name='jdk', specification='25', runtimeHome=None):
         """
@@ -321,19 +324,22 @@ class UpdateTests(FixtureTest):
 
         self.assertEqual(self.target.read_bytes(), VENDOR)
 
-    def testSudoNeverPrompts(self):
+    def testSudoPromptPolicyExplainsInteractiveAuthorization(self):
         """
-        Use sudo -n regardless of terminal availability or whether the script runs in CI.
+        Explain interactive sudo requests while preventing prompts in CI and headless execution.
         """
         cases = (
-            (True, ''),
-            (False, ''),
-            (True, 'true'),
+            (True, '', False),
+            (False, '', True),
+            (True, 'true', True),
         )
         response = subprocess.CompletedProcess([], 0)
-        for terminal, ci in cases:
+        for terminal, ci, nonInteractive in cases:
             with self.subTest(terminal=terminal, ci=ci):
+                errors, output = io.StringIO(), io.StringIO()
                 with contextlib.ExitStack() as stack:
+                    stack.enter_context(contextlib.redirect_stderr(errors))
+                    stack.enter_context(contextlib.redirect_stdout(output))
                     stack.enter_context(mock.patch.dict(os.environ, {'CI': ci}))
                     stack.enter_context(mock.patch.object(target=sys.stdin, attribute='isatty', return_value=terminal))
                     stack.enter_context(
@@ -344,7 +350,14 @@ class UpdateTests(FixtureTest):
                     )
                     subject.appendBlocklist(self.target, 'entries\n')
 
-                self.assertEqual(sudo.call_args.kwargs['args'][:2], ['sudo', '-n'])
+                self.assertEqual('-n' in sudo.call_args.kwargs['args'], nonInteractive)
+                self.assertEqual(output.getvalue(), '')
+                if nonInteractive:
+                    self.assertEqual(errors.getvalue(), '')
+                else:
+                    self.assertIn(str(self.target), errors.getvalue())
+                    self.assertIn('elevated write permission', errors.getvalue())
+                    self.assertIn('password', errors.getvalue())
 
     def testUnreadableBlocklistDoesNotUseSudo(self):
         """

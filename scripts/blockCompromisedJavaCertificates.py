@@ -118,17 +118,27 @@ def appendBlocklist(target: Path, additions: str) -> None:
     """
     Append normally, using sudo only if the write is denied.
 
-    Always use noninteractive sudo, even in a terminal. Pass append data directly to tee
-    without a shell and discard its output so JSON reports remain clean.
+    Explain privileged writes before allowing a password prompt in an interactive terminal.
+    Never prompt in CI or without a terminal, and keep diagnostics out of JSON stdout.
     """
     try:
         with target.open(mode='a', encoding='ascii') as output:
             output.write(additions)
     except PermissionError:
-        command = ['sudo', '-n', 'tee', '-a', str(target)]
+        command = ['sudo']
+        if not sys.stdin.isatty() or os.environ.get('CI'):
+            command.append('-n')
+        else:
+            print(
+                f'Updating {target} requires elevated write permission. '
+                'sudo may prompt for your password to append the missing certificate fingerprints.',
+                file=sys.stderr,
+            )
+
+        command += ['tee', '-a', str(target)]
         result = subprocess.run(args=command, input=additions, encoding='ascii', stdout=subprocess.DEVNULL, timeout=120)
         if result.returncode:
-            raise ValueError(f'Unable to append to {target} using noninteractive sudo; authorize separately and retry.')
+            raise ValueError(f'Unable to append to {target} using sudo.')
 
 
 def updateBlocklist(target: Path, fingerprints: list[str], apply: bool = False) -> BlocklistUpdate:
