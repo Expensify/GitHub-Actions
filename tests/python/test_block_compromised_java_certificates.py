@@ -486,6 +486,22 @@ class RuntimeTests(FixtureTest):
         self.assertEqual([entry['status'] for entry in blocklists], ['patched', 'already-protected'])
         self.assertEqual(sum(entry['added'] for entry in blocklists), len(FINGERPRINTS))
 
+    def testCandidateCollectionsShareOneDeduplicationStep(self):
+        """
+        Accept sets and one-pass iterators without requiring conversions in the caller.
+        """
+        home, _ = self.makeJava()
+        for homes in ({home}, iter([home, home])):
+            with self.subTest(collection=type(homes).__name__):
+                with mock.patch.object(
+                    target=subject, attribute='inspectRuntime', wraps=subject.inspectRuntime
+                ) as inspect:
+                    runtimes, blocklists = subject.run(homes, FINGERPRINTS, False)
+
+                inspect.assert_called_once_with(home)
+                self.assertEqual(len(runtimes), 1)
+                self.assertEqual(len(blocklists), 1)
+
     def testPartialFailureStillProcessesOtherJvms(self):
         """
         Continue protecting valid installations after another candidate fails inspection.

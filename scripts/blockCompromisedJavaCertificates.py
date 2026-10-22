@@ -16,7 +16,7 @@ import subprocess
 import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Literal
+from typing import Iterable, Literal
 
 SCRIPT = Path(__file__).resolve()
 # The certificate source is https://emudhra.we-have-a-problem.com/impacted-intermediates.json (reviewed snapshot).
@@ -402,7 +402,7 @@ def discoverInstallations(environment: dict, home: Path, platform: str, extraRoo
     return discovery
 
 
-def run(homes: list[Path], fingerprints: list[str], apply: bool) -> tuple[list[dict], list[dict]]:
+def run(homes: Iterable[Path], fingerprints: list[str], apply: bool) -> tuple[list[dict], list[dict]]:
     """
     Collect unique blocklist paths, then update each file and return runtime and file results.
 
@@ -486,7 +486,7 @@ def main(argv=None) -> int:
 
         discovery = Discovery(homes={Path(selected).expanduser().absolute()})
 
-    runtimes, blocklists = run(list(discovery.homes), fingerprints, args.apply)
+    runtimes, blocklists = run(discovery.homes, fingerprints, args.apply)
     if not runtimes:
         discovery.errors.append('No Java installations found in the searched locations.')
 
