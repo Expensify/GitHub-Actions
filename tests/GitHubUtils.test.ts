@@ -397,18 +397,15 @@ describe('GitHubUtils', () => {
             const gitHubUtils = createGitHubUtils(
                 createMockClient(async (query, variables) => {
                     calls++;
-                    assert.match(query, /team0: team\(slug: \$teamSlug0\)/);
-                    assert.match(query, /team1: team\(slug: \$teamSlug1\)/);
-                    assert.match(query, /member0: members\(first: 1, query: \$member0\)/);
-                    assert.match(query, /member1: members\(first: 1, query: \$member1\)/);
+                    assert.match(query, /organization\(login: "Expensify"\)/);
+                    assert.match(query, /team0: team\(slug: "expensify-expensify"\)/);
+                    assert.match(query, /team1: team\(slug: "writers"\)/);
+                    assert.doesNotMatch(query, /team2:/);
+                    assert.match(query, /member0: members\(first: 1, query: "AndrewGable"\)/);
+                    assert.match(query, /member1: members\(first: 1, query: "outsider"\)/);
+                    assert.doesNotMatch(query, /member2:/);
                     assert.doesNotMatch(query, /pageInfo|after:/);
-                    assert.deepEqual(variables, {
-                        organization: 'Expensify',
-                        member0: 'AndrewGable',
-                        member1: 'outsider',
-                        teamSlug0: 'expensify-expensify',
-                        teamSlug1: 'writers',
-                    });
+                    assert.equal(variables, undefined);
                     return {
                         organization: {
                             team0: {
