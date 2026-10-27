@@ -481,7 +481,9 @@ def printReport(report: dict, asJson: bool = False) -> None:
         f'{len(report["runtimes"])} runtimes; {len(report["blocklists"])} unique blocklists; '
         f'{len(report["skipped"])} skipped locations.'
     )
-    if report['mode'] == 'apply':
+    if not report['runtimes'] and not report['errors']:
+        print('No Java installations found in the searched locations; nothing to patch.')
+    if report['mode'] == 'apply' and report['runtimes']:
         print('Restart existing JVMs/Gradle daemons. Rerun after JDK installations or updates.')
 
 
@@ -497,6 +499,7 @@ def main(argv=None) -> int:
     selection.add_argument('--all', action='store_true', help='Discover installed JVMs in known locations')
     selection.add_argument('--java-home', type=Path, help='Protect only this JDK/JRE (default: JAVA_HOME)')
     parser.add_argument('--search-root', type=Path, action='append', default=[], help='Additional --all search root')
+    parser.add_argument('--require-java', action='store_true', help='Fail if discovery finds no Java installations')
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument('--apply', action='store_true', help='Apply missing blocks (default: dry-run)')
     mode.add_argument('--dry-run', action='store_true', help='Report changes without writing or requesting sudo')
@@ -523,7 +526,7 @@ def main(argv=None) -> int:
         discovery = Discovery(homes={Path(selected).expanduser().absolute()})
 
     runtimes, blocklists = run(discovery.homes, fingerprints, args.apply)
-    if not runtimes:
+    if not runtimes and args.require_java:
         discovery.errors.append('No Java installations found in the searched locations.')
 
     report = {
