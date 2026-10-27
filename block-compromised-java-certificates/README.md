@@ -53,6 +53,8 @@ Discovery checks `JAVA_HOME`, `JDK_HOME`, all Java entries on `PATH`, the macOS 
 
 Searches are bounded (normally six directory levels); they do not scan the entire filesystem. Add custom or deeper locations with `--all --search-root /path/to/jdks`. Arbitrary locations, archives, inaccessible directories, other users' homes, containers, and VMs require separate coverage. `--json` includes searched roots, skipped locations, a `runtimes` inventory, and per-file results in `blocklists`. Any search/access/patch failure produces a nonzero exit, while other discovered files are still processed.
 
+A clean `--all` scan that finds no Java succeeds without making changes, in both dry-run and apply modes. Text output says there is nothing to patch; JSON returns empty `runtimes`, `blocklists`, and `errors` arrays. Discovery/permission errors and failures inspecting an explicitly selected JVM still fail. Provisioning that requires Java can use `--all --require-java --apply` to reject an empty inventory. The composite action continues to require a valid selected JVM.
+
 Dry-run is the default and never modifies blocklists or requests sudo. Run as your normal user. If an append requires sudo, interactive runs explain why and allow sudo to request your password. CI and headless runs use noninteractive sudo and fail if authorization is unavailable. To target one installation, use `--java-home /path/to/jdk` instead of `--all` (or set `JAVA_HOME`).
 
 Restart existing JVMs, IDEs, and Gradle daemons after patching. Rerun after JDK installations or updates, including newly downloaded Gradle toolchains. The blocklist protects standard JVM certificate validation, not custom TLS implementations that bypass it.

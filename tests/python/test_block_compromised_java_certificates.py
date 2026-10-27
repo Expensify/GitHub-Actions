@@ -476,16 +476,74 @@ class CliTests(FixtureTest):
                 if failure != 'search':
                     self.assertEqual(badTarget.read_bytes(), before)
 
-    def testEmptyDiscoveryDoesNotReportProtection(self):
+    def testEmptyDiscoveryIsSuccessfulNoOp(self):
         """
-        Return a failure report rather than claiming protection when no runtime was found.
+        Allow Java-free machines in dry-run and apply modes without claiming protection or requesting sudo.
         """
-        status, output, _ = self.invokeAll(self.root, ['--json'])
+        for mode in ('--dry-run', '--apply'):
+            for outputMode in ([], ['--json']):
+                with self.subTest(mode=mode, outputMode=outputMode):
+                    with mock.patch.object(subject, 'appendBlocklist') as append:
+                        status, output, errors = self.invokeAll(self.root, [mode, *outputMode])
+                    self.assertEqual(status, 0)
+                    self.assertEqual(errors, '')
+                    append.assert_not_called()
+                    if outputMode:
+                        report = json.loads(output)
+                        self.assertEqual(report['errors'], [])
+                        self.assertEqual(report['runtimes'], [])
+                        self.assertEqual(report['blocklists'], [])
+                    else:
+                        self.assertIn('nothing to patch', output)
+                        self.assertNotIn('Restart existing', output)
+
+    def testRequireJavaRejectsEmptyDiscovery(self):
+        """
+        Let provisioning callers explicitly require an installation without changing the report schema.
+        """
+        for mode in ('--dry-run', '--apply'):
+            with self.subTest(mode=mode):
+                status, output, _ = self.invokeAll(self.root, ['--require-java', mode, '--json'])
+                report = json.loads(output)
+                self.assertEqual(status, 1)
+                self.assertEqual(report['errors'], ['No Java installations found in the searched locations.'])
+                self.assertEqual(report['runtimes'], [])
+                self.assertEqual(report['blocklists'], [])
+
+    def testRequireJavaAcceptsInstalledRuntime(self):
+        """
+        Strict discovery succeeds when an installation can actually be inspected and patched.
+        """
+        self.makeJava()
+        status, output, _ = self.invokeAll(self.root, ['--require-java', '--apply', '--json'])
+        report = json.loads(output)
+        self.assertEqual(status, 0)
+        self.assertEqual(report['errors'], [])
+        self.assertEqual(report['blocklists'][0]['status'], 'patched')
+
+    def testEmptyDiscoveryDoesNotHideSearchErrors(self):
+        """
+        A missing required search directory is still a failure even when no Java was discovered.
+        """
+        status, output, _ = self.invokeAll(self.root / 'missing', ['--json'])
         report = json.loads(output)
         self.assertEqual(status, 1)
         self.assertTrue(report['errors'])
         self.assertEqual(report['runtimes'], [])
-        self.assertEqual(report['blocklists'], [])
+
+    def testInvalidSelectedJavaStillFails(self):
+        """
+        Missing explicit or configured JVMs are inspection failures, not clean empty inventories.
+        """
+        missing = str(self.root / 'missing-jdk')
+        for arguments in (['--java-home', missing], []):
+            with self.subTest(arguments=arguments):
+                with mock.patch.dict(os.environ, {'JAVA_HOME': missing}):
+                    status, output, _ = self.invoke([*arguments, '--json'])
+                report = json.loads(output)
+                self.assertEqual(status, 1)
+                self.assertEqual(report['runtimes'][0]['status'], 'failed')
+                self.assertEqual(report['blocklists'], [])
 
     def testReportsKeepJsonAndTextErrorsOnTheirIntendedStreams(self):
         """
