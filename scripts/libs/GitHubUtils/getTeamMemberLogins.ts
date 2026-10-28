@@ -3,87 +3,64 @@ import type GitHubAPIClient from '../GitHubAPIClient';
 const EXPENSIFY_ORG = 'Expensify';
 
 type TeamMembersResponse = {
-    organization: {
-        team: {
-            members: {
-                pageInfo: {
-                    hasNextPage: boolean;
-                    endCursor: string | null;
-                };
-                nodes: Array<{
-                    login: string;
-                }>;
-            };
-        } | null;
-    } | null;
+    organization: Record<string, Record<string, {nodes: Array<{login: string}>} | null> | null> | null;
 };
 
-const teamMemberLoginsPromisesByClient = new WeakMap<GitHubAPIClient, Map<string, Promise<Set<string>>>>();
-
 /**
- * Fetches and memoizes all members of a GitHub team for the lifetime of a client.
+ * Returns the candidate logins that belong to any of the teams, using a single GraphQL request.
+ *
+ * For teams ['expensify-expensify', 'margelo'] and candidates ['rafecolton', 'chrispader'], the query is:
+ *
+ *   {
+ *     organization(login: "Expensify") {
+ *       team0: team(slug: "expensify-expensify") {
+ *         member0: members(first: 1, query: "rafecolton") { nodes { login } }
+ *         member1: members(first: 1, query: "chrispader") { nodes { login } }
+ *       }
+ *       team1: team(slug: "margelo") {
+ *         member0: members(first: 1, query: "rafecolton") { nodes { login } }
+ *         member1: members(first: 1, query: "chrispader") { nodes { login } }
+ *       }
+ *     }
+ *   }
+ *
+ * Aliases are index-based because logins and slugs can contain characters that aren't valid in GraphQL aliases (e.g. `-`).
  */
-async function getTeamMemberLogins(client: GitHubAPIClient, teamSlug: string): Promise<Set<string>> {
-    let teamPromises = teamMemberLoginsPromisesByClient.get(client);
-    if (!teamPromises) {
-        teamPromises = new Map();
-        teamMemberLoginsPromisesByClient.set(client, teamPromises);
-    }
-
-    let teamMembersPromise = teamPromises.get(teamSlug);
-    if (!teamMembersPromise) {
-        teamMembersPromise = fetchTeamMemberLogins(client, teamSlug);
-        teamPromises.set(teamSlug, teamMembersPromise);
-    }
-
-    return teamMembersPromise;
-}
-
-async function fetchTeamMemberLogins(client: GitHubAPIClient, teamSlug: string): Promise<Set<string>> {
+async function getTeamMemberLogins(client: GitHubAPIClient, teamSlugs: string[], candidateLogins: string[]): Promise<Set<string>> {
+    const uniqueTeamSlugs = [...new Set(teamSlugs)];
+    const uniqueCandidateLogins = [...new Set(candidateLogins)];
     const teamMemberLogins = new Set<string>();
-    let cursor: string | null = null;
-    let hasNextPage = true;
+    if (uniqueTeamSlugs.length === 0 || uniqueCandidateLogins.length === 0) {
+        return teamMemberLogins;
+    }
 
-    while (hasNextPage) {
-        // await-in-loop is necessary and appropriate for polling a paginated endpoint;
-        // each request is dependent upon the response of the previous.
-        // eslint-disable-next-line no-await-in-loop
-        const response: TeamMembersResponse = await client.graphql<TeamMembersResponse>(
-            `
-            query TeamMembers($organization: String!, $teamSlug: String!, $cursor: String) {
-                organization(login: $organization) {
-                    team(slug: $teamSlug) {
-                        members(first: 100, after: $cursor) {
-                            pageInfo {
-                                hasNextPage
-                                endCursor
-                            }
-                            nodes {
-                                login
-                            }
-                        }
-                    }
-                }
+    // JSON.stringify produces a properly quoted and escaped GraphQL string literal.
+    const memberQueries = uniqueCandidateLogins.map((login, i) => `member${i}: members(first: 1, query: ${JSON.stringify(login)}) { nodes { login } }`).join('\n');
+    const teamQueries = uniqueTeamSlugs.map((slug, i) => `team${i}: team(slug: ${JSON.stringify(slug)}) {\n${memberQueries}\n}`).join('\n');
+    const response = await client.graphql<TeamMembersResponse>(`{\norganization(login: "${EXPENSIFY_ORG}") {\n${teamQueries}\n}\n}`);
+
+    const organization = response.organization;
+    if (!organization) {
+        throw new Error(`${EXPENSIFY_ORG} organization could not be found.`);
+    }
+
+    for (const [teamIndex, slug] of uniqueTeamSlugs.entries()) {
+        const team = organization[`team${teamIndex}`];
+        if (!team) {
+            throw new Error(`${EXPENSIFY_ORG}/${slug} team could not be found.`);
+        }
+
+        for (const [memberIndex, login] of uniqueCandidateLogins.entries()) {
+            const members = team[`member${memberIndex}`];
+            if (!members) {
+                throw new Error(`Missing team membership search result for ${login} in ${slug}.`);
             }
-        `,
-            {
-                organization: EXPENSIFY_ORG,
-                teamSlug,
-                cursor,
-            },
-        );
 
-        const members = response.organization?.team?.members;
-        if (!members) {
-            throw new Error(`${EXPENSIFY_ORG}/${teamSlug} team could not be found.`);
+            // The members search is fuzzy and case-insensitive, so only an exact login match proves membership.
+            if (members.nodes.some((member) => member.login === login)) {
+                teamMemberLogins.add(login);
+            }
         }
-
-        for (const member of members.nodes) {
-            teamMemberLogins.add(member.login);
-        }
-
-        hasNextPage = members.pageInfo.hasNextPage;
-        cursor = members.pageInfo.endCursor;
     }
 
     return teamMemberLogins;
