@@ -7,6 +7,7 @@ import type {InternalOctokit} from '../scripts/libs/GitHubAPIClient';
 import GitHubAPIClient from '../scripts/libs/GitHubAPIClient';
 import createGitHubUtils from '../scripts/libs/GitHubUtils';
 import {WorkflowError} from '../scripts/libs/GitHubWorkflowUtils';
+import VerifyPeerReview from '../scripts/verifyPeerReview';
 
 const context = {
     owner: 'Expensify',
@@ -21,6 +22,227 @@ function createMockClient(graphqlClient: (query: string, variables?: Record<stri
     client['internalOctokit'] = {graphql: graphqlClient} as unknown as InternalOctokit;
     return client;
 }
+
+describe('getPeerReviewData', () => {
+    function createPeerReviewReader(client: GitHubAPIClient) {
+        return {getPeerReviewData: (args: typeof context) => VerifyPeerReview.getPeerReviewData(client, args)};
+    }
+
+    function makeResponse(count = 1, offset = 0, pageSize = count) {
+        return {
+            repository: {
+                ref: {
+                    branchProtectionRule: {requiredApprovingReviewCount: 1},
+                    rules: {nodes: [{type: 'PULL_REQUEST', parameters: {requiredApprovingReviewCount: 2}}], pageInfo: {hasNextPage: false}},
+                },
+                pullRequest: {
+                    commits: {
+                        totalCount: count,
+                        nodes: Array.from({length: pageSize}, (_, index) => ({
+                            commit: {
+                                oid: `commit-${offset + index}`,
+                                message: 'Change\n\nCo-authored-by: Rachael Hopkins <Rachael@Expensify.com>',
+                                author: {name: 'MelvinBot', user: {login: 'MelvinBot'}},
+                                authors: {
+                                    nodes: [
+                                        {email: 'Rachael@Expensify.com', user: {login: 'RachCHopkins'}},
+                                        {email: 'unknown@example.com', user: null},
+                                    ],
+                                    pageInfo: {hasNextPage: false},
+                                },
+                            },
+                        })),
+                        pageInfo: {hasNextPage: offset + pageSize < count, endCursor: `cursor-${offset + pageSize}`},
+                    },
+                    latestOpinionatedReviews: {
+                        nodes: [
+                            {state: 'APPROVED', author: {login: 'MonilBhavsar'}},
+                            {state: 'CHANGES_REQUESTED', author: {login: 'AndrewGable'}},
+                            {state: 'DISMISSED', author: {login: 'dismissed'}},
+                            {state: 'APPROVED', author: null},
+                            {state: 'APPROVED', author: {login: 'MonilBhavsar'}},
+                        ],
+                    },
+                },
+            },
+        };
+    }
+
+    it('reads protection, count, commits, co-author identities, and latest approvals in one GraphQL request', async () => {
+        let calls = 0;
+        const gitHubUtils = createPeerReviewReader(
+            createMockClient(async (query, variables) => {
+                calls++;
+                assert.match(query, /ref\(qualifiedName: \$branchRef\)/);
+                assert.match(query, /rules\(first: 100\)/);
+                assert.match(query, /commits\(first: 100, after: \$cursor\)/);
+                assert.match(query, /authors\(first: 100\)/);
+                assert.match(query, /latestOpinionatedReviews\(last: 100, writersOnly: true\)/);
+                assert.deepEqual(variables, {owner: 'Expensify', repo: 'Auth', prNumber: 1, branchRef: 'refs/heads/main', cursor: null, includeMetadata: true});
+                return makeResponse();
+            }),
+        );
+
+        const data = await gitHubUtils.getPeerReviewData(context);
+        assert.equal(calls, 1);
+        assert.equal(data.requiredApprovingReviewCount, 2);
+        assert.equal(data.commitCount, 1);
+        assert.deepEqual(data.approvers, ['MonilBhavsar']);
+        assert.deepEqual(data.commits, [
+            {
+                sha: 'commit-0',
+                author: {login: 'MelvinBot'},
+                commit: {message: 'Change\n\nCo-authored-by: Rachael Hopkins <Rachael@Expensify.com>', author: {name: 'MelvinBot', user: {login: 'MelvinBot'}}},
+                authorLoginsByEmail: new Map([['rachael@expensify.com', 'RachCHopkins']]),
+            },
+        ]);
+    });
+
+    it('paginates beyond 250 commits without re-reading protection or reviews', async () => {
+        const cursors: unknown[] = [];
+        const gitHubUtils = createPeerReviewReader(
+            createMockClient(async (_query, variables) => {
+                cursors.push(variables?.cursor);
+                const offset = (cursors.length - 1) * 100;
+                assert.equal(variables?.includeMetadata, offset === 0);
+                const response = makeResponse(350, offset, Math.min(100, 350 - offset));
+                if (offset > 0) {
+                    return {repository: {pullRequest: {commits: response.repository.pullRequest.commits}}};
+                }
+                return response;
+            }),
+        );
+        const data = await gitHubUtils.getPeerReviewData(context);
+        assert.deepEqual(cursors, [null, 'cursor-100', 'cursor-200', 'cursor-300']);
+        assert.equal(data.commitCount, 350);
+        assert.equal(data.commits.length, 350);
+        assert.equal(data.commits.at(349)?.sha, 'commit-349');
+        assert.equal(data.requiredApprovingReviewCount, 2);
+        assert.deepEqual(data.approvers, ['MonilBhavsar']);
+    });
+
+    it('fails closed on truncated commit data even when the PR has more than 250 commits', async () => {
+        const response = makeResponse(350, 0, 100);
+        response.repository.pullRequest.commits.pageInfo.hasNextPage = false;
+        const gitHubUtils = createPeerReviewReader(createMockClient(async () => response));
+        await assert.rejects(() => gitHubUtils.getPeerReviewData(context), /Expected 350 commits.*received 100/);
+    });
+
+    it('does not paginate or require PR data for branches requiring no reviews', async () => {
+        const gitHubUtils = createPeerReviewReader(createMockClient(async () => ({repository: {ref: {branchProtectionRule: null}, pullRequest: null}})));
+        assert.deepEqual(await gitHubUtils.getPeerReviewData(context), {requiredApprovingReviewCount: 0, commitCount: 0, commits: [], approvers: []});
+    });
+
+    it('preserves a canonical author name when GitHub cannot resolve a login', async () => {
+        const response = makeResponse();
+        const node = response.repository.pullRequest.commits.nodes.at(0);
+        assert.ok(node);
+        const {commit} = node;
+        const gitHubUtils = createPeerReviewReader(
+            createMockClient(async () => ({
+                repository: {
+                    ...response.repository,
+                    pullRequest: {
+                        ...response.repository.pullRequest,
+                        commits: {...response.repository.pullRequest.commits, nodes: [{commit: {...commit, author: {name: 'Unlinked Author', user: null}}}]},
+                    },
+                },
+            })),
+        );
+        const data = await gitHubUtils.getPeerReviewData(context);
+        assert.equal(data.commits.at(0)?.author, null);
+        assert.equal(data.commits.at(0)?.commit.author?.name, 'Unlinked Author');
+    });
+
+    it('fails closed when repository, branch, PR, or review data is missing', async () => {
+        const response = makeResponse();
+        for (const value of [
+            {repository: null},
+            {repository: {...response.repository, ref: null}},
+            {repository: {...response.repository, pullRequest: null}},
+            {repository: {...response.repository, pullRequest: {...response.repository.pullRequest, latestOpinionatedReviews: null}}},
+        ]) {
+            const gitHubUtils = createPeerReviewReader(createMockClient(async () => value));
+            await assert.rejects(() => gitHubUtils.getPeerReviewData(context), WorkflowError);
+        }
+    });
+
+    it('retains fail-closed validation of branch protection and rulesets', async () => {
+        for (const ref of [
+            {},
+            {branchProtectionRule: {requiredApprovingReviewCount: null}},
+            {branchProtectionRule: null, rules: {nodes: [{type: 'PULL_REQUEST', parameters: null}]}},
+            {branchProtectionRule: null, rules: {nodes: [], pageInfo: {hasNextPage: true}}},
+        ]) {
+            const response = makeResponse();
+            const gitHubUtils = createPeerReviewReader(createMockClient(async () => ({repository: {...response.repository, ref}})));
+            await assert.rejects(() => gitHubUtils.getPeerReviewData(context), WorkflowError);
+        }
+    });
+
+    it('fails closed when a commit has more than 100 authors', async () => {
+        const response = makeResponse();
+        const node = response.repository.pullRequest.commits.nodes.at(0);
+        assert.ok(node);
+        node.commit.authors.pageInfo.hasNextPage = true;
+        const gitHubUtils = createPeerReviewReader(createMockClient(async () => response));
+        await assert.rejects(() => gitHubUtils.getPeerReviewData(context), /more than 100 authors/);
+    });
+
+    it('fails closed when the final page contains fewer commits than reported', async () => {
+        const response = makeResponse(2, 0, 1);
+        response.repository.pullRequest.commits.pageInfo.hasNextPage = false;
+        const gitHubUtils = createPeerReviewReader(createMockClient(async () => response));
+        await assert.rejects(() => gitHubUtils.getPeerReviewData(context), /Expected 2 commits.*received 1/);
+    });
+
+    it('fails closed on missing or non-advancing pagination cursors', async () => {
+        for (const endCursor of [null, 'cursor-1']) {
+            let calls = 0;
+            const gitHubUtils = createPeerReviewReader(
+                createMockClient(async () => {
+                    calls++;
+                    const response = makeResponse(3, calls - 1, 1);
+                    if (calls === 2) {
+                        return {repository: {pullRequest: {commits: {...response.repository.pullRequest.commits, pageInfo: {hasNextPage: true, endCursor}}}}};
+                    }
+                    return response;
+                }),
+            );
+            await assert.rejects(() => gitHubUtils.getPeerReviewData(context), /Unable to paginate all commits/);
+            assert.equal(calls, 2);
+        }
+    });
+
+    it('fails closed if the commit count changes while paginating', async () => {
+        let calls = 0;
+        const gitHubUtils = createPeerReviewReader(
+            createMockClient(async () => {
+                calls++;
+                return makeResponse(calls === 1 ? 2 : 3, calls - 1, 1);
+            }),
+        );
+        await assert.rejects(() => gitHubUtils.getPeerReviewData(context), /Commit count changed/);
+    });
+
+    it('propagates API failures with peer-review context', async () => {
+        const gitHubUtils = createPeerReviewReader(
+            createMockClient(async () => {
+                throw new Error('502 Bad Gateway');
+            }),
+        );
+        await assert.rejects(() => gitHubUtils.getPeerReviewData(context), /Unable to read peer review data.*502 Bad Gateway/);
+    });
+
+    it('provides a permissions hint for access failures', async () => {
+        const gitHubUtils = createPeerReviewReader(
+            createMockClient(async () => {
+                throw new RequestError('Resource not accessible by integration', 403, {request: {method: 'POST', url: 'https://api.github.com/graphql', headers: {}}});
+            }),
+        );
+        await assert.rejects(() => gitHubUtils.getPeerReviewData(context), /administration:read and pull_requests:read/);
+    });
+});
 
 describe('GitHubUtils', () => {
     describe('getRequiredApprovingReviewCount', () => {

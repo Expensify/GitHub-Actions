@@ -43,7 +43,10 @@ async function getLatestApprovers(client: GitHubAPIClient, {owner, repo, number}
         },
     );
 
-    const reviews: OpinionatedReviewNode[] = response.repository?.pullRequest?.latestOpinionatedReviews.nodes ?? [];
+    return parseLatestApprovers(response.repository?.pullRequest?.latestOpinionatedReviews.nodes ?? []);
+}
+
+function parseLatestApprovers(reviews: OpinionatedReviewNode[]): string[] {
     return CollectionUtils.uniqueSorted(
         reviews
             .filter((review) => review.state === 'APPROVED')
@@ -52,4 +55,6 @@ async function getLatestApprovers(client: GitHubAPIClient, {owner, repo, number}
     );
 }
 
+export type {OpinionatedReviewNode};
+export {parseLatestApprovers};
 export default getLatestApprovers;

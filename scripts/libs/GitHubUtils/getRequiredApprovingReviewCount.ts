@@ -27,6 +27,25 @@ type BranchProtectionResponse = {
     } | null;
 };
 
+const BRANCH_PROTECTION_FIELDS = `
+    branchProtectionRule {
+        requiredApprovingReviewCount
+    }
+    rules(first: 100) {
+        nodes {
+            type
+            parameters {
+                ... on PullRequestParameters {
+                    requiredApprovingReviewCount
+                }
+            }
+        }
+        pageInfo {
+            hasNextPage
+        }
+    }
+`;
+
 /**
  * Returns the number of approving reviews the target branch requires, or 0 if nothing requires any.
  *
@@ -60,22 +79,7 @@ async function getRequiredApprovingReviewCount(client: GitHubAPIClient, {owner, 
             query RequiredApprovingReviewCount($owner: String!, $repo: String!, $branchRef: String!) {
                 repository(owner: $owner, name: $repo) {
                     ref(qualifiedName: $branchRef) {
-                        branchProtectionRule {
-                            requiredApprovingReviewCount
-                        }
-                        rules(first: 100) {
-                            nodes {
-                                type
-                                parameters {
-                                    ... on PullRequestParameters {
-                                        requiredApprovingReviewCount
-                                    }
-                                }
-                            }
-                            pageInfo {
-                                hasNextPage
-                            }
-                        }
+                        ${BRANCH_PROTECTION_FIELDS}
                     }
                 }
             }
@@ -101,6 +105,10 @@ async function getRequiredApprovingReviewCount(client: GitHubAPIClient, {owner, 
         });
     }
 
+    return parseRequiredApprovingReviewCount(response, {owner, repo, baseRef});
+}
+
+function parseRequiredApprovingReviewCount(response: BranchProtectionResponse, {owner, repo, baseRef}: {owner: string; repo: string; baseRef: string}): number {
     const repository = response.repository;
     if (!repository) {
         throw new WorkflowError({
@@ -166,4 +174,6 @@ async function getRequiredApprovingReviewCount(client: GitHubAPIClient, {owner, 
     return Math.max(branchProtectionCount, rulesetCount);
 }
 
+export type {BranchProtectionResponse};
+export {BRANCH_PROTECTION_FIELDS, parseRequiredApprovingReviewCount};
 export default getRequiredApprovingReviewCount;
