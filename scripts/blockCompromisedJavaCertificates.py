@@ -492,7 +492,7 @@ def main(argv=None) -> int:
     Run the selected CLI mode and return a nonzero status for any discovery or runtime failure.
 
     Default to a dry-run of JAVA_HOME unless a home or system discovery is explicitly selected.
-    Require explicit root opt-in for trusted provisioning; only individual appends can request sudo.
+    Use the caller's privileges; only individual append operations can request sudo.
     """
     parser = argparse.ArgumentParser(description=__doc__)
     selection = parser.add_mutually_exclusive_group()
@@ -500,10 +500,6 @@ def main(argv=None) -> int:
     selection.add_argument('--java-home', type=Path, help='Protect only this JDK/JRE (default: JAVA_HOME)')
     parser.add_argument('--search-root', type=Path, action='append', default=[], help='Additional --all search root')
     parser.add_argument('--require-java', action='store_true', help='Fail if discovery finds no Java installations')
-    parser.add_argument(
-        '--allow-root', action='store_true',
-        help='Allow root for trusted provisioning; discovered Java executables also run as root',
-    )
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument('--apply', action='store_true', help='Apply missing blocks (default: dry-run)')
     mode.add_argument('--dry-run', action='store_true', help='Report changes without writing or requesting sudo')
@@ -513,9 +509,6 @@ def main(argv=None) -> int:
         parser.error('Python 3.9+ on Linux or macOS is required.')
 
     fingerprints = certificateFingerprints(CERTIFICATES.read_text(encoding='ascii'))
-
-    if os.geteuid() == 0 and not args.allow_root:
-        parser.error('Run as your normal user, or pass --allow-root only for trusted provisioning.')
 
     if args.search_root and not args.all:
         parser.error('--search-root requires --all.')

@@ -410,24 +410,7 @@ class CliTests(FixtureTest):
     """
     Exercise selected and discovered installations through the public CLI and reports.
     """
-    def testRootRequiresExplicitOptInBeforeInspectingJava(self):
-        """
-        Reject root callers by default before discovery, Java execution, or blocklist writes.
-        """
-        home, target = self.makeJava()
-        for selection in (['--all'], ['--java-home', str(home)]):
-            with self.subTest(selection=selection):
-                with mock.patch.object(subject, 'discoverInstallations') as discover:
-                    with mock.patch.object(subject.subprocess, 'run') as execute:
-                        with self.assertRaises(SystemExit) as error:
-                            self.invoke(arguments=[*selection, '--apply'], userID=0)
-
-                self.assertEqual(error.exception.code, 2)
-                discover.assert_not_called()
-                execute.assert_not_called()
-                self.assertEqual(target.read_bytes(), VENDOR)
-
-    def testRootOptInSupportsSelectedAndDiscoveredRuntimes(self):
+    def testRootSupportsSelectedAndDiscoveredRuntimes(self):
         """
         Allow trusted root provisioning to inspect and patch Java directly, without invoking sudo.
         """
@@ -435,7 +418,7 @@ class CliTests(FixtureTest):
             for mode in ('--dry-run', '--apply'):
                 with self.subTest(selection=selection, mode=mode):
                     home, target = self.makeJava(f'{selection}/{mode}')
-                    arguments = ['--allow-root', '--require-java', mode, '--json']
+                    arguments = ['--require-java', mode, '--json']
                     with mock.patch.object(subject.subprocess, 'run', wraps=subprocess.run) as execute:
                         if selection == 'all':
                             status, output, _ = self.invokeAll(root=home, arguments=arguments, userID=0)

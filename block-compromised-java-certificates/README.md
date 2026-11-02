@@ -22,7 +22,7 @@ Patch the selected JVM's certificate blocklist **after Java setup/cache restorat
 - Inspects the selected executable's actual `java.home`, vendor, and runtime version. Discovers `lib/security/blocked.certs` or `lib/security/blacklisted.certs` there, including the Java 8 nested JRE layout and distro symlinks.
 - Appends only missing fingerprints from the [checked-in certificates](./compromised-java-certificates.pem).
 - Merges into existing files, preserving existing blocklist entries. Verifies the resulting file and is idempotent.
-- Uses `sudo tee -a` only if a normal append is denied. Interactive runs explain why elevated permission is needed before sudo can prompt; CI and headless runs never prompt. Java discovery and final verification use the caller's privileges; root execution requires explicit CLI opt-in.
+- Uses `sudo tee -a` only if a normal append is denied. Interactive runs explain why elevated permission is needed before sudo can prompt; CI and headless runs never prompt. The script and discovered Java binaries run with the caller's privileges, including root when invoked as root.
 - Fails the job loudly if patching the blocklist fails.
 
 ## Gradle builds
@@ -55,8 +55,8 @@ Searches are bounded (normally six directory levels); they do not scan the entir
 
 A clean `--all` scan that finds no Java succeeds without making changes, in both dry-run and apply modes. Text output says there is nothing to patch; JSON returns empty `runtimes`, `blocklists`, and `errors` arrays. Discovery/permission errors and failures inspecting an explicitly selected JVM still fail. Provisioning that requires Java can use `--all --require-java --apply` to reject an empty inventory. The composite action continues to require a valid selected JVM.
 
-Dry-run is the default and never modifies blocklists or requests sudo. Run as your normal user. If an append requires sudo, interactive runs explain why and allow sudo to request your password. CI and headless runs use noninteractive sudo and fail if authorization is unavailable. To target one installation, use `--java-home /path/to/jdk` instead of `--all` (or set `JAVA_HOME`).
+Dry-run is the default and never modifies blocklists or requests sudo. Run as your normal user on laptops so discovery uses your home directory and environment. If an append requires sudo, interactive runs explain why and allow sudo to request your password. CI and headless runs use noninteractive sudo and fail if authorization is unavailable. To target one installation, use `--java-home /path/to/jdk` instead of `--all` (or set `JAVA_HOME`).
 
-For trusted VM/image provisioning that already runs as root, pass `--allow-root --all --require-java --apply`. This also executes discovered Java binaries as root, so use it only when the installation paths, binaries, and environment are trusted. Root is rejected without `--allow-root`; normal laptop runs should remain unprivileged. The composite action does not opt into root execution.
+VM/image provisioning can run `--all --require-java --apply` directly as root. Root execution is also supported by the composite action. Installation paths, Java binaries, and the environment must be trusted for the privileges used to run the script.
 
 Restart existing JVMs, IDEs, and Gradle daemons after patching. Rerun after JDK installations or updates, including newly downloaded Gradle toolchains. The blocklist protects standard JVM certificate validation, not custom TLS implementations that bypass it.
