@@ -44,6 +44,7 @@ type PeerReviewResponse = {
     repository:
         | (NonNullable<BranchProtectionResponse['repository']> & {
               pullRequest: {
+                  headRefOid: string;
                   commits: {
                       totalCount: number;
                       nodes: CommitNode[];
@@ -55,13 +56,32 @@ type PeerReviewResponse = {
         | null;
 };
 
+type PeerReviewReadArgs = {owner: string; repo: string; number: number; baseRef: string; expectedHeadSHA: string};
+type ApprovalsResponse = {
+    repository: {
+        pullRequest: {
+            headRefOid: string;
+            latestOpinionatedReviews: {nodes: OpinionatedReviewNode[]} | null;
+        } | null;
+    } | null;
+};
+
 const EXPENSIFY_EMPLOYEE_TEAM_SLUG = 'expensify-expensify';
 const REPOSITORY_REVIEWER_TEAMS = new Map([
     ['Expensify/react-native-wallet', ['react-native-wallet-writers']],
     ['Expensify/react-native-live-markdown', ['react-native-live-markdown-writers', 'react-native-live-markdown-maintainers']],
 ]);
 
-async function getPeerReviewData(client: GitHubAPIClient, args: {owner: string; repo: string; number: number; baseRef: string}): Promise<PeerReviewData> {
+function assertExpectedHead(headSHA: string, {owner, repo, number, expectedHeadSHA}: PeerReviewReadArgs): void {
+    if (headSHA !== expectedHeadSHA) {
+        throw new WorkflowError({
+            title: 'Pull request changed',
+            message: `${owner}/${repo}#${number} no longer has the expected head ${expectedHeadSHA}. Please rerun the check for its current head.`,
+        });
+    }
+}
+
+async function getPeerReviewData(client: GitHubAPIClient, args: PeerReviewReadArgs): Promise<PeerReviewData> {
     const {owner, repo, number, baseRef} = args;
     const commits: PeerReviewCommit[] = [];
     let cursor: string | null = null;
@@ -73,7 +93,7 @@ async function getPeerReviewData(client: GitHubAPIClient, args: {owner: string; 
         const isFirstPage = cursor === null;
         let response: PeerReviewResponse;
         try {
-            // Only the commit connection needs subsequent pages; protection and reviews are read once.
+            // The first page includes protection and approvals; subsequent pages fetch commits and the current head.
             // eslint-disable-next-line no-await-in-loop
             response = await client.graphql<PeerReviewResponse>(
                 `query PeerReviewData($owner: String!, $repo: String!, $prNumber: Int!, $branchRef: String!, $cursor: String, $includeMetadata: Boolean!) {
@@ -82,6 +102,7 @@ async function getPeerReviewData(client: GitHubAPIClient, args: {owner: string; 
                             ${BRANCH_PROTECTION_FIELDS}
                         }
                         pullRequest(number: $prNumber) {
+                            headRefOid
                             commits(first: 100, after: $cursor) {
                                 totalCount
                                 nodes {
@@ -129,14 +150,15 @@ async function getPeerReviewData(client: GitHubAPIClient, args: {owner: string; 
 
         if (isFirstPage) {
             requiredApprovingReviewCount = parseRequiredApprovingReviewCount(response, args);
-            if (requiredApprovingReviewCount === 0) {
-                return {requiredApprovingReviewCount, commitCount: 0, commits: [], approvers: []};
-            }
         }
 
         const pullRequest = response.repository?.pullRequest;
         if (!pullRequest) {
             throw new WorkflowError({title: 'Unknown pull request', message: `Pull request ${owner}/${repo}#${number} could not be found.`});
+        }
+        assertExpectedHead(pullRequest.headRefOid, args);
+        if (requiredApprovingReviewCount === 0) {
+            return {requiredApprovingReviewCount, commitCount: 0, commits: [], approvers: []};
         }
 
         const page = pullRequest.commits;
@@ -175,6 +197,38 @@ async function getPeerReviewData(client: GitHubAPIClient, args: {owner: string; 
 
     if (commits.length !== commitCount) {
         throw new WorkflowError({title: 'Incomplete commit data', message: `Expected ${commitCount} commits for ${owner}/${repo}#${number}, but received ${commits.length}.`});
+    }
+    if (commits.length > 0) {
+        assertExpectedHead(commits.at(-1)?.sha ?? '', args);
+    }
+
+    // Pagination spans multiple requests, so approvals must be read after the full commit set is collected.
+    if (cursor !== null) {
+        const response = await client.graphql<ApprovalsResponse>(
+            `query PeerReviewApprovals($owner: String!, $repo: String!, $prNumber: Int!) {
+                repository(owner: $owner, name: $repo) {
+                    pullRequest(number: $prNumber) {
+                        headRefOid
+                        latestOpinionatedReviews(last: 100, writersOnly: true) {
+                            nodes {
+                                state
+                                author { login }
+                            }
+                        }
+                    }
+                }
+            }`,
+            {owner, repo, prNumber: number},
+        );
+        const pullRequest = response.repository?.pullRequest;
+        if (!pullRequest) {
+            throw new WorkflowError({title: 'Unknown pull request', message: `Pull request ${owner}/${repo}#${number} could not be found.`});
+        }
+        assertExpectedHead(pullRequest.headRefOid, args);
+        if (!pullRequest.latestOpinionatedReviews) {
+            throw new WorkflowError({title: 'Missing reviews', message: `No review data returned for ${owner}/${repo}#${number}.`});
+        }
+        approvers = parseLatestApprovers(pullRequest.latestOpinionatedReviews.nodes);
     }
     return {requiredApprovingReviewCount, commitCount, commits, approvers};
 }
@@ -319,6 +373,15 @@ async function main(clientOverride?: GitHubAPIClient): Promise<void> {
             'target-branch': {
                 description: 'Ref for the branch into which the pull request is being merged e.g. "refs/heads/main"',
             },
+            'head-sha': {
+                description: 'Expected pull request head SHA from the triggering workflow event',
+                parse: (value: string) => {
+                    if (!/^[a-f0-9]{40}$/.test(value)) {
+                        throw new Error('Must be a 40-character hexadecimal commit SHA');
+                    }
+                    return value;
+                },
+            },
             'actor-type': {
                 description: 'GitHub actor type of the user who triggered the event (Bot or User)',
                 parse: (value: string): ActorType => {
@@ -337,6 +400,7 @@ async function main(clientOverride?: GitHubAPIClient): Promise<void> {
     const pullRequestNumber = cli.namedArgs['pull-request-number'];
     const targetBranch = cli.namedArgs['target-branch'];
     const actorType = cli.namedArgs['actor-type'];
+    const expectedHeadSHA = cli.namedArgs['head-sha'];
 
     console.log('Evaluating PR', {
         repo,
@@ -346,7 +410,7 @@ async function main(clientOverride?: GitHubAPIClient): Promise<void> {
     });
 
     const client = clientOverride ?? GitHubAPIClient.fromEnv();
-    const data = await getPeerReviewData(client, {owner, repo, number: pullRequestNumber, baseRef: targetBranch});
+    const data = await getPeerReviewData(client, {owner, repo, number: pullRequestNumber, baseRef: targetBranch, expectedHeadSHA});
     const result = await evaluatePeerReview(
         createGitHubUtils(client),
         {
