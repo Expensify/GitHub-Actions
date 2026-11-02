@@ -64,25 +64,25 @@ class FixtureTest(unittest.TestCase):
 
         return home, target
 
-    def invoke(self, arguments):
+    def invoke(self, arguments, userID=1000):
         """
-        Capture CLI results as a normal user, without changing the real process privileges.
+        Capture CLI results with a simulated user ID, without changing real process privileges.
         """
         output, errors = io.StringIO(), io.StringIO()
-        with mock.patch.object(target=subject.os, attribute='geteuid', return_value=1000):
+        with mock.patch.object(target=subject.os, attribute='geteuid', return_value=userID):
             with contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors):
                 status = subject.main(arguments)
 
         return status, output.getvalue(), errors.getvalue()
 
-    def invokeAll(self, root, arguments):
+    def invokeAll(self, root, arguments, userID=1000):
         """
         Limit discovery to fixture roots so apply tests cannot touch installed Java runtimes.
         """
         with mock.patch.dict(in_dict=os.environ, values={'PATH': ''}, clear=True):
             with mock.patch.object(target=subject, attribute='defaultRoots', return_value=[]):
                 with mock.patch.object(subject.sys, 'platform', 'linux'):
-                    return self.invoke(['--all', '--search-root', str(root), *arguments])
+                    return self.invoke(arguments=['--all', '--search-root', str(root), *arguments], userID=userID)
 
     def openReadOnly(self, path, mode='r', *args, **kwargs):
         """
@@ -410,6 +410,33 @@ class CliTests(FixtureTest):
     """
     Exercise selected and discovered installations through the public CLI and reports.
     """
+    def testRootSupportsSelectedAndDiscoveredRuntimes(self):
+        """
+        Allow trusted root provisioning to inspect and patch Java directly, without invoking sudo.
+        """
+        for selection in ('selected', 'all'):
+            for mode in ('--dry-run', '--apply'):
+                with self.subTest(selection=selection, mode=mode):
+                    home, target = self.makeJava(f'{selection}/{mode}')
+                    arguments = ['--require-java', mode, '--json']
+                    with mock.patch.object(subject.subprocess, 'run', wraps=subprocess.run) as execute:
+                        if selection == 'all':
+                            status, output, _ = self.invokeAll(root=home, arguments=arguments, userID=0)
+                        else:
+                            status, output, _ = self.invoke(
+                                arguments=['--java-home', str(home), *arguments], userID=0,
+                            )
+
+                    self.assertEqual(status, 0)
+                    self.assertEqual(execute.call_count, 1)
+                    self.assertEqual(execute.call_args.kwargs['args'][0], str(home / 'bin/java'))
+                    expected = 'patched' if mode == '--apply' else 'would-patch'
+                    self.assertEqual(json.loads(output)['blocklists'][0]['status'], expected)
+                    if mode == '--apply':
+                        self.assertTrue(set(FINGERPRINTS).issubset(subject.blockedFingerprints(target.read_bytes())))
+                    else:
+                        self.assertEqual(target.read_bytes(), VENDOR)
+
     def testSelectedHomeDefaultsToDryRunAndRequiresApply(self):
         """
         Honor both JAVA_HOME and explicit selection without changing files until apply is requested.

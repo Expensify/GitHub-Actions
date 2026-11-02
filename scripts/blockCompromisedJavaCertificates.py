@@ -147,7 +147,7 @@ def updateBlocklist(target: Path, fingerprints: list[str], apply: bool = False) 
 
     Dry-run only reports missing fingerprints. Apply mode appends missing entries to the
     existing file, then reads it back to verify coverage.
-    Only the append can request sudo; reading and final verification stay unprivileged.
+    Only the append can request sudo; inspection and verification use the caller's privileges.
     """
     if not stat.S_ISREG(target.stat().st_mode):
         raise ValueError(f'JVM certificate blocklist is not a regular file: {target}')
@@ -492,7 +492,7 @@ def main(argv=None) -> int:
     Run the selected CLI mode and return a nonzero status for any discovery or runtime failure.
 
     Default to a dry-run of JAVA_HOME unless a home or system discovery is explicitly selected.
-    Keep discovery unprivileged; only individual append operations can request sudo.
+    Use the caller's privileges; only individual append operations can request sudo.
     """
     parser = argparse.ArgumentParser(description=__doc__)
     selection = parser.add_mutually_exclusive_group()
@@ -509,9 +509,6 @@ def main(argv=None) -> int:
         parser.error('Python 3.9+ on Linux or macOS is required.')
 
     fingerprints = certificateFingerprints(CERTIFICATES.read_text(encoding='ascii'))
-
-    if os.geteuid() == 0:
-        parser.error('Run as your normal user, not with sudo; only individual file updates will be elevated.')
 
     if args.search_root and not args.all:
         parser.error('--search-root requires --all.')
