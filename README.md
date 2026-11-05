@@ -143,8 +143,8 @@ Rolls Node.js releases out to the repos listed in [`config/nodeBump.json`](./con
 
 Each repo's `.nvmrc` decides how it pins Node.js:
 
-- **Floats on a major line** (`.nvmrc` holds `26`). CI installs the newest 26.x release on every run, because `setup-node` sets `check-latest: true`, and `engines`, `devEngines` and `checkRuntimeVersions.sh` only set a minimum. Patch releases need no pull request. The workflow raises the minimums only when asked to.
-- **Pins an exact release** (`.nvmrc` holds `26.12.1`). Every release needs a pull request, which the workflow opens.
+- **Floats on a major line** (`.nvmrc` holds `26`). CI installs the newest 26.x release on every run, because `setup-node` sets `check-latest: true`, and `engines`, `devEngines` and `checkRuntimeVersions.sh` only set a minimum. Patch releases need no pull request.
+- **Pins an exact release** (`.nvmrc` holds `26.12.1`). Every release needs a pull request.
 
 The workflow never makes a major upgrade, since those need code changes.
 
@@ -155,14 +155,13 @@ The workflow never makes a major upgrade, since those need code changes.
 | Input | Effect |
 | --- | --- |
 | `ISSUE_URL` | Tracking issue that the pull requests and the results comment link to |
-| `VERSION` | Exact release to move to. Only repos on its major line change. Leave empty to move each repo to the newest release on its line |
+| `VERSION` | Releases to roll out, one per major line, for example `26.13.1,24.22.3`. Repos that pin an exact version move to the release on their line, and repos that float require it as their minimum, so laptops and builds have to use it. Leave empty to only move repos that pin an exact version to the newest release on their line |
 | `REPOS` | Comma-separated subset of the config. Leave empty for every repo |
-| `RAISE_MINIMUMS` | Also raise the minimums of repos that float, so developer machines and the build boxes have to move to the release |
 | `DRY_RUN` | Checked by default |
 
 Each repo in the config can set:
 
-- `holdForBuildBoxes`: Jenkins builds the repo on the build boxes and checks the Node.js version first, so its pull request starts with `[HOLD]` until the build boxes run the release.
+- `holdForBuildBoxes`: Jenkins builds the repo on the build boxes and checks the Node.js version first. While the build boxes use the apt `nodejs` package, its pull request starts with `[HOLD]` until they run the release. Remove it once the build boxes install the version in `.nvmrc` with nvm.
 - `securityReleaseTitlePrefix`: added to the pull request title when the bump includes a security fix, for example `[CP Staging & Prod]`.
 
 Behaviours worth knowing:
@@ -176,7 +175,7 @@ Behaviours worth knowing:
 To bump a local checkout the same way:
 
 ```bash
-npm run bump-node -- --repo-dir ../App [--version 26.13.1] [--raise-minimums]
+npm run bump-node -- --repo-dir ../App [--version 26.13.1,24.22.3]
 ```
 
 ## Rulesets

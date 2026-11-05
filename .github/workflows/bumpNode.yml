@@ -11,18 +11,13 @@ on:
         required: true
         type: string
       VERSION:
-        description: Exact Node.js version to move to. Only repos on its major line change. Leave empty to move each repo to the newest release on its line.
+        description: Node.js versions to roll out, one per major line, for example 26.13.1,24.22.3. Repos that pin an exact version move to it, and repos that float require it as their minimum. Leave empty to only move exact pins to the newest release.
         required: false
         type: string
       REPOS:
         description: Comma-separated repos to bump. Leave empty for every repo in config/nodeBump.json.
         required: false
         type: string
-      RAISE_MINIMUMS:
-        description: Also raise the minimum Node.js version of repos that float on a major line
-        required: false
-        type: boolean
-        default: false
       DRY_RUN:
         description: Show the changes without opening pull requests
         required: false
@@ -94,9 +89,6 @@ jobs:
           if [[ -n "$REPOS" ]]; then
             args+=(--repos "$REPOS")
           fi
-          if [[ "$RAISE_MINIMUMS" == 'true' ]]; then
-            args+=(--raise-minimums)
-          fi
           if [[ "$DRY_RUN" == 'true' ]]; then
             args+=(--dry-run)
           fi
@@ -106,7 +98,6 @@ jobs:
           ISSUE_URL: ${{ inputs.ISSUE_URL }}
           VERSION: ${{ inputs.VERSION }}
           REPOS: ${{ inputs.REPOS }}
-          RAISE_MINIMUMS: ${{ inputs.RAISE_MINIMUMS }}
           DRY_RUN: ${{ inputs.DRY_RUN }}
           CO_AUTHOR_LOGIN: ${{ github.actor }}
           CO_AUTHOR_ID: ${{ github.actor_id }}

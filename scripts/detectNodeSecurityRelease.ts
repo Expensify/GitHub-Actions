@@ -78,14 +78,12 @@ function getTrackingIssueBody(releases: NodeRelease[], repoPins: RepoPin[]): str
     });
 
     const buildBoxRepos = repoPins.filter((repoPin) => repoPin.holdForBuildBoxes && releasedMajors.has(getPinMajor(repoPin.pin))).map((repoPin) => repoPin.name);
+    const versions = releases.map((release) => release.version).join(',');
     const steps = [
-        `- [ ] Run the [Bump Node workflow](${WORKFLOW_URL}) with this issue's URL, first as a dry run. It opens a pull request in every repo that pins an exact version.`,
-        '- [ ] Decide whether developer machines and builds must move to this release too. If so, run the workflow again with `RAISE_MINIMUMS` checked, so the repos that float on the line require it.',
+        `- [ ] Run the [Bump Node workflow](${WORKFLOW_URL}) with this issue's URL and \`VERSION\` set to \`${versions}\`, first as a dry run. Repos that pin an exact version move to the release, and repos that float require it as their minimum, so laptops and builds have to use it.`,
     ];
     if (buildBoxRepos.length > 0) {
-        steps.push(
-            `- [ ] Publish the Node.js apt mirror and upgrade Node.js on the build boxes, which build ${buildBoxRepos.join(', ')}. Pull requests for those repos stay on \`[HOLD]\` until then.`,
-        );
+        steps.push(`- [ ] Upgrade Node.js on the build boxes, which build ${buildBoxRepos.join(', ')} with the apt package. Pull requests for those repos stay on \`[HOLD]\` until then.`);
     }
     steps.push('- [ ] Merge the pull requests.');
 

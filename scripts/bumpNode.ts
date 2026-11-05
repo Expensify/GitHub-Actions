@@ -13,18 +13,14 @@ import NodeReleaseUtils from './libs/NodeReleaseUtils';
 async function main(): Promise<void> {
     /* eslint-disable @typescript-eslint/naming-convention -- CLI uses kebab-case argument names */
     const cli = new CLI({
-        flags: {
-            'raise-minimums': {
-                description: 'Also raise the minimum Node.js version of a repo whose .nvmrc floats on a major line',
-            },
-        },
         namedArgs: {
             'repo-dir': {
                 description: 'Path to the repository to bump',
                 default: '.',
             },
             version: {
-                description: 'Exact Node.js version to move to. Defaults to the newest release on the line in .nvmrc',
+                description:
+                    'Comma-separated Node.js versions, at most one per major line, such as "26.13.1,24.22.3". A repo that pins an exact release moves to the one on its line, a repo that floats raises its minimum to it. Defaults to the newest release on the line, which only changes repos that pin an exact release',
                 default: '',
             },
         },
@@ -33,10 +29,7 @@ async function main(): Promise<void> {
 
     const repoDir = path.resolve(cli.namedArgs['repo-dir']);
     const releases = await NodeReleaseUtils.fetchNodeReleases();
-    const plan = NodeBumpUtils.planRepoBump(repoDir, releases, {
-        requestedRelease: NodeReleaseUtils.findRequestedRelease(releases, cli.namedArgs.version),
-        raiseMinimums: cli.flags['raise-minimums'],
-    });
+    const plan = NodeBumpUtils.planRepoBump(repoDir, releases, NodeReleaseUtils.findRequestedReleases(releases, cli.namedArgs.version));
 
     if (plan.status === 'skipped') {
         console.log(`Nothing to do in ${repoDir}: ${plan.reason}`);

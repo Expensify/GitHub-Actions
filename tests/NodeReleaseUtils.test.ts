@@ -78,17 +78,24 @@ describe('NodeReleaseUtils', () => {
         });
     });
 
-    describe('findRequestedRelease', () => {
+    describe('findRequestedReleases', () => {
         it('returns nothing when no version is requested', () => {
-            assert.equal(NodeReleaseUtils.findRequestedRelease(releases, ''), undefined);
+            assert.deepEqual(NodeReleaseUtils.findRequestedReleases(releases, ''), []);
         });
 
-        it('finds a published release', () => {
-            assert.equal(NodeReleaseUtils.findRequestedRelease(releases, 'v26.13.0')?.version, '26.13.0');
+        it('finds one published release per line', () => {
+            assert.deepEqual(
+                NodeReleaseUtils.findRequestedReleases(releases, 'v26.13.0, 24.22.3').map((release) => release.version),
+                ['26.13.0', '24.22.3'],
+            );
         });
 
         it('throws for a version that was never published', () => {
-            assert.throws(() => NodeReleaseUtils.findRequestedRelease(releases, '26.99.0'), /not a published Node.js release/);
+            assert.throws(() => NodeReleaseUtils.findRequestedReleases(releases, '26.99.0'), /not a published Node.js release/);
+        });
+
+        it('throws for two versions on the same line', () => {
+            assert.throws(() => NodeReleaseUtils.findRequestedReleases(releases, '26.13.0,26.13.1'), /at most one Node.js version per major line/);
         });
     });
 
@@ -100,17 +107,17 @@ describe('NodeReleaseUtils', () => {
         });
 
         it('moves to the requested release on the same line', () => {
-            const target = NodeReleaseUtils.resolveBumpTarget(releases, '26.12.1', getRelease('26.13.0'));
+            const target = NodeReleaseUtils.resolveBumpTarget(releases, '26.12.1', [getRelease('24.22.3'), getRelease('26.13.0')]);
             assert.equal(target.status === 'bump' && target.to.version, '26.13.0');
         });
 
-        it('skips a requested release on another major line', () => {
-            assert.deepEqual(NodeReleaseUtils.resolveBumpTarget(releases, '24.22.1', getRelease('26.13.1')), {status: 'skipped', reason: 'On the Node.js 24.x line'});
+        it('skips a repo when no requested release is on its line', () => {
+            assert.deepEqual(NodeReleaseUtils.resolveBumpTarget(releases, '24.22.1', [getRelease('26.13.1')]), {status: 'skipped', reason: 'No requested release on the Node.js 24.x line'});
         });
 
         it('reports a repo that is already on the target', () => {
             assert.deepEqual(NodeReleaseUtils.resolveBumpTarget(releases, '26.13.1'), {status: 'up-to-date', version: '26.13.1'});
-            assert.deepEqual(NodeReleaseUtils.resolveBumpTarget(releases, '26.13.1', getRelease('26.13.0')), {status: 'up-to-date', version: '26.13.1'});
+            assert.deepEqual(NodeReleaseUtils.resolveBumpTarget(releases, '26.13.1', [getRelease('26.13.0')]), {status: 'up-to-date', version: '26.13.1'});
         });
 
         it('skips a version that was never published', () => {

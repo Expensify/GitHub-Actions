@@ -41,8 +41,7 @@ type Options = {
     owner: string;
     token: string;
     releases: NodeRelease[];
-    requestedRelease?: NodeRelease;
-    raiseMinimums: boolean;
+    requestedReleases: NodeRelease[];
     dryRun: boolean;
     issueURL: string;
     coAuthorTrailer: string;
@@ -198,7 +197,7 @@ async function openPullRequest(
 
 async function bumpRepo(client: GitHubAPIClient, repo: NodeBumpRepo, options: Options): Promise<RepoResult> {
     const repoDir = cloneVersionFiles(options.owner, repo.name, options.token, options.workDir);
-    const plan = NodeBumpUtils.planRepoBump(repoDir, options.releases, {requestedRelease: options.requestedRelease, raiseMinimums: options.raiseMinimums});
+    const plan = NodeBumpUtils.planRepoBump(repoDir, options.releases, options.requestedReleases);
     if (plan.status === 'skipped') {
         return {repo: repo.name, outcome: plan.reason};
     }
@@ -260,9 +259,6 @@ async function main(): Promise<void> {
             'dry-run': {
                 description: 'Print the changes instead of opening pull requests',
             },
-            'raise-minimums': {
-                description: 'Also raise the minimum Node.js version of repos whose .nvmrc floats on a major line',
-            },
         },
         namedArgs: {
             'issue-url': {
@@ -275,7 +271,8 @@ async function main(): Promise<void> {
                 },
             },
             version: {
-                description: 'Exact Node.js version to move to. Only repos on its major line change. Defaults to the newest release on each repo line',
+                description:
+                    'Comma-separated Node.js versions, at most one per major line, such as "26.13.1,24.22.3". Repos that pin an exact release move to the one on their line, and repos that float raise their minimum to it. Defaults to the newest release on each line, which only changes repos that pin an exact release',
                 default: '',
             },
             repos: {
@@ -317,8 +314,7 @@ async function main(): Promise<void> {
         owner: config.owner,
         token,
         releases,
-        requestedRelease: NodeReleaseUtils.findRequestedRelease(releases, cli.namedArgs.version),
-        raiseMinimums: cli.flags['raise-minimums'],
+        requestedReleases: NodeReleaseUtils.findRequestedReleases(releases, cli.namedArgs.version),
         dryRun: cli.flags['dry-run'],
         issueURL,
         coAuthorTrailer: getCoAuthorTrailer(cli.namedArgs['co-author-login'], cli.namedArgs['co-author-id']),

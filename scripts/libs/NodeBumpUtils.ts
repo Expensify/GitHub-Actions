@@ -195,10 +195,10 @@ function findMinimumNodeVersion(repoDir: string, major: number): string | null {
 
 /**
  * Decides whether and how far to bump a repo.
- * A repo that pins an exact release moves to `requestedRelease` or the newest release on its line.
- * A repo that floats on its line only changes when `raiseMinimums` is set, and then raises its minimums the same way.
+ * A repo that pins an exact release moves to the requested release on its line, or to the newest release on its line when no release is requested.
+ * A repo that floats on its line already gets every release, so it only changes when a release is requested, and then raises its minimums to it.
  */
-function planRepoBump(repoDir: string, releases: NodeRelease[], {requestedRelease, raiseMinimums}: {requestedRelease?: NodeRelease; raiseMinimums: boolean}): RepoBumpPlan {
+function planRepoBump(repoDir: string, releases: NodeRelease[], requestedReleases: NodeRelease[] = []): RepoBumpPlan {
     const pin = readNvmrc(repoDir);
     if (!pin) {
         return {status: 'skipped', reason: '.nvmrc is missing or does not hold a Node.js version'};
@@ -208,7 +208,7 @@ function planRepoBump(repoDir: string, releases: NodeRelease[], {requestedReleas
     if (pin.type === 'exact') {
         currentVersion = pin.version;
     } else {
-        if (!raiseMinimums) {
+        if (requestedReleases.length === 0) {
             return {status: 'skipped', reason: `Floats on Node.js ${pin.major}.x`};
         }
         const minimum = findMinimumNodeVersion(repoDir, pin.major);
@@ -218,7 +218,7 @@ function planRepoBump(repoDir: string, releases: NodeRelease[], {requestedReleas
         currentVersion = minimum;
     }
 
-    const target = NodeReleaseUtils.resolveBumpTarget(releases, currentVersion, requestedRelease);
+    const target = NodeReleaseUtils.resolveBumpTarget(releases, currentVersion, requestedReleases);
     switch (target.status) {
         case 'bump':
             return {status: 'bump', from: target.from, to: target.to, floats: pin.type === 'major'};

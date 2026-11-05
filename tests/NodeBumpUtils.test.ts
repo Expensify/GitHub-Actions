@@ -35,8 +35,14 @@ function read(repoDir: string, file: string): string {
     return readFileSync(path.join(repoDir, file), 'utf8');
 }
 
-function bump(repoDir: string, raiseMinimums = false): string[] {
-    const plan = NodeBumpUtils.planRepoBump(repoDir, releases, {raiseMinimums});
+function getRelease(version: string) {
+    const release = releases.find((candidate) => candidate.version === version);
+    assert.ok(release, `Missing fixture release ${version}`);
+    return release;
+}
+
+function bump(repoDir: string, requestedVersions: string[] = []): string[] {
+    const plan = NodeBumpUtils.planRepoBump(repoDir, releases, requestedVersions.map(getRelease));
     assert.equal(plan.status, 'bump', plan.status === 'skipped' ? plan.reason : '');
     return plan.status === 'bump' ? NodeBumpUtils.bumpNodeVersionFiles(repoDir, plan.from, plan.to) : [];
 }
@@ -112,7 +118,13 @@ describe('NodeBumpUtils', () => {
 
         it('skips a repo that is already on the newest release', () => {
             const repoDir = createRepo({'.nvmrc': '26.13.1\n'});
-            assert.deepEqual(NodeBumpUtils.planRepoBump(repoDir, releases, {raiseMinimums: false}), {status: 'skipped', reason: 'Already on Node.js 26.13.1'});
+            assert.deepEqual(NodeBumpUtils.planRepoBump(repoDir, releases), {status: 'skipped', reason: 'Already on Node.js 26.13.1'});
+        });
+
+        it('moves to the requested release on its line', () => {
+            const repoDir = createRepo({'.nvmrc': '26.12.1\n'});
+            bump(repoDir, ['24.22.3', '26.13.0']);
+            assert.equal(read(repoDir, '.nvmrc'), '26.13.0\n');
         });
 
         it('refuses to reformat a JSON file', () => {
@@ -132,16 +144,16 @@ describe('NodeBumpUtils', () => {
                 'worker/package.json': toJson({devEngines: {runtime: {name: 'node', version: '>=24.22.1 <25 || >=26.12.1', onFail: 'error'}}}),
             });
 
-        it('skips them unless minimums should be raised', () => {
-            assert.deepEqual(NodeBumpUtils.planRepoBump(createFloatingRepo(), releases, {raiseMinimums: false}), {status: 'skipped', reason: 'Floats on Node.js 26.x'});
+        it('skips them when no release is requested, since they already get every release', () => {
+            assert.deepEqual(NodeBumpUtils.planRepoBump(createFloatingRepo(), releases), {status: 'skipped', reason: 'Floats on Node.js 26.x'});
         });
 
-        it('raises their minimums on the line and leaves .nvmrc and other lines alone', () => {
+        it('raises their minimums to the requested release and leaves .nvmrc and other lines alone', () => {
             const repoDir = createFloatingRepo();
-            const plan = NodeBumpUtils.planRepoBump(repoDir, releases, {raiseMinimums: true});
+            const plan = NodeBumpUtils.planRepoBump(repoDir, releases, [getRelease('26.13.1')]);
             assert.equal(plan.status === 'bump' && plan.floats, true);
 
-            assert.deepEqual(bump(repoDir, true).sort(), ['tools/checkRuntimeVersions.sh', 'worker/package.json']);
+            assert.deepEqual(bump(repoDir, ['26.13.1', '24.22.3']).sort(), ['tools/checkRuntimeVersions.sh', 'worker/package.json']);
             assert.equal(read(repoDir, '.nvmrc'), '26');
             assert.equal(read(repoDir, 'tools/checkRuntimeVersions.sh'), '#!/bin/bash\nminimumNodeVersion="26.13.1"\nminimumNpmVersion="11.10.0"\n');
             assert.equal(read(repoDir, 'worker/package.json'), toJson({devEngines: {runtime: {name: 'node', version: '>=24.22.1 <25 || >=26.13.1', onFail: 'error'}}}));
@@ -149,7 +161,7 @@ describe('NodeBumpUtils', () => {
 
         it('skips them when they have no minimum to raise', () => {
             const repoDir = createRepo({'.nvmrc': '24\n'});
-            assert.deepEqual(NodeBumpUtils.planRepoBump(repoDir, releases, {raiseMinimums: true}), {status: 'skipped', reason: 'Floats on Node.js 24.x without a minimum to raise'});
+            assert.deepEqual(NodeBumpUtils.planRepoBump(repoDir, releases, [getRelease('24.22.3')]), {status: 'skipped', reason: 'Floats on Node.js 24.x without a minimum to raise'});
         });
     });
 });

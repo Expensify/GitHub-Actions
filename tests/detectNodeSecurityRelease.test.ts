@@ -40,6 +40,10 @@ describe('detectNodeSecurityRelease', () => {
             assert.match(body, /\| \[24\.22\.3\]\(.+\) \| 11\.19\.1 \| None \| expensify-common \|/);
         });
 
+        it('tells people which versions to run the workflow with', () => {
+            assert.match(DetectNodeSecurityRelease.getTrackingIssueBody(securityReleases, repoPins), /`VERSION` set to `26\.13\.1,24\.22\.3`/);
+        });
+
         it('asks for the build boxes only when a repo built there is on a released line', () => {
             assert.match(DetectNodeSecurityRelease.getTrackingIssueBody(securityReleases, repoPins), /build boxes, which build Web-Expensify/);
             assert.doesNotMatch(DetectNodeSecurityRelease.getTrackingIssueBody(securityReleases.slice(1), repoPins), /build boxes/);
