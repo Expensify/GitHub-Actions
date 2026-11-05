@@ -20,8 +20,7 @@ async function main(): Promise<void> {
             },
             version: {
                 description:
-                    'Comma-separated Node.js versions, at most one per major line, such as "26.13.1,24.22.3". A repo that pins an exact release moves to the one on its line, a repo that floats raises its minimum to it. Defaults to the newest release on the line, which only changes repos that pin an exact release',
-                default: '',
+                    'Comma-separated Node.js versions, at most one per major line, such as "26.13.1,24.22.3". A repo that pins an exact release moves to the one on its line, a repo that floats raises its minimum to it',
             },
         },
     });

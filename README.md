@@ -155,7 +155,7 @@ The workflow never makes a major upgrade, since those need code changes.
 | Input | Effect |
 | --- | --- |
 | `ISSUE_URL` | Tracking issue that the pull requests and the results comment link to |
-| `VERSION` | Releases to roll out, one per major line, for example `26.13.1,24.22.3`. Repos that pin an exact version move to the release on their line, and repos that float require it as their minimum, so laptops and builds have to use it. Leave empty to only move repos that pin an exact version to the newest release on their line |
+| `VERSION` | Releases to roll out, one per major line, for example `26.13.1,24.22.3`. Repos that pin an exact version move to the release on their line, and repos that float require it as their minimum, so laptops and builds have to use it. Required |
 | `REPOS` | Comma-separated subset of the config. Leave empty for every repo |
 | `DRY_RUN` | Checked by default |
 
@@ -175,7 +175,7 @@ Behaviours worth knowing:
 To bump a local checkout the same way:
 
 ```bash
-npm run bump-node -- --repo-dir ../App [--version 26.13.1,24.22.3]
+npm run bump-node -- --repo-dir ../App --version 26.13.1,24.22.3
 ```
 
 ## Rulesets

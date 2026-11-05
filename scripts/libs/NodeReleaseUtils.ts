@@ -101,7 +101,7 @@ function findRecentSecurityReleases(releases: NodeRelease[], majors: number[], n
 
 /**
  * Finds the releases for a comma-separated list of versions passed on the command line, such as "26.13.1,24.22.3".
- * Allows at most one version per major line. An empty list means no release was requested.
+ * Requires at least one version, and allows at most one per major line.
  */
 function findRequestedReleases(releases: NodeRelease[], requestedVersions: string): NodeRelease[] {
     const requestedReleases = requestedVersions
@@ -117,6 +117,9 @@ function findRequestedReleases(releases: NodeRelease[], requestedVersions: strin
             return release;
         });
 
+    if (requestedReleases.length === 0) {
+        throw new Error('Pass at least one Node.js version');
+    }
     const majors = requestedReleases.map((release) => getMajor(release.version));
     if (new Set(majors).size !== majors.length) {
         throw new Error('Request at most one Node.js version per major line');
@@ -125,26 +128,20 @@ function findRequestedReleases(releases: NodeRelease[], requestedVersions: strin
 }
 
 /**
- * Picks the release to move `currentVersion` to: the requested release on its major line, or the newest release on that line when no release is requested.
- * Major upgrades need code changes, so they are left to a person.
+ * Picks the requested release on the major line of `currentVersion`. Major upgrades need code changes, so they are left to a person.
  */
-function resolveBumpTarget(releases: NodeRelease[], currentVersion: string, requestedReleases: NodeRelease[] = []): BumpTarget {
+function resolveBumpTarget(releases: NodeRelease[], currentVersion: string, requestedReleases: NodeRelease[]): BumpTarget {
     const from = releases.find((release) => release.version === currentVersion);
     if (!from) {
         return {status: 'skipped', reason: `${currentVersion} is not a published Node.js release`};
     }
 
-    let to: NodeRelease | undefined;
-    if (requestedReleases.length > 0) {
-        to = requestedReleases.find((release) => getMajor(release.version) === getMajor(currentVersion));
-        if (!to) {
-            return {status: 'skipped', reason: `No requested release on the Node.js ${getMajor(currentVersion)}.x line`};
-        }
-    } else {
-        to = getNewerReleasesOnLine(releases, currentVersion).at(0);
+    const to = requestedReleases.find((release) => getMajor(release.version) === getMajor(currentVersion));
+    if (!to) {
+        return {status: 'skipped', reason: `No requested release on the Node.js ${getMajor(currentVersion)}.x line`};
     }
 
-    if (!to || compareVersions(to.version, currentVersion) <= 0) {
+    if (compareVersions(to.version, currentVersion) <= 0) {
         return {status: 'up-to-date', version: currentVersion};
     }
 

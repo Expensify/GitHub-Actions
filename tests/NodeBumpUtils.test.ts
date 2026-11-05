@@ -41,7 +41,7 @@ function getRelease(version: string) {
     return release;
 }
 
-function bump(repoDir: string, requestedVersions: string[] = []): string[] {
+function bump(repoDir: string, requestedVersions: string[]): string[] {
     const plan = NodeBumpUtils.planRepoBump(repoDir, releases, requestedVersions.map(getRelease));
     assert.equal(plan.status, 'bump', plan.status === 'skipped' ? plan.reason : '');
     return plan.status === 'bump' ? NodeBumpUtils.bumpNodeVersionFiles(repoDir, plan.from, plan.to) : [];
@@ -70,7 +70,7 @@ describe('NodeBumpUtils', () => {
                 'package-lock.json': toJson({name: 'app', lockfileVersion: 3, packages: {'': {name: 'app', engines: {node: '26.12.1', npm: '11.20.0'}}}}),
             });
 
-            assert.deepEqual(bump(repoDir).sort(), ['.nvmrc', 'package-lock.json', 'package.json']);
+            assert.deepEqual(bump(repoDir, ['26.13.1']).sort(), ['.nvmrc', 'package-lock.json', 'package.json']);
             assert.equal(read(repoDir, '.nvmrc'), '26.13.1\n');
             assert.equal(read(repoDir, 'package.json'), toJson({name: 'app', engines: {node: '26.13.1', npm: '11.21.0'}}));
             assert.equal(read(repoDir, 'package-lock.json'), toJson({name: 'app', lockfileVersion: 3, packages: {'': {name: 'app', engines: {node: '26.13.1', npm: '11.21.0'}}}}));
@@ -82,13 +82,13 @@ describe('NodeBumpUtils', () => {
                 '_tools/deploy/checkRuntimeVersions.sh': '#!/bin/bash\ndesiredNpmVersion="11.20.0"\ndesiredNodeVersion="v26.12.1"\n',
             });
 
-            bump(repoDir);
+            bump(repoDir, ['26.13.1']);
             assert.equal(read(repoDir, '_tools/deploy/checkRuntimeVersions.sh'), '#!/bin/bash\ndesiredNpmVersion="11.21.0"\ndesiredNodeVersion="v26.13.1"\n');
         });
 
         it('keeps the format of .nvmrc', () => {
             const repoDir = createRepo({'.nvmrc': 'v26.12.1'});
-            bump(repoDir);
+            bump(repoDir, ['26.13.1']);
             assert.equal(read(repoDir, '.nvmrc'), 'v26.13.1');
         });
 
@@ -103,7 +103,7 @@ describe('NodeBumpUtils', () => {
                 }),
             });
 
-            bump(repoDir);
+            bump(repoDir, ['24.22.3']);
             assert.equal(read(repoDir, '.nvmrc'), '24.22.3\n');
             assert.equal(
                 read(repoDir, 'package.json'),
@@ -116,9 +116,9 @@ describe('NodeBumpUtils', () => {
             );
         });
 
-        it('skips a repo that is already on the newest release', () => {
+        it('skips a repo that is already on the requested release', () => {
             const repoDir = createRepo({'.nvmrc': '26.13.1\n'});
-            assert.deepEqual(NodeBumpUtils.planRepoBump(repoDir, releases), {status: 'skipped', reason: 'Already on Node.js 26.13.1'});
+            assert.deepEqual(NodeBumpUtils.planRepoBump(repoDir, releases, [getRelease('26.13.1')]), {status: 'skipped', reason: 'Already on Node.js 26.13.1'});
         });
 
         it('moves to the requested release on its line', () => {
@@ -132,7 +132,7 @@ describe('NodeBumpUtils', () => {
                 '.nvmrc': '26.12.1\n',
                 'package.json': '{"name": "app", "engines": {"node": "26.12.1"}}\n',
             });
-            assert.throws(() => bump(repoDir), /would reformat it/);
+            assert.throws(() => bump(repoDir, ['26.13.1']), /would reformat it/);
         });
     });
 
@@ -144,8 +144,8 @@ describe('NodeBumpUtils', () => {
                 'worker/package.json': toJson({devEngines: {runtime: {name: 'node', version: '>=24.22.1 <25 || >=26.12.1', onFail: 'error'}}}),
             });
 
-        it('skips them when no release is requested, since they already get every release', () => {
-            assert.deepEqual(NodeBumpUtils.planRepoBump(createFloatingRepo(), releases), {status: 'skipped', reason: 'Floats on Node.js 26.x'});
+        it('skips them when they already require the requested release', () => {
+            assert.deepEqual(NodeBumpUtils.planRepoBump(createFloatingRepo(), releases, [getRelease('26.12.1')]), {status: 'skipped', reason: 'Already requires Node.js 26.12.1 or newer'});
         });
 
         it('raises their minimums to the requested release and leaves .nvmrc and other lines alone', () => {

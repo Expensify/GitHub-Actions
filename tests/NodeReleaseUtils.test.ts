@@ -79,8 +79,8 @@ describe('NodeReleaseUtils', () => {
     });
 
     describe('findRequestedReleases', () => {
-        it('returns nothing when no version is requested', () => {
-            assert.deepEqual(NodeReleaseUtils.findRequestedReleases(releases, ''), []);
+        it('throws when no version is requested', () => {
+            assert.throws(() => NodeReleaseUtils.findRequestedReleases(releases, ' , '), /at least one Node.js version/);
         });
 
         it('finds one published release per line', () => {
@@ -100,14 +100,9 @@ describe('NodeReleaseUtils', () => {
     });
 
     describe('resolveBumpTarget', () => {
-        it('moves to the newest release on the line by default', () => {
-            const target = NodeReleaseUtils.resolveBumpTarget(releases, '26.12.1');
-            assert.equal(target.status, 'bump');
-            assert.equal(target.status === 'bump' && target.to.version, '26.13.1');
-        });
-
         it('moves to the requested release on the same line', () => {
             const target = NodeReleaseUtils.resolveBumpTarget(releases, '26.12.1', [getRelease('24.22.3'), getRelease('26.13.0')]);
+            assert.equal(target.status, 'bump');
             assert.equal(target.status === 'bump' && target.to.version, '26.13.0');
         });
 
@@ -115,13 +110,13 @@ describe('NodeReleaseUtils', () => {
             assert.deepEqual(NodeReleaseUtils.resolveBumpTarget(releases, '24.22.1', [getRelease('26.13.1')]), {status: 'skipped', reason: 'No requested release on the Node.js 24.x line'});
         });
 
-        it('reports a repo that is already on the target', () => {
-            assert.deepEqual(NodeReleaseUtils.resolveBumpTarget(releases, '26.13.1'), {status: 'up-to-date', version: '26.13.1'});
+        it('reports a repo that is already on or past the requested release', () => {
+            assert.deepEqual(NodeReleaseUtils.resolveBumpTarget(releases, '26.13.1', [getRelease('26.13.1')]), {status: 'up-to-date', version: '26.13.1'});
             assert.deepEqual(NodeReleaseUtils.resolveBumpTarget(releases, '26.13.1', [getRelease('26.13.0')]), {status: 'up-to-date', version: '26.13.1'});
         });
 
         it('skips a version that was never published', () => {
-            assert.equal(NodeReleaseUtils.resolveBumpTarget(releases, '26.99.0').status, 'skipped');
+            assert.equal(NodeReleaseUtils.resolveBumpTarget(releases, '26.99.0', [getRelease('26.13.1')]).status, 'skipped');
         });
     });
 });

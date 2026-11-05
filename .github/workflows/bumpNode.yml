@@ -11,8 +11,8 @@ on:
         required: true
         type: string
       VERSION:
-        description: Node.js versions to roll out, one per major line, for example 26.13.1,24.22.3. Repos that pin an exact version move to it, and repos that float require it as their minimum. Leave empty to only move exact pins to the newest release.
-        required: false
+        description: Node.js versions to roll out, one per major line, for example 26.13.1,24.22.3. Repos that pin an exact version move to it, and repos that float require it as their minimum.
+        required: true
         type: string
       REPOS:
         description: Comma-separated repos to bump. Leave empty for every repo in config/nodeBump.json.
@@ -82,10 +82,7 @@ jobs:
       - name: Open the Node bump pull requests
         if: github.event_name == 'workflow_dispatch'
         run: |
-          args=(--issue-url "$ISSUE_URL" --co-author-login "$CO_AUTHOR_LOGIN" --co-author-id "$CO_AUTHOR_ID")
-          if [[ -n "$VERSION" ]]; then
-            args+=(--version "$VERSION")
-          fi
+          args=(--issue-url "$ISSUE_URL" --version "$VERSION" --co-author-login "$CO_AUTHOR_LOGIN" --co-author-id "$CO_AUTHOR_ID")
           if [[ -n "$REPOS" ]]; then
             args+=(--repos "$REPOS")
           fi

@@ -194,11 +194,10 @@ function findMinimumNodeVersion(repoDir: string, major: number): string | null {
 }
 
 /**
- * Decides whether and how far to bump a repo.
- * A repo that pins an exact release moves to the requested release on its line, or to the newest release on its line when no release is requested.
- * A repo that floats on its line already gets every release, so it only changes when a release is requested, and then raises its minimums to it.
+ * Decides whether and how far to bump a repo to the requested release on its line.
+ * A repo that pins an exact release moves to it. A repo that floats on its line already gets every release, so it raises its minimums to it.
  */
-function planRepoBump(repoDir: string, releases: NodeRelease[], requestedReleases: NodeRelease[] = []): RepoBumpPlan {
+function planRepoBump(repoDir: string, releases: NodeRelease[], requestedReleases: NodeRelease[]): RepoBumpPlan {
     const pin = readNvmrc(repoDir);
     if (!pin) {
         return {status: 'skipped', reason: '.nvmrc is missing or does not hold a Node.js version'};
@@ -208,9 +207,6 @@ function planRepoBump(repoDir: string, releases: NodeRelease[], requestedRelease
     if (pin.type === 'exact') {
         currentVersion = pin.version;
     } else {
-        if (requestedReleases.length === 0) {
-            return {status: 'skipped', reason: `Floats on Node.js ${pin.major}.x`};
-        }
         const minimum = findMinimumNodeVersion(repoDir, pin.major);
         if (!minimum) {
             return {status: 'skipped', reason: `Floats on Node.js ${pin.major}.x without a minimum to raise`};

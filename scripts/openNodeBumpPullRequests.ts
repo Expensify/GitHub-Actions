@@ -272,8 +272,7 @@ async function main(): Promise<void> {
             },
             version: {
                 description:
-                    'Comma-separated Node.js versions, at most one per major line, such as "26.13.1,24.22.3". Repos that pin an exact release move to the one on their line, and repos that float raise their minimum to it. Defaults to the newest release on each line, which only changes repos that pin an exact release',
-                default: '',
+                    'Comma-separated Node.js versions, at most one per major line, such as "26.13.1,24.22.3". Repos that pin an exact release move to the one on their line, and repos that float raise their minimum to it',
             },
             repos: {
                 description: 'Comma-separated repos to bump. Defaults to every repo in config/nodeBump.json',
