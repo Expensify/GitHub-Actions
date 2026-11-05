@@ -44,6 +44,7 @@ jobs:
         with:
           registry-url: 'https://registry.npmjs.org'
           node-version-file: '.nvmrc'
+          check-latest: true
 
       - name: Install npm packages
         run: npm ci
