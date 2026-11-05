@@ -137,6 +137,48 @@ Protect the JVM selected by `actions/setup-java` before Java network operations,
 - uses: Expensify/GitHub-Actions/block-compromised-java-certificates@main
 ```
 
+### `bumpNode.yml`
+
+Rolls Node.js releases out to the repos listed in [`config/nodeBump.json`](./config/nodeBump.json). It runs in this repository, so the repos don't need a caller workflow.
+
+Each repo's `.nvmrc` decides how it pins Node.js:
+
+- **Floats on a major line** (`.nvmrc` holds `26`). CI installs the newest 26.x release on every run, because `setup-node` sets `check-latest: true`, and `engines`, `devEngines` and `checkRuntimeVersions.sh` only set a minimum. Patch releases need no pull request. The workflow raises the minimums only when asked to.
+- **Pins an exact release** (`.nvmrc` holds `26.12.1`). Every release needs a pull request, which the workflow opens.
+
+The workflow never makes a major upgrade, since those need code changes.
+
+**Every hour** it checks https://nodejs.org/dist/index.json for a security release from the last 14 days on a major line the repos use. When a release has no tracking issue yet, it opens one in `Expensify/Expensify` with the rollout steps.
+
+**Run it from the Actions tab** with the tracking issue's URL. A dry run prints each repo's diff to the log. A real run opens a pull request in every repo that needs one, then comments the results on the issue.
+
+| Input | Effect |
+| --- | --- |
+| `ISSUE_URL` | Tracking issue that the pull requests and the results comment link to |
+| `VERSION` | Exact release to move to. Only repos on its major line change. Leave empty to move each repo to the newest release on its line |
+| `REPOS` | Comma-separated subset of the config. Leave empty for every repo |
+| `RAISE_MINIMUMS` | Also raise the minimums of repos that float, so developer machines and the build boxes have to move to the release |
+| `DRY_RUN` | Checked by default |
+
+Each repo in the config can set:
+
+- `holdForBuildBoxes`: Jenkins builds the repo on the build boxes and checks the Node.js version first, so its pull request starts with `[HOLD]` until the build boxes run the release.
+- `securityReleaseTitlePrefix`: added to the pull request title when the bump includes a security fix, for example `[CP Staging & Prod]`.
+
+Behaviours worth knowing:
+
+- The commit is created through the GraphQL API as `os-botify[bot]`, so GitHub signs it, and it credits whoever ran the workflow as a co-author. `verifyPeerReview.yml` then needs one independent approval instead of the two it requires for bot-only pull requests, and that person can't approve their own bump.
+- Each repo is cloned sparsely, with only the files that pin versions, so even App takes a few seconds.
+- npm only changes where it is pinned to exactly the npm bundled with the old release. Minimums such as `>=11.10.0` stay put.
+- A JSON file is only rewritten when nothing but the version lines changes. Otherwise that repo fails and asks for a hand edit.
+- The GitHub App token only reaches the repos in the config, and can only write to their contents and pull requests on manual runs. The OSBotify app has to be installed on every repo in the config, or creating the token fails.
+
+To bump a local checkout the same way:
+
+```bash
+npm run bump-node -- --repo-dir ../App [--version 26.13.1] [--raise-minimums]
+```
+
 ## Rulesets
 
 GitHub [org-level rulesets](https://docs.github.com/en/enterprise-cloud@latest/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets#require-workflows-to-pass-before-merging) can be configured to run a workflow check against pull requests in all repos in the org. This is a very powerful feature, but there are some caveats and best practices to be aware of when enabling a ruleset.

@@ -11,6 +11,9 @@
     "lint": "eslint .",
     "typecheck": "tsgo --noEmit -p tsconfig.json",
     "verify-peer-review": "tsx scripts/verifyPeerReview.ts",
+    "bump-node": "tsx scripts/bumpNode.ts",
+    "detect-node-security-release": "tsx scripts/detectNodeSecurityRelease.ts",
+    "open-node-bump-pull-requests": "tsx scripts/openNodeBumpPullRequests.ts",
     "test": "tsx --test tests/*.test.ts"
   },
   "dependencies": {

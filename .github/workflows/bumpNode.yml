@@ -1,0 +1,112 @@
+name: Bump Node
+
+on:
+  schedule:
+    # Every hour, because Node.js publishes security releases at no fixed time of day
+    - cron: '23 * * * *'
+  workflow_dispatch:
+    inputs:
+      ISSUE_URL:
+        description: Tracking issue the pull requests are for
+        required: true
+        type: string
+      VERSION:
+        description: Exact Node.js version to move to. Only repos on its major line change. Leave empty to move each repo to the newest release on its line.
+        required: false
+        type: string
+      REPOS:
+        description: Comma-separated repos to bump. Leave empty for every repo in config/nodeBump.json.
+        required: false
+        type: string
+      RAISE_MINIMUMS:
+        description: Also raise the minimum Node.js version of repos that float on a major line
+        required: false
+        type: boolean
+        default: false
+      DRY_RUN:
+        description: Show the changes without opening pull requests
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+
+jobs:
+  bumpNode:
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    steps:
+      # v7.0.0
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+
+      - name: List the repos the GitHub App token needs
+        id: repos
+        run: |
+          {
+            echo 'NAMES<<EOF'
+            jq -r '.trackingIssueRepo, .repos[].name' config/nodeBump.json
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      # The token only reaches the repos in config/nodeBump.json, and can only write to their contents and pull requests when a person runs the workflow.
+      # v3.2.0
+      - name: Generate a GitHub App token
+        id: generateAppToken
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          app-id: ${{ secrets.OS_BOTIFY_APP_ID }}
+          private-key: ${{ secrets.OS_BOTIFY_PRIVATE_KEY }}
+          owner: Expensify
+          repositories: ${{ steps.repos.outputs.NAMES }}
+          permission-contents: ${{ github.event_name == 'workflow_dispatch' && 'write' || 'read' }}
+          permission-issues: write
+          permission-pull-requests: ${{ github.event_name == 'workflow_dispatch' && 'write' || 'read' }}
+
+      # v6.4.0
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version-file: .nvmrc
+          check-latest: true
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install npm packages
+        run: npm ci --omit=dev
+
+      - name: Open a tracking issue for new Node.js security releases
+        if: github.event_name == 'schedule'
+        run: npm run detect-node-security-release
+        env:
+          GITHUB_TOKEN: ${{ steps.generateAppToken.outputs.token }}
+
+      - name: Open the Node bump pull requests
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          args=(--issue-url "$ISSUE_URL" --co-author-login "$CO_AUTHOR_LOGIN" --co-author-id "$CO_AUTHOR_ID")
+          if [[ -n "$VERSION" ]]; then
+            args+=(--version "$VERSION")
+          fi
+          if [[ -n "$REPOS" ]]; then
+            args+=(--repos "$REPOS")
+          fi
+          if [[ "$RAISE_MINIMUMS" == 'true' ]]; then
+            args+=(--raise-minimums)
+          fi
+          if [[ "$DRY_RUN" == 'true' ]]; then
+            args+=(--dry-run)
+          fi
+          npm run open-node-bump-pull-requests -- "${args[@]}"
+        env:
+          GITHUB_TOKEN: ${{ steps.generateAppToken.outputs.token }}
+          ISSUE_URL: ${{ inputs.ISSUE_URL }}
+          VERSION: ${{ inputs.VERSION }}
+          REPOS: ${{ inputs.REPOS }}
+          RAISE_MINIMUMS: ${{ inputs.RAISE_MINIMUMS }}
+          DRY_RUN: ${{ inputs.DRY_RUN }}
+          CO_AUTHOR_LOGIN: ${{ github.actor }}
+          CO_AUTHOR_ID: ${{ github.actor_id }}
