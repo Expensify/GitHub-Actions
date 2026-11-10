@@ -34,6 +34,10 @@ export default defineConfig([
     ...jestConfig,
     {
         files: ['**/*.ts'],
+        settings: {
+            // Use the configured parser object and its TypeScript 6 dependency for import analysis.
+            'import/parsers': null,
+        },
         languageOptions: {
             parserOptions: {
                 project: path.resolve(projectRoot, 'tsconfig.json'),
