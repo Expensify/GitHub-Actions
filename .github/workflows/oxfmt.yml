@@ -19,7 +19,7 @@ on:
 jobs:
   oxfmt:
     if: ${{ github.actor != 'OSBotify' || github.event_name == 'workflow_call' }}
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: blacksmith-2vcpu-ubuntu-2404-arm
     steps:
       - name: Checkout
         # v7
