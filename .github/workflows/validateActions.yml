@@ -9,7 +9,7 @@ on: pull_request
 
 jobs:
   validateSchemas:
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: blacksmith-2vcpu-ubuntu-2404-arm
     if: ${{ !contains(github.actor, '[bot]') && github.actor != 'MelvinBot' && github.actor != 'botify' && github.actor != 'OSBotify' }}
     steps:
       - name: Checkout repos
@@ -36,7 +36,7 @@ jobs:
         run: echo "::error::The validateWorkflowSchemas check failed! To run it locally, go to the root of ${{ steps.repo.outputs.NAME }} and run <path_to_github_actions_repo>/scripts/validateWorkflowSchemas.sh"
 
   actionlint:
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: blacksmith-2vcpu-ubuntu-2404-arm
     if: ${{ !contains(github.actor, '[bot]') && github.actor != 'MelvinBot' && github.actor != 'botify' && github.actor != 'OSBotify' }}
     steps:
       - name: Checkout repos
@@ -53,7 +53,7 @@ jobs:
         run: echo "::error::The actionlint check failed! To run it locally, go to the root of ${{ steps.repo.outputs.NAME }} and run <path_to_github_actions_repo>/scripts/actionlint.sh"
 
   validateImmutableActionRefs:
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: blacksmith-2vcpu-ubuntu-2404-arm
     if: ${{ !contains(github.actor, '[bot]') && github.actor != 'MelvinBot' && github.actor != 'botify' && github.actor != 'OSBotify' }}
     steps:
       - name: Checkout repos

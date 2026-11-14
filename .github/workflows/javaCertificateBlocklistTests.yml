@@ -26,16 +26,16 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - {os: blacksmith-2vcpu-ubuntu-2404, distribution: temurin, java: '8'}
-          - {os: blacksmith-2vcpu-ubuntu-2404, distribution: temurin, java: '11'}
-          - {os: blacksmith-2vcpu-ubuntu-2404, distribution: temurin, java: '17'}
-          - {os: blacksmith-2vcpu-ubuntu-2404, distribution: temurin, java: '21'}
-          - {os: blacksmith-2vcpu-ubuntu-2404, distribution: temurin, java: '25'}
-          - {os: blacksmith-2vcpu-ubuntu-2404, distribution: zulu, java: '8'}
-          - {os: blacksmith-2vcpu-ubuntu-2404, distribution: corretto, java: '17'}
-          - {os: blacksmith-2vcpu-ubuntu-2404, distribution: microsoft, java: '21'}
-          - {os: blacksmith-2vcpu-ubuntu-2404, distribution: oracle, java: '25'}
-          - {os: blacksmith-2vcpu-ubuntu-2404, distribution: semeru, java: '17'}
+          - {os: blacksmith-2vcpu-ubuntu-2404-arm, distribution: temurin, java: '8'}
+          - {os: blacksmith-2vcpu-ubuntu-2404-arm, distribution: temurin, java: '11'}
+          - {os: blacksmith-2vcpu-ubuntu-2404-arm, distribution: temurin, java: '17'}
+          - {os: blacksmith-2vcpu-ubuntu-2404-arm, distribution: temurin, java: '21'}
+          - {os: blacksmith-2vcpu-ubuntu-2404-arm, distribution: temurin, java: '25'}
+          - {os: blacksmith-2vcpu-ubuntu-2404-arm, distribution: zulu, java: '8'}
+          - {os: blacksmith-2vcpu-ubuntu-2404-arm, distribution: corretto, java: '17'}
+          - {os: blacksmith-2vcpu-ubuntu-2404-arm, distribution: microsoft, java: '21'}
+          - {os: blacksmith-2vcpu-ubuntu-2404-arm, distribution: oracle, java: '25'}
+          - {os: blacksmith-2vcpu-ubuntu-2404-arm, distribution: semeru, java: '17'}
           - {os: macos-15, distribution: temurin, java: '21'}
     steps:
       - name: Checkout
@@ -75,7 +75,7 @@ jobs:
 
   verify-gradle:
     name: Restricted Gradle ${{ matrix.gradle }}
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: blacksmith-2vcpu-ubuntu-2404-arm
     defaults:
       run:
         working-directory: .github/actions/under-test
