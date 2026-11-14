@@ -22,7 +22,7 @@ permissions:
 jobs:
   verifyPeerReview:
     name: Check independent approval
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: blacksmith-2vcpu-ubuntu-2404-arm
     steps:
       # v3.2.0
       - name: Generate a GitHub App token
