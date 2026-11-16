@@ -5,6 +5,7 @@
 # Usage: postReviewToPrBody.sh <PR_NUMBER> <HEAD_SHA>
 # Env: EXECUTION_FILE (claude-code-action's execution_file output), GH_TOKEN, GITHUB_REPOSITORY,
 #      GITHUB_SERVER_URL, GITHUB_RUN_ID, and optionally READ_TOKEN, ANTHROPIC_API_KEY, GITHUB_STEP_SUMMARY
+# shellcheck disable=SC2016 # jq filters use jq variables such as $text, which the shell must not expand.
 set -euo pipefail
 
 # shellcheck source=reviewBlock.sh
