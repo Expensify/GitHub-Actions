@@ -1,0 +1,20 @@
+{
+    "type": "object",
+    "properties": {
+        "blockingCount": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Number of blocking findings still open at the head commit. Resolved and dismissed findings are not counted."
+        },
+        "suggestionCount": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Number of non-blocking findings still open at the head commit, including pre-existing ones."
+        },
+        "review": {
+            "type": "string",
+            "description": "The full walkthrough in GitHub Markdown, starting with the verdict line."
+        }
+    },
+    "required": ["blockingCount", "suggestionCount", "review"]
+}
