@@ -3,7 +3,7 @@
 # Write the AI review into a collapsed block at the bottom of the PR description, replacing the
 # previous block if there is one. Text outside the block is left exactly as people wrote it.
 # Usage: postReviewToPrBody.sh <PR_NUMBER> <HEAD_SHA>
-# Env: STRUCTURED_OUTPUT (JSON matching schemas/review-output.json), GH_TOKEN, GITHUB_REPOSITORY,
+# Env: EXECUTION_FILE (claude-code-action's execution_file output), GH_TOKEN, GITHUB_REPOSITORY,
 #      GITHUB_SERVER_URL, GITHUB_RUN_ID, and optionally READ_TOKEN, ANTHROPIC_API_KEY, GITHUB_STEP_SUMMARY
 set -euo pipefail
 
@@ -25,10 +25,16 @@ if ! [[ "$2" =~ ^[0-9a-f]{40}$ ]]; then
     exit 1
 fi
 
-if [[ -z "${STRUCTURED_OUTPUT:-}" ]]; then
+# The review is read from claude-code-action's execution file rather than its structured_output step
+# output, because passing that output through an environment variable fails to start the shell once
+# it is over Linux's 128 KB limit for a single environment entry. The last result message holds the
+# same structured_output, matching schemas/review-output.json.
+STRUCTURED_OUTPUT=$(jq -c '[.[] | select(.type == "result")] | last | .structured_output // empty' "${EXECUTION_FILE:-/dev/null}" 2> /dev/null || true)
+if [[ -z "$STRUCTURED_OUTPUT" ]]; then
     echo "::error::The AI reviewer returned no structured output" >&2
     exit 1
 fi
+readonly STRUCTURED_OUTPUT
 
 readonly PR_NUMBER="$1"
 readonly HEAD_SHA="$2"

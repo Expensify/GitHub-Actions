@@ -242,7 +242,15 @@ describe('AI PR reviewer scripts', () => {
     describe('postReviewToPrBody.sh', () => {
         function post(body: string, output: Record<string, unknown>, environment: Record<string, string> = {}) {
             respond(`/repos/${REPO}/pulls/1`, {body});
-            return run('postReviewToPrBody.sh', ['1', HEAD_SHA], {STRUCTURED_OUTPUT: JSON.stringify(output), ...environment});
+            const executionFile = path.join(temporaryDirectory, 'claude-execution-output.json');
+            writeFileSync(
+                executionFile,
+                JSON.stringify([
+                    {type: 'system', subtype: 'init'},
+                    {type: 'result', subtype: 'success', structured_output: output},
+                ]),
+            );
+            return run('postReviewToPrBody.sh', ['1', HEAD_SHA], {EXECUTION_FILE: executionFile, ...environment});
         }
 
         it('first review of a PR', () => {
@@ -292,7 +300,7 @@ describe('AI PR reviewer scripts', () => {
 
         it('description and review too long for the PR description together', () => {
             const description = '€'.repeat(50000);
-            const result = post(description, {blockingCount: 1, suggestionCount: 0, review: 'x'.repeat(70000)});
+            const result = post(description, {blockingCount: 1, suggestionCount: 0, review: 'x'.repeat(140000)});
 
             assert.equal(result.status, 0, result.stderr);
             const body = patchedBody();

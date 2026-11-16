@@ -125,7 +125,7 @@ runs:
         GH_TOKEN: ${{ inputs.github_token }}
         READ_TOKEN: ${{ inputs.read_token }}
         ANTHROPIC_API_KEY: ${{ inputs.anthropic_api_key }}
-        STRUCTURED_OUTPUT: ${{ steps.review.outputs.structured_output }}
+        EXECUTION_FILE: ${{ steps.review.outputs.execution_file }}
         PR_NUMBER: ${{ inputs.pr_number }}
         HEAD_SHA: ${{ steps.context.outputs.head_sha }}
       run: '"$GITHUB_ACTION_PATH/scripts/postReviewToPrBody.sh" "$PR_NUMBER" "$HEAD_SHA"'
