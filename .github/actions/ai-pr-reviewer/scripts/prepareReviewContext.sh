@@ -8,6 +8,7 @@
 #   pr.md                          Title, author, branches, SHAs and description (without the review block)
 #   pr.diff                        The full PR diff
 #   changed-files.md               Every changed file with its status and line counts
+#   head-files.txt                 Paths that exist at the head commit, one per line, for extractHeadFiles.sh
 #   comments.md                    Conversation comments, review comments and review bodies
 #   issues.md                      Linked issues with their comments, or why each was skipped
 #   previous-review.md             The earlier review block, when there is one
@@ -74,6 +75,7 @@ jq -r --arg body "$HUMAN_BODY" '
 FILES=$(gh api --paginate "/repos/$REPO/pulls/$PR_NUMBER/files" --jq '.[] | {filename, status, additions, deletions, patch}' | jq -s '.')
 readonly FILES
 jq -r '.[] | "- \(.status) `\(.filename)` (+\(.additions) -\(.deletions))"' <<< "$FILES" > "$OUTPUT_DIR/changed-files.md"
+jq -r '.[] | select(.status != "removed") | .filename' <<< "$FILES" > "$OUTPUT_DIR/head-files.txt"
 
 # The diff media type is refused for very large PRs, so fall back to the per-file patches, which GitHub
 # omits only for individual files that are too large or binary.

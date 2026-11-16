@@ -41,7 +41,7 @@ jobs:
           read_token: ${{ secrets.<token that can read llm-skills-library> }}
 ```
 
-Don't check out the repository in the job: the action checks out the PR head itself. In a public repository, put a contributor authorization job in front of it, as `App` does for `claude-review.yml`.
+Don't check out the repository in the job: the action checks out the base branch itself. In a public repository, put a contributor authorization job in front of it, as `App` does for `claude-review.yml`.
 
 ## Inputs
 
@@ -63,7 +63,7 @@ Don't check out the repository in the job: the action checks out the PR head its
    - `incremental`: new commits on top of the reviewed one. The model gets its earlier review and the patches since then, re-checks each earlier finding, marks fixed ones resolved and never raises a finding twice. Patches are limited to files the PR changes, so merging `main` in does not pull other people's changes into the review.
    - `rewritten`: the branch was force-pushed, so review the whole diff again, still re-checking the earlier findings.
    - If the earlier review already covers the head commit (for example on `ready_for_review` after a review of the same commit), the run stops.
-3. The PR head is checked out as the workspace. Nothing from it runs: the model may only read files, and `claude-code-action` swaps the PR's `.claude/`, `CLAUDE.md` and `.mcp.json` for the base branch's before starting. That swap is why the skill is installed in `~/.claude/skills` rather than the workspace.
+3. The base branch is checked out as the workspace, and `extractHeadFiles.sh` copies the PR's changed files at its head commit into `.ai-review/head/`. The PR head is never checked out, so nothing in it can configure or run tools (the `pull_request_target` "pwn request" risk), and the model may only read files. The skill is installed in `~/.claude/skills` because `claude-code-action` resets the workspace `.claude/` to the base branch's.
 4. The skill verifies each blocking finding with a separate subagent before reporting it, tags bugs the PR did not introduce as **Pre-existing**, and drops style-only findings.
 5. `postReviewToPrBody.sh` re-reads the description and replaces only the text between `<!-- expensify-ai-reviewer:start -->` and `<!-- expensify-ai-reviewer:end -->`, so people's edits stay. It refuses to post a review that contains one of the action's secrets, and shortens a review that would push the description past GitHub's 65536-character limit (the full review stays in the run summary).
 

@@ -133,6 +133,10 @@ describe('AI PR reviewer scripts', () => {
             respond(`/repos/${REPO}`, {private: false});
             respond(`/repos/${REPO}/issues/7`, {title: 'Thing is broken', html_url: `https://github.com/${REPO}/issues/7`, body: 'Steps to reproduce'});
             respond(`/repos/${REPO}/issues/7/comments`, [{user: {login: 'qa'}, created_at: '2026-11-15', body: 'Reproduced'}]);
+            respond(`/repos/${REPO}/pulls/1/files`, [
+                {filename: 'src/fix.ts', status: 'modified', additions: 2, deletions: 1, patch: '@@ -1 +1,2 @@\n-old\n+new'},
+                {filename: 'src/gone.ts', status: 'removed', additions: 0, deletions: 5, patch: '-gone'},
+            ]);
 
             const result = run('prepareReviewContext.sh', ['1', outputDirectory]);
 
@@ -140,7 +144,8 @@ describe('AI PR reviewer scripts', () => {
             assert.deepEqual(outputs(), {head_sha: HEAD_SHA, mode: 'first', skip: 'false'});
             assert.match(readFileSync(path.join(outputDirectory, 'pr.md'), 'utf8'), /Fixes https:\/\/github\.com\/Expensify\/App\/issues\/7/);
             assert.equal(readFileSync(path.join(outputDirectory, 'pr.diff'), 'utf8'), 'diff --git a/src/fix.ts b/src/fix.ts\n+new');
-            assert.match(readFileSync(path.join(outputDirectory, 'changed-files.md'), 'utf8'), /modified `src\/fix\.ts` \(\+2 -1\)/);
+            assert.match(readFileSync(path.join(outputDirectory, 'changed-files.md'), 'utf8'), /modified `src\/fix\.ts` \(\+2 -1\)\n- removed `src\/gone\.ts`/);
+            assert.equal(readFileSync(path.join(outputDirectory, 'head-files.txt'), 'utf8'), 'src/fix.ts\n');
             const comments = readFileSync(path.join(outputDirectory, 'comments.md'), 'utf8');
             assert.match(comments, /@reviewer[\s\S]*Looks risky/);
             assert.match(comments, /@codex on src\/fix\.ts:2[\s\S]*Null check\?/);
@@ -283,6 +288,48 @@ describe('AI PR reviewer scripts', () => {
             assert.ok(body.length <= 65536, `body has ${body.length} characters`);
             assert.match(body, /The review was cut short to fit the PR description/);
             assert.ok(body.endsWith(`</details>\n${END}`));
+        });
+    });
+
+    describe('extractHeadFiles.sh', () => {
+        function git(cwd: string, ...args: string[]) {
+            const result = spawnSync('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', ...args], {cwd, encoding: 'utf8'});
+            assert.equal(result.status, 0, result.stderr);
+            return result.stdout.trim();
+        }
+
+        it('changed files at a PR head that is not checked out', () => {
+            const origin = path.join(temporaryDirectory, 'origin.git');
+            const author = path.join(temporaryDirectory, 'author');
+            const workspace = path.join(temporaryDirectory, 'workspace');
+            git(temporaryDirectory, 'init', '--quiet', '--bare', '--initial-branch=main', origin);
+            git(origin, 'config', 'uploadpack.allowAnySHA1InWant', 'true');
+            git(temporaryDirectory, 'init', '--quiet', '--initial-branch=main', author);
+            writeFileSync(path.join(author, 'README.md'), 'base\n');
+            git(author, 'add', '.');
+            git(author, 'commit', '--quiet', '-m', 'Base');
+            const baseSha = git(author, 'rev-parse', 'HEAD');
+            git(author, 'push', '--quiet', origin, 'main');
+            mkdirSync(path.join(author, 'src', 'deep'), {recursive: true});
+            writeFileSync(path.join(author, 'src', 'deep', 'fix.ts'), 'fixed\n');
+            git(author, 'add', '.');
+            git(author, 'update-index', '--add', '--cacheinfo', `160000,${baseSha},submodule`);
+            git(author, 'commit', '--quiet', '-m', 'Fix');
+            const headSha = git(author, 'rev-parse', 'HEAD');
+            git(author, 'push', '--quiet', origin, 'HEAD:refs/pull/1/head');
+            git(temporaryDirectory, 'clone', '--quiet', '--depth=1', `file://${origin}`, workspace);
+            const fileList = path.join(temporaryDirectory, 'head-files.txt');
+            writeFileSync(fileList, 'src/deep/fix.ts\nsubmodule\n');
+            const destination = path.join(workspace, '.ai-review', 'head');
+
+            const result = spawnSync('bash', [path.join(SCRIPTS_PATH, 'extractHeadFiles.sh'), headSha, fileList, destination], {cwd: workspace, encoding: 'utf8'});
+
+            assert.equal(result.status, 0, result.stderr);
+            assert.equal(readFileSync(path.join(destination, 'src', 'deep', 'fix.ts'), 'utf8'), 'fixed\n');
+            assert.ok(!existsSync(path.join(destination, 'submodule')));
+            assert.match(result.stderr, /Skipping submodule: not a file/);
+            assert.equal(git(workspace, 'rev-parse', 'HEAD'), baseSha);
+            assert.ok(!existsSync(path.join(workspace, 'src')));
         });
     });
 });
