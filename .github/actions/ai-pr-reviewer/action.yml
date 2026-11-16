@@ -96,7 +96,7 @@ runs:
     - name: Run Claude Code
       if: steps.context.outputs.skip != 'true'
       id: review
-      uses: anthropics/claude-code-action@4d7e1f0cd85743fdc93b1c8040ab54395da024e2 # v1.0.149
+      uses: anthropics/claude-code-action@cc98b3ae241b0fcfb6a42a2690751afffecb4452 # v1.0.278
       with:
         display_report: 'true'
         anthropic_api_key: ${{ inputs.anthropic_api_key }}
