@@ -142,7 +142,7 @@ describe('AI PR reviewer scripts', () => {
             const result = run('prepareReviewContext.sh', ['1', outputDirectory]);
 
             assert.equal(result.status, 0, result.stderr);
-            assert.deepEqual(outputs(), {head_sha: HEAD_SHA, mode: 'first', skip: 'false'});
+            assert.deepEqual(outputs(), {head_sha: HEAD_SHA, base_ref: 'main', mode: 'first', skip: 'false'});
             const prMarkdown = readFileSync(path.join(outputDirectory, 'pr.md'), 'utf8');
             assert.match(prMarkdown, /Fixes https:\/\/github\.com\/Expensify\/App\/issues\/7/);
             assert.ok(prMarkdown.includes(longDescription));
@@ -191,7 +191,7 @@ describe('AI PR reviewer scripts', () => {
             const result = run('prepareReviewContext.sh', ['1', outputDirectory]);
 
             assert.equal(result.status, 0, result.stderr);
-            assert.deepEqual(outputs(), {head_sha: HEAD_SHA, mode: 'incremental', skip: 'false'});
+            assert.deepEqual(outputs(), {head_sha: HEAD_SHA, base_ref: 'main', mode: 'incremental', skip: 'false'});
             assert.doesNotMatch(readFileSync(path.join(outputDirectory, 'pr.md'), 'utf8'), /Old review|expensify-ai-reviewer/);
             assert.match(readFileSync(path.join(outputDirectory, 'previous-review.md'), 'utf8'), /Old review/);
             const changes = readFileSync(path.join(outputDirectory, 'changes-since-last-review.md'), 'utf8');
@@ -208,7 +208,7 @@ describe('AI PR reviewer scripts', () => {
             const result = run('prepareReviewContext.sh', ['1', outputDirectory]);
 
             assert.equal(result.status, 0, result.stderr);
-            assert.deepEqual(outputs(), {head_sha: HEAD_SHA, mode: 'rewritten', skip: 'false'});
+            assert.deepEqual(outputs(), {head_sha: HEAD_SHA, base_ref: 'main', mode: 'rewritten', skip: 'false'});
             assert.match(readFileSync(path.join(outputDirectory, 'previous-review.md'), 'utf8'), /Old review/);
             assert.ok(!existsSync(path.join(outputDirectory, 'changes-since-last-review.md')));
         });

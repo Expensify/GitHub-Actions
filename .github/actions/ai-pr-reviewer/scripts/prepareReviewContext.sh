@@ -14,7 +14,7 @@
 #   previous-review.md             The earlier review block, when there is one
 #   changes-since-last-review.md   Commits and patches since the earlier review (incremental mode only)
 #
-# Writes to GITHUB_OUTPUT: head_sha, mode (first | incremental | rewritten) and skip (true | false).
+# Writes to GITHUB_OUTPUT: head_sha, base_ref, mode (first | incremental | rewritten) and skip (true | false).
 # skip is true when the earlier review already covers the current head commit.
 set -euo pipefail
 
@@ -49,6 +49,8 @@ mkdir -p "$OUTPUT_DIR"
 PULL=$(gh api "/repos/$REPO/pulls/$PR_NUMBER")
 HEAD_SHA=$(jq -r '.head.sha' <<< "$PULL")
 readonly HEAD_SHA
+BASE_REF=$(jq -r '.base.ref' <<< "$PULL")
+readonly BASE_REF
 IS_PUBLIC_REPO=$(jq -r '.base.repo.private | not' <<< "$PULL")
 readonly IS_PUBLIC_REPO
 BODY=$(jq -r '.body // ""' <<< "$PULL")
@@ -60,6 +62,7 @@ PREVIOUS_SHA=$(grep -oE 'reviewed-sha=[0-9a-f]{40}' <<< "$PREVIOUS_BLOCK" | tail
 readonly PREVIOUS_SHA
 
 echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+echo "base_ref=$BASE_REF" >> "$GITHUB_OUTPUT"
 
 if [[ -n "$PREVIOUS_SHA" && "$PREVIOUS_SHA" == "$HEAD_SHA" ]]; then
     echo "The review in the PR description already covers $HEAD_SHA, skipping" >&2

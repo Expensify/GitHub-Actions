@@ -20,7 +20,7 @@ inputs:
   model:
     description: 'Claude model'
     required: false
-    default: 'claude-opus-4-8'
+    default: 'claude-opus-5-5'
   effort:
     description: 'Claude reasoning effort'
     required: false
@@ -41,14 +41,16 @@ runs:
         PR_NUMBER: ${{ inputs.pr_number }}
       run: '"$GITHUB_ACTION_PATH/scripts/prepareReviewContext.sh" "$PR_NUMBER" "$RUNNER_TEMP/ai-review-context"'
 
-    # The workspace is the base branch, so the agent config Claude loads (.claude/, CLAUDE.md, .mcp.json)
-    # is reviewed code. The PR's changed files are copied out of its head commit as plain data and never
-    # checked out, so nothing a PR adds can configure or run tools.
+    # The workspace is the reviewed PR's base branch, whatever event started the run, so the agent
+    # config Claude loads (.claude/, CLAUDE.md, .mcp.json) is reviewed code. The PR's changed files are
+    # copied out of its head commit as plain data and never checked out, so nothing a PR adds can
+    # configure or run tools.
     - name: Checkout base branch
       if: steps.context.outputs.skip != 'true'
       # 6.0.3
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
       with:
+        ref: ${{ steps.context.outputs.base_ref }}
         token: ${{ inputs.github_token }}
         fetch-depth: 1
         persist-credentials: false

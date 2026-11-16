@@ -52,7 +52,7 @@ Don't check out the repository in the job: the action checks out the base branch
 | `github_token` | | Token for the PR repository with `contents: read` and `pull-requests: write`. |
 | `read_token` | | Token that can read the private `Expensify/llm-skills-library`, and the private repositories of issues the PR links to. |
 | `skills_ref` | pinned commit | `llm-skills-library` commit to load the skill from. Bump it to ship skill changes. |
-| `model` | `claude-opus-4-8` | Claude model. |
+| `model` | `claude-opus-5-5` | Claude model. |
 | `effort` | `high` | Claude reasoning effort. |
 
 ## How a run works
