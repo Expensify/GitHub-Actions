@@ -16,7 +16,7 @@ inputs:
   skills_ref:
     description: 'Commit of Expensify/llm-skills-library to load the pr-review-walkthrough skill from'
     required: false
-    default: '61b2368bd2c459a8e6e14398bab9bd1336441468'
+    default: '90b24c2ec0f2bbf8f829d70f71ce610590609468'
   model:
     description: 'Claude model'
     required: false
