@@ -18,9 +18,15 @@ export REVIEW_SHA_MARKER_PREFIX='<!-- expensify-ai-reviewer:reviewed-sha='
 # shellcheck disable=SC2016 # Perl expands these variables, not the shell.
 REVIEW_BLOCK_PERL='my ($s, $e) = map { quotemeta $ENV{$_} } qw(REVIEW_BLOCK_START REVIEW_BLOCK_END); our $block = qr/$s(?:(?!$s).)*?$e/s;'
 
-# Print stdin with the first review block replaced by $1 and any other review blocks removed.
+# Print stdin with the first review block replaced by $1 and any other review blocks removed. The
+# replacement reaches perl through a file, because Linux rejects any single argument or environment
+# entry over 128 KB, which a long review can pass.
 replaceReviewBlocks() {
-    REPLACEMENT="$1" perl -0777 -pe "BEGIN { $REVIEW_BLOCK_PERL }"' my $count = 0; s/$block/$count++ ? "" : $ENV{REPLACEMENT}/ge'
+    local replacementFile
+    replacementFile=$(mktemp)
+    printf '%s' "$1" > "$replacementFile"
+    REPLACEMENT_FILE="$replacementFile" perl -0777 -pe "BEGIN { $REVIEW_BLOCK_PERL"' open(my $file, "<", $ENV{REPLACEMENT_FILE}) or die "Cannot read replacement: $!"; local $/; our $replacement = <$file> // ""; } my $count = 0; s/$block/$count++ ? "" : $replacement/ge'
+    rm -f "$replacementFile"
 }
 
 # Print stdin with every review block removed.

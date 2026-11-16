@@ -41,14 +41,27 @@ readonly HEAD_SHA="$2"
 readonly REPO="${GITHUB_REPOSITORY}"
 readonly RUN_URL="${GITHUB_SERVER_URL}/${REPO}/actions/runs/${GITHUB_RUN_ID}"
 
-# GitHub rejects PR descriptions longer than 65536 characters. The margin leaves room for the
-# truncation note and for people's later edits.
-readonly MAX_BODY_CHARACTERS=65000
+# GitHub rejects PR descriptions longer than 65536 characters.
+readonly MAX_BODY_CHARACTERS=65536
 
-# Text goes to jq on stdin, never as an argument: Linux rejects any single argument over 128 KB, which a
-# long review or a long multibyte description can pass.
+# A truncated review shorter than this is not worth showing, so the block keeps only its summary line.
+readonly MIN_REVIEW_CHARACTERS=1000
+
+# Run a jq filter on $1, available to the filter as $text. The text goes through a file: as an argument
+# it fails over Linux's 128 KB limit, and piped into jq -R it corrupts any multibyte character that
+# one pipe read splits.
+jqOnText() {
+    local text="$1"
+    shift
+    local textFile
+    textFile=$(mktemp)
+    printf '%s' "$text" > "$textFile"
+    jq -n --rawfile text "$textFile" "$@"
+    rm -f "$textFile"
+}
+
 characterCount() {
-    jq -Rrs 'length'
+    jqOnText "$1" -r '$text | length'
 }
 
 BLOCKING_COUNT=$(jq -r '.blockingCount' <<< "$STRUCTURED_OUTPUT")
@@ -106,18 +119,32 @@ else
 fi
 readonly SEPARATOR
 
-TOTAL_LENGTH=$(printf '%s' "$HUMAN_BODY$SEPARATOR$BLOCK" | characterCount)
+TOTAL_LENGTH=$(characterCount "$HUMAN_BODY$SEPARATOR$BLOCK")
 if [[ "$TOTAL_LENGTH" -gt "$MAX_BODY_CHARACTERS" ]]; then
     NOTE=$'\n\n'"**The review was cut short to fit the PR description. The full review is in the [workflow run summary]($RUN_URL).**"
-    BLOCK_WITHOUT_REVIEW_LENGTH=$(printf '%s' "$HUMAN_BODY$SEPARATOR$(buildBlock "")$NOTE" | characterCount)
+    BLOCK_WITHOUT_REVIEW_LENGTH=$(characterCount "$HUMAN_BODY$SEPARATOR$(buildBlock "")$NOTE")
     AVAILABLE=$((MAX_BODY_CHARACTERS - BLOCK_WITHOUT_REVIEW_LENGTH))
-    if [[ "$AVAILABLE" -lt 0 ]]; then
-        AVAILABLE=0
+    if [[ "$AVAILABLE" -ge "$MIN_REVIEW_CHARACTERS" ]]; then
+        TRUNCATED_REVIEW=$(jqOnText "$REVIEW" -r --argjson available "$AVAILABLE" '$text[0:$available]')
+        BLOCK=$(buildBlock "$TRUNCATED_REVIEW$NOTE")
+    else
+        BLOCK=$(buildBlock "The PR description has no room for the review. Read it in the [workflow run summary]($RUN_URL).")
     fi
-    TRUNCATED_REVIEW=$(printf '%s' "$REVIEW" | jq -Rrs --argjson available "$AVAILABLE" '.[0:$available]')
-    BLOCK=$(buildBlock "$TRUNCATED_REVIEW$NOTE")
 fi
 readonly BLOCK
+
+# People's text is never cut to make room. When even the summary does not fit, only remove an
+# outdated review so it is not mistaken for a review of the current commit.
+if [[ "$(characterCount "$HUMAN_BODY$SEPARATOR$BLOCK")" -gt "$MAX_BODY_CHARACTERS" ]]; then
+    echo "::warning::The PR description has no room for the review, which is in the workflow run summary" >&2
+    if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
+        buildBlock "$REVIEW" >> "$GITHUB_STEP_SUMMARY"
+    fi
+    if [[ -n "$(extractLastReviewBlock <<< "$BODY")" ]]; then
+        jqOnText "$HUMAN_BODY" '{body: $text}' | gh api -X PATCH "/repos/$REPO/pulls/$PR_NUMBER" --input - > /dev/null
+    fi
+    exit 0
+fi
 
 if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
     buildBlock "$REVIEW" >> "$GITHUB_STEP_SUMMARY"
@@ -132,5 +159,5 @@ else
 fi
 readonly NEW_BODY
 
-printf '%s' "$NEW_BODY" | jq -Rs '{body: .}' | gh api -X PATCH "/repos/$REPO/pulls/$PR_NUMBER" --input - > /dev/null
+jqOnText "$NEW_BODY" '{body: $text}' | gh api -X PATCH "/repos/$REPO/pulls/$PR_NUMBER" --input - > /dev/null
 echo "Posted: $SUMMARY"

@@ -270,11 +270,13 @@ describe('AI PR reviewer scripts', () => {
         });
 
         it('update of an earlier review that people wrote around', () => {
-            const result = post(`Top\n\n${reviewBlock(PREVIOUS_SHA, 'Old review')}\n\nAdded below`, {blockingCount: 0, suggestionCount: 3, review: 'New review'});
+            const newReview = `New review ${'€'.repeat(50000)}`;
+            const result = post(`Top\n\n${reviewBlock(PREVIOUS_SHA, 'Old review')}\n\nAdded below`, {blockingCount: 0, suggestionCount: 3, review: newReview});
 
             assert.equal(result.status, 0, result.stderr);
             const body = patchedBody();
             assert.match(body, /^Top\n\n<!-- expensify-ai-reviewer:start -->[\s\S]*New review[\s\S]*<!-- expensify-ai-reviewer:end -->\n\nAdded below$/);
+            assert.ok(body.includes(newReview));
             assert.match(body, /Expensify AI reviewer: ✅ Approved \(0 blocking, 3 suggestions\)/);
             assert.doesNotMatch(body, /Old review/);
             assert.equal(body.split(START).length, 2);
@@ -306,8 +308,32 @@ describe('AI PR reviewer scripts', () => {
             const body = patchedBody();
             assert.ok(body.startsWith(`${description}\n\n${START}`));
             assert.ok(body.length <= 65536, `body has ${body.length} characters`);
+            assert.ok(!body.includes('\uFFFD'));
             assert.match(body, /The review was cut short to fit the PR description/);
             assert.ok(body.endsWith(`</details>\n${END}`));
+        });
+
+        it('description with no room left for the review', () => {
+            const description = 'h'.repeat(64500);
+            const result = post(description, {blockingCount: 1, suggestionCount: 0, review: 'x'.repeat(5000)});
+
+            assert.equal(result.status, 0, result.stderr);
+            const body = patchedBody();
+            assert.ok(body.startsWith(`${description}\n\n${START}`));
+            assert.ok(body.length <= 65536, `body has ${body.length} characters`);
+            assert.match(body, /<summary>Expensify AI reviewer: ❌ Changes requested \(1 blocking, 0 suggestions\)<\/summary>/);
+            assert.match(body, /The PR description has no room for the review\. Read it in the \[workflow run summary\]\(https:\/\/github\.com\/Expensify\/App\/actions\/runs\/42\)\./);
+            assert.doesNotMatch(body, /xxxxx/);
+            assert.ok(body.endsWith(`</details>\n${END}`));
+        });
+
+        it('description with no room left even for a summary', () => {
+            const description = 'h'.repeat(65300);
+            const result = post(`${description}\n\n${reviewBlock(PREVIOUS_SHA, 'Old review')}`, {blockingCount: 0, suggestionCount: 0, review: 'New review'});
+
+            assert.equal(result.status, 0, result.stderr);
+            assert.match(result.stderr, /no room for the review/);
+            assert.equal(patchedBody(), description);
         });
     });
 
