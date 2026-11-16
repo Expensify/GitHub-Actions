@@ -39,6 +39,12 @@ readonly RUN_URL="${GITHUB_SERVER_URL}/${REPO}/actions/runs/${GITHUB_RUN_ID}"
 # truncation note and for people's later edits.
 readonly MAX_BODY_CHARACTERS=65000
 
+# Text goes to jq on stdin, never as an argument: Linux rejects any single argument over 128 KB, which a
+# long review or a long multibyte description can pass.
+characterCount() {
+    jq -Rrs 'length'
+}
+
 BLOCKING_COUNT=$(jq -r '.blockingCount' <<< "$STRUCTURED_OUTPUT")
 readonly BLOCKING_COUNT
 SUGGESTION_COUNT=$(jq -r '.suggestionCount' <<< "$STRUCTURED_OUTPUT")
@@ -94,15 +100,15 @@ else
 fi
 readonly SEPARATOR
 
-TOTAL_LENGTH=$(jq -rn --arg body "$HUMAN_BODY$SEPARATOR$BLOCK" '$body | length')
+TOTAL_LENGTH=$(printf '%s' "$HUMAN_BODY$SEPARATOR$BLOCK" | characterCount)
 if [[ "$TOTAL_LENGTH" -gt "$MAX_BODY_CHARACTERS" ]]; then
     NOTE=$'\n\n'"**The review was cut short to fit the PR description. The full review is in the [workflow run summary]($RUN_URL).**"
-    BLOCK_WITHOUT_REVIEW_LENGTH=$(jq -rn --arg text "$HUMAN_BODY$SEPARATOR$(buildBlock "")$NOTE" '$text | length')
+    BLOCK_WITHOUT_REVIEW_LENGTH=$(printf '%s' "$HUMAN_BODY$SEPARATOR$(buildBlock "")$NOTE" | characterCount)
     AVAILABLE=$((MAX_BODY_CHARACTERS - BLOCK_WITHOUT_REVIEW_LENGTH))
     if [[ "$AVAILABLE" -lt 0 ]]; then
         AVAILABLE=0
     fi
-    TRUNCATED_REVIEW=$(jq -rn --arg review "$REVIEW" --argjson available "$AVAILABLE" '$review[0:$available]')
+    TRUNCATED_REVIEW=$(printf '%s' "$REVIEW" | jq -Rrs --argjson available "$AVAILABLE" '.[0:$available]')
     BLOCK=$(buildBlock "$TRUNCATED_REVIEW$NOTE")
 fi
 readonly BLOCK
@@ -120,5 +126,5 @@ else
 fi
 readonly NEW_BODY
 
-jq -n --arg body "$NEW_BODY" '{body: $body}' | gh api -X PATCH "/repos/$REPO/pulls/$PR_NUMBER" --input - > /dev/null
+printf '%s' "$NEW_BODY" | jq -Rs '{body: .}' | gh api -X PATCH "/repos/$REPO/pulls/$PR_NUMBER" --input - > /dev/null
 echo "Posted: $SUMMARY"

@@ -129,7 +129,8 @@ describe('AI PR reviewer scripts', () => {
     describe('prepareReviewContext.sh', () => {
         it('first review', () => {
             const outputDirectory = path.join(temporaryDirectory, 'context');
-            respondWithPullRequest(`Fixes https://github.com/${REPO}/issues/7`);
+            const longDescription = '€'.repeat(50000);
+            respondWithPullRequest(`Fixes https://github.com/${REPO}/issues/7\n\n${longDescription}`);
             respond(`/repos/${REPO}`, {private: false});
             respond(`/repos/${REPO}/issues/7`, {title: 'Thing is broken', html_url: `https://github.com/${REPO}/issues/7`, body: 'Steps to reproduce'});
             respond(`/repos/${REPO}/issues/7/comments`, [{user: {login: 'qa'}, created_at: '2026-11-15', body: 'Reproduced'}]);
@@ -142,7 +143,9 @@ describe('AI PR reviewer scripts', () => {
 
             assert.equal(result.status, 0, result.stderr);
             assert.deepEqual(outputs(), {head_sha: HEAD_SHA, mode: 'first', skip: 'false'});
-            assert.match(readFileSync(path.join(outputDirectory, 'pr.md'), 'utf8'), /Fixes https:\/\/github\.com\/Expensify\/App\/issues\/7/);
+            const prMarkdown = readFileSync(path.join(outputDirectory, 'pr.md'), 'utf8');
+            assert.match(prMarkdown, /Fixes https:\/\/github\.com\/Expensify\/App\/issues\/7/);
+            assert.ok(prMarkdown.includes(longDescription));
             assert.equal(readFileSync(path.join(outputDirectory, 'pr.diff'), 'utf8'), 'diff --git a/src/fix.ts b/src/fix.ts\n+new');
             assert.match(readFileSync(path.join(outputDirectory, 'changed-files.md'), 'utf8'), /modified `src\/fix\.ts` \(\+2 -1\)\n- removed `src\/gone\.ts`/);
             assert.equal(readFileSync(path.join(outputDirectory, 'head-files.txt'), 'utf8'), 'src/fix.ts\n');
@@ -166,6 +169,13 @@ describe('AI PR reviewer scripts', () => {
         it('new commits since the last review', () => {
             const outputDirectory = path.join(temporaryDirectory, 'context');
             respondWithPullRequest(`Description\n\n${reviewBlock(PREVIOUS_SHA, 'Old review')}`);
+            const largePatch = `+${'x'.repeat(60000)}`;
+            respond(`/repos/${REPO}/pulls/1/files`, [
+                {filename: 'src/fix.ts', status: 'modified', additions: 2, deletions: 1, patch: '@@ -1 +1,2 @@\n-old\n+new'},
+                {filename: 'src/large1.ts', status: 'modified', additions: 1, deletions: 0, patch: largePatch},
+                {filename: 'src/large2.ts', status: 'modified', additions: 1, deletions: 0, patch: largePatch},
+                {filename: 'src/large3.ts', status: 'modified', additions: 1, deletions: 0, patch: largePatch},
+            ]);
             respond(`/repos/${REPO}/compare/${PREVIOUS_SHA}...${HEAD_SHA}`, {
                 status: 'ahead',
                 commits: [
@@ -280,11 +290,13 @@ describe('AI PR reviewer scripts', () => {
             assert.ok(!existsSync(path.join(fakeGhDirectory, 'patch.json')));
         });
 
-        it('review too long for the PR description', () => {
-            const result = post('Description', {blockingCount: 1, suggestionCount: 0, review: 'x'.repeat(70000)});
+        it('description and review too long for the PR description together', () => {
+            const description = '€'.repeat(50000);
+            const result = post(description, {blockingCount: 1, suggestionCount: 0, review: 'x'.repeat(70000)});
 
             assert.equal(result.status, 0, result.stderr);
             const body = patchedBody();
+            assert.ok(body.startsWith(`${description}\n\n${START}`));
             assert.ok(body.length <= 65536, `body has ${body.length} characters`);
             assert.match(body, /The review was cut short to fit the PR description/);
             assert.ok(body.endsWith(`</details>\n${END}`));

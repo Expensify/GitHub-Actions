@@ -38,6 +38,12 @@ readonly READ_TOKEN="${READ_TOKEN:-${GH_TOKEN}}"
 readonly MAX_ISSUES=5
 readonly MAX_ISSUE_BYTES=200000
 
+# Large values go to jq through files, never as arguments: Linux rejects any single argument over 128 KB,
+# which one big patch or a long multibyte description can pass.
+WORK_DIR=$(mktemp -d)
+readonly WORK_DIR
+trap 'rm -rf "$WORK_DIR"' EXIT
+
 mkdir -p "$OUTPUT_DIR"
 
 PULL=$(gh api "/repos/$REPO/pulls/$PR_NUMBER")
@@ -62,7 +68,8 @@ if [[ -n "$PREVIOUS_SHA" && "$PREVIOUS_SHA" == "$HEAD_SHA" ]]; then
     exit 0
 fi
 
-jq -r --arg body "$HUMAN_BODY" '
+printf '%s' "$HUMAN_BODY" > "$WORK_DIR/body.md"
+jq -r --rawfile body "$WORK_DIR/body.md" '
     "# \(.title)\n",
     "- URL: \(.html_url)",
     "- Author: @\(.user.login)",
@@ -74,6 +81,7 @@ jq -r --arg body "$HUMAN_BODY" '
 
 FILES=$(gh api --paginate "/repos/$REPO/pulls/$PR_NUMBER/files" --jq '.[] | {filename, status, additions, deletions, patch}' | jq -s '.')
 readonly FILES
+printf '%s' "$FILES" > "$WORK_DIR/files.json"
 jq -r '.[] | "- \(.status) `\(.filename)` (+\(.additions) -\(.deletions))"' <<< "$FILES" > "$OUTPUT_DIR/changed-files.md"
 jq -r '.[] | select(.status != "removed") | .filename' <<< "$FILES" > "$OUTPUT_DIR/head-files.txt"
 
@@ -166,8 +174,8 @@ fi
     echo
     echo "## Patches to files this PR changes"
     echo
-    jq -r --argjson prFiles "$FILES" '
-        ($prFiles | map(.filename)) as $names
+    jq -r --slurpfile prFiles "$WORK_DIR/files.json" '
+        ($prFiles[0] | map(.filename)) as $names
         | .files[]
         | select(.filename as $name | $names | index($name))
         | "diff --git a/\(.filename) b/\(.filename)\n\(.patch // "(patch not available from GitHub, read the file at the PR head)")"
