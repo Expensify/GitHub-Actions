@@ -36,7 +36,7 @@ jobs:
           - {os: blacksmith-2vcpu-ubuntu-2404-arm, distribution: microsoft, java: '21'}
           - {os: blacksmith-2vcpu-ubuntu-2404-arm, distribution: oracle, java: '25'}
           - {os: blacksmith-2vcpu-ubuntu-2404-arm, distribution: semeru, java: '17'}
-          - {os: macos-15, distribution: temurin, java: '21'}
+          - {os: blacksmith-6vcpu-macos-27, distribution: temurin, java: '21'}
     steps:
       - name: Checkout
         # v6.0.3
