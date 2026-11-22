@@ -179,6 +179,71 @@ jobs:
             assert.deepEqual(getJobLabels(workflow), [['fallback', ['ubuntu-latest']]]);
         });
 
+        it('leaves out matrix values that every combination excludes, unless an include entry adds them back', () => {
+            const workflow = `on: push
+jobs:
+  excluded:
+    runs-on: \${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [blacksmith-2vcpu-ubuntu-2404, ubuntu-latest]
+        exclude:
+          - os: ubuntu-latest
+  partlyExcluded:
+    runs-on: \${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [blacksmith-2vcpu-ubuntu-2404, ubuntu-latest]
+        node: [20, 22]
+        exclude:
+          - os: ubuntu-latest
+            node: 20
+  addedBack:
+    runs-on: \${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [blacksmith-2vcpu-ubuntu-2404, windows-latest]
+        exclude:
+          - os: windows-latest
+        include:
+          - os: windows-latest
+`;
+            assert.deepEqual(getJobLabels(workflow), [
+                ['partlyExcluded', ['ubuntu-latest']],
+                ['addedBack', ['windows-latest']],
+            ]);
+        });
+
+        it('keeps a fallback it can read when building a runner name around a value it cannot read', () => {
+            const workflow = `on: push
+jobs:
+  fallback:
+    runs-on: \${{ vars.OS || 'ubuntu' }}-latest
+`;
+            assert.deepEqual(getJobLabels(workflow), [['fallback', ['ubuntu-latest']]]);
+        });
+
+        it('only treats a label list as Blacksmith when its Blacksmith label is fully known', () => {
+            const workflow = `on: push
+jobs:
+  partlyKnown:
+    runs-on: ["\${{ vars.RUNNER || 'blacksmith-2vcpu-ubuntu-2404' }}", ubuntu-latest]
+`;
+            assert.deepEqual(getJobLabels(workflow), [['partlyKnown', ['ubuntu-latest']]]);
+        });
+
+        it('uses unquoted numbers in the matrix as text, like Actions does', () => {
+            const workflow = `on: push
+jobs:
+  numeric:
+    runs-on: ubuntu-\${{ matrix.version }}
+    strategy:
+      matrix:
+        version: [24.04]
+`;
+            assert.deepEqual(getJobLabels(workflow), [['numeric', ['ubuntu-24.04']]]);
+        });
+
         it('marks jobs with an exemption comment on or above the runs-on line', () => {
             const workflow = `on: push
 jobs:
@@ -238,6 +303,26 @@ jobs:
             assert.deepEqual(
                 report.preExisting.map(({job}) => job),
                 ['lint'],
+            );
+        });
+
+        it('reports a job as a violation when the PR removes the exclusion that kept it off a hosted runner', () => {
+            const baseSource = `on: push
+jobs:
+  build:
+    runs-on: \${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [blacksmith-2vcpu-ubuntu-2404, ubuntu-latest]
+        exclude:
+          - os: ubuntu-latest
+`;
+            const headSource = baseSource.replace(/\n {8}exclude:\n {10}- os: ubuntu-latest\n/, '\n');
+            const report = ValidateBlacksmithRunners.evaluateChangedWorkflows([{path: '.github/workflows/build.yml', baseSource, headSource}]);
+
+            assert.deepEqual(
+                report.violations.map(({job, labels}) => [job, labels]),
+                [['build', ['ubuntu-latest']]],
             );
         });
 

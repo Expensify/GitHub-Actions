@@ -24,6 +24,10 @@ const WORKFLOW_PATH_PATTERN = /^\.github\/workflows\/[^/]+\.ya?ml$/;
 // combination of their values. Past this many, the string is treated as unknown instead of listing them all.
 const MAX_RESOLVED_RUNNER_NAMES = 100;
 
+// GitHub runs at most 256 jobs from one matrix, so a real workflow never comes close to this many combinations before
+// exclusions. Past it, exclusions aren't applied, and every value of an axis counts as possible.
+const MAX_MATRIX_COMBINATIONS = 4096;
+
 const EXPRESSION_PATTERN = /\$\{\{([\s\S]*?)\}\}/g;
 
 type RunnerFinding = {
@@ -126,38 +130,102 @@ function isWrappedInParentheses(expression: string): boolean {
     return depth === 0;
 }
 
+function isSameValue(first: unknown, second: unknown): boolean {
+    return JSON.stringify(first) === JSON.stringify(second);
+}
+
 /**
- * Returns the string values a `matrix.*` or `inputs.*` reference can have, following any property path like
+ * Returns a value as the text Actions puts in a runner name, so an unquoted `24.04` in the matrix becomes `"24.04"`.
+ * Returns null for values that can't be read, like objects or another expression.
+ */
+function toRunnerText(value: unknown): string | null {
+    if (typeof value === 'string') {
+        return value.includes('${{') ? null : value;
+    }
+    if (typeof value === 'number' || typeof value === 'boolean') {
+        return String(value);
+    }
+    return null;
+}
+
+/**
+ * Returns the values a matrix key has across the jobs the matrix creates: every combination of the axes, minus the
+ * combinations `exclude` removes, plus the entries `include` adds. Exclusions are applied before inclusions, like
+ * GitHub does, so an `include` entry can add back a value that was excluded.
+ */
+function getMatrixValues(matrix: Record<string, unknown>, key: string): {values: unknown[]; isComplete: boolean} {
+    const axes: Array<[string, unknown[]]> = [];
+    for (const [axis, axisValues] of Object.entries(matrix)) {
+        if (axis !== 'include' && axis !== 'exclude' && Array.isArray(axisValues)) {
+            const values: unknown[] = [];
+            axes.push([axis, values.concat(axisValues)]);
+        }
+    }
+
+    const includes = Array.isArray(matrix.include) ? matrix.include.filter(isRecord) : [];
+    const includedValues = includes.filter((combination) => key in combination).map((combination) => combination[key]);
+
+    // An axis or `include` set by an expression, like `fromJSON()`, has values we can't read
+    const isKeyAnExpression = key in matrix && !Array.isArray(matrix[key]);
+    const isIncludeAnExpression = 'include' in matrix && !Array.isArray(matrix.include);
+    if (isKeyAnExpression || isIncludeAnExpression) {
+        return {values: includedValues, isComplete: false};
+    }
+
+    const combinationCount = axes.reduce((count, [, axisValues]) => count * axisValues.length, 1);
+    if (combinationCount > MAX_MATRIX_COMBINATIONS) {
+        return {values: [...(axes.find(([axis]) => axis === key)?.[1] ?? []), ...includedValues], isComplete: true};
+    }
+
+    let combinations: Array<Record<string, unknown>> = [{}];
+    for (const [axis, axisValues] of axes) {
+        combinations = combinations.flatMap((combination) => axisValues.map((value) => ({...combination, [axis]: value})));
+    }
+
+    // An exclusion removes every combination it matches, even when it only names some of the axes
+    const exclusions = Array.isArray(matrix.exclude) ? matrix.exclude.filter(isRecord).filter((exclusion) => Object.keys(exclusion).length > 0) : [];
+    const remainingCombinations = combinations.filter(
+        (combination) => !exclusions.some((exclusion) => Object.entries(exclusion).every(([axis, value]) => axis in combination && isSameValue(combination[axis], value))),
+    );
+
+    const combinationValues = remainingCombinations.filter((combination) => key in combination).map((combination) => combination[key]);
+    return {values: [...combinationValues, ...includedValues], isComplete: true};
+}
+
+/**
+ * Returns the values a `matrix.*` or `inputs.*` reference can have, following any property path like
  * `matrix.config.runner` into object values. Only an input's default is known, since callers can pass any value.
  */
 function resolveReference(reference: string, {job, workflow}: JobContext): ResolvedValues {
     const [context, name, ...propertyPath] = reference.split('.');
     let candidates: unknown[] = [];
+    let areCandidatesComplete = true;
 
     if (context === 'matrix') {
         const strategy = isRecord(job.strategy) ? job.strategy : {};
-        const matrix = isRecord(strategy.matrix) ? strategy.matrix : {};
-        // concat() adds each value of a list axis, or the single value of a scalar axis
-        candidates = candidates.concat(matrix[name]);
-        const matrixIncludes = Array.isArray(matrix.include) ? matrix.include.filter(isRecord) : [];
-        candidates.push(...matrixIncludes.filter((combination) => name in combination).map((combination) => combination[name]));
+        if (!isRecord(strategy.matrix)) {
+            return {values: [], isComplete: false};
+        }
+        const matrixValues = getMatrixValues(strategy.matrix, name);
+        candidates = matrixValues.values;
+        areCandidatesComplete = matrixValues.isComplete;
     } else if (context === 'inputs' && propertyPath.length === 0) {
         const triggers = isRecord(workflow.on) ? workflow.on : {};
         for (const trigger of ['workflow_call', 'workflow_dispatch']) {
             const triggerConfig = isRecord(triggers[trigger]) ? triggers[trigger] : {};
             const inputs = isRecord(triggerConfig.inputs) ? triggerConfig.inputs : {};
             const input = isRecord(inputs[name]) ? inputs[name] : {};
-            candidates.push(input.default);
+            if (input.default !== undefined) {
+                candidates.push(input.default);
+            }
         }
     } else {
         return {values: [], isComplete: false};
     }
 
-    const resolvedCandidates = candidates
-        .filter((candidate) => candidate !== undefined)
-        .map((candidate) => propertyPath.reduce<unknown>((value, property) => (isRecord(value) ? value[property] : undefined), candidate));
-    const values = resolvedCandidates.filter((value): value is string => typeof value === 'string' && !value.includes('${{'));
-    return {values, isComplete: values.length > 0 && values.length === resolvedCandidates.length};
+    const resolvedCandidates = candidates.map((candidate) => propertyPath.reduce<unknown>((value, property) => (isRecord(value) ? value[property] : undefined), candidate));
+    const values = resolvedCandidates.map(toRunnerText).filter((value): value is string => value !== null);
+    return {values, isComplete: areCandidatesComplete && values.length > 0 && values.length === resolvedCandidates.length};
 }
 
 /**
@@ -198,40 +266,40 @@ function resolveExpression(expression: string, context: JobContext): ResolvedVal
 /**
  * Returns the runner names a `runs-on` string can resolve to. A string made only of one expression resolves to that
  * expression's values. A string mixing text and expressions, like `blacksmith-${{ matrix.size }}-ubuntu-2404`, is
- * built out into full names, so the pieces of a name are never checked as names of their own.
+ * built out into full names, so the pieces of a name are never checked as names of their own. Values we can read are
+ * always used, so a fallback like `${{ vars.OS || 'ubuntu' }}-latest` still gives `ubuntu-latest`.
  */
-function resolveRunnerName(runsOn: string, context: JobContext): string[] {
+function resolveRunnerName(runsOn: string, context: JobContext): ResolvedValues {
     const expressions = [...runsOn.matchAll(EXPRESSION_PATTERN)];
     if (expressions.length === 0) {
-        return [runsOn];
+        return {values: [runsOn], isComplete: true};
     }
 
     const onlyExpression = expressions.at(0);
     if (expressions.length === 1 && onlyExpression?.[0] === runsOn.trim()) {
-        return resolveExpression(onlyExpression[1], context).values;
+        return resolveExpression(onlyExpression[1], context);
     }
 
     // Whatever the expressions resolve to, a name with Blacksmith's prefix runs on Blacksmith
     if (runsOn.startsWith(BLACKSMITH_RUNNER_PREFIX)) {
-        return [runsOn];
+        return {values: [runsOn], isComplete: true};
     }
 
     let runnerNames = [''];
+    let isComplete = true;
     let textStart = 0;
     for (const expression of expressions) {
         const resolved = resolveExpression(expression[1], context);
-        if (!resolved.isComplete) {
-            return [];
-        }
+        isComplete &&= resolved.isComplete;
         const textBefore = runsOn.slice(textStart, expression.index);
         runnerNames = runnerNames.flatMap((runnerName) => resolved.values.map((value) => `${runnerName}${textBefore}${value}`));
         if (runnerNames.length > MAX_RESOLVED_RUNNER_NAMES) {
-            return [];
+            return {values: [], isComplete: false};
         }
         textStart = expression.index + expression[0].length;
     }
 
-    return runnerNames.map((runnerName) => `${runnerName}${runsOn.slice(textStart)}`);
+    return {values: runnerNames.map((runnerName) => `${runnerName}${runsOn.slice(textStart)}`), isComplete};
 }
 
 /**
@@ -239,7 +307,7 @@ function resolveRunnerName(runsOn: string, context: JobContext): string[] {
  * that a runner must all have, a `group`/`labels` map, or an expression that picks a name from the matrix, the
  * workflow inputs, or literals in the expression.
  */
-function getRunnerLabels(runsOn: unknown, context: JobContext): string[] {
+function getRunnerLabels(runsOn: unknown, context: JobContext): ResolvedValues {
     if (typeof runsOn === 'string') {
         return resolveRunnerName(runsOn, context);
     }
@@ -247,19 +315,21 @@ function getRunnerLabels(runsOn: unknown, context: JobContext): string[] {
     if (Array.isArray(runsOn)) {
         // A runner must have every label in the list, so a list that includes `self-hosted` never runs on a GitHub-hosted runner
         if (runsOn.includes(SELF_HOSTED_RUNNER_LABEL)) {
-            return [];
+            return {values: [], isComplete: true};
         }
 
-        // For the same reason, one label that can only be Blacksmith makes the whole runner Blacksmith, like `[blacksmith-2vcpu-ubuntu-2404, Linux, X64]`
+        // For the same reason, one label that can only be Blacksmith makes the whole runner Blacksmith, like
+        // `[blacksmith-2vcpu-ubuntu-2404, Linux, X64]`. That label must be fully known, since a value we can't read
+        // could be a GitHub-hosted runner.
         const labelsByElement = runsOn.map((label) => getRunnerLabels(label, context));
-        if (labelsByElement.some((labels) => labels.length > 0 && labels.every(isAllowedRunnerLabel))) {
-            return [];
+        if (labelsByElement.some(({values, isComplete}) => isComplete && values.length > 0 && values.every(isAllowedRunnerLabel))) {
+            return {values: [], isComplete: true};
         }
-        return labelsByElement.flat();
+        return {values: labelsByElement.flatMap(({values}) => values), isComplete: labelsByElement.every(({isComplete}) => isComplete)};
     }
 
     if (!isRecord(runsOn)) {
-        return [];
+        return {values: [], isComplete: false};
     }
 
     if ('labels' in runsOn) {
@@ -267,7 +337,7 @@ function getRunnerLabels(runsOn: unknown, context: JobContext): string[] {
     }
 
     // A runner group without labels is a GitHub larger runner group or a self-hosted group, and either one needs a person to check it
-    return typeof runsOn.group === 'string' ? [`group: ${runsOn.group}`] : [];
+    return typeof runsOn.group === 'string' ? {values: [`group: ${runsOn.group}`], isComplete: true} : {values: [], isComplete: false};
 }
 
 /**
@@ -293,7 +363,7 @@ function findNonBlacksmithJobs(source: string): RunnerFinding[] {
             continue;
         }
 
-        const labels = [...new Set(getRunnerLabels(job['runs-on'], {job, workflow}))].filter((label) => !isAllowedRunnerLabel(label));
+        const labels = [...new Set(getRunnerLabels(job['runs-on'], {job, workflow}).values)].filter((label) => !isAllowedRunnerLabel(label));
         if (labels.length === 0) {
             continue;
         }
