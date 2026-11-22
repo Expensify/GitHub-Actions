@@ -104,6 +104,81 @@ jobs:
             assert.deepEqual(getJobLabels(workflow), [['largerRunner', ['group: ubuntu-runners']]]);
         });
 
+        it('does not read matrix values or inputs that an expression only compares as runner labels', () => {
+            const workflow = `on:
+  workflow_call:
+    inputs:
+      platform:
+        type: string
+        default: ios
+jobs:
+  matrixCondition:
+    runs-on: \${{ matrix.arch == 'arm' && 'blacksmith-2vcpu-ubuntu-2404-arm' || 'blacksmith-2vcpu-ubuntu-2404' }}
+    strategy:
+      matrix:
+        arch: [arm, x64]
+  inputCondition:
+    runs-on: \${{ (inputs.platform == 'ios') && 'blacksmith-12vcpu-macos-27' || 'blacksmith-4vcpu-ubuntu-2404' }}
+`;
+            assert.deepEqual(getJobLabels(workflow), []);
+        });
+
+        it('follows a property path into object values in the matrix', () => {
+            const workflow = `on: push
+jobs:
+  build:
+    runs-on: \${{ matrix.config.runner }}
+    strategy:
+      matrix:
+        config:
+          - runner: ubuntu-latest
+          - runner: blacksmith-4vcpu-ubuntu-2404
+        include:
+          - config:
+              runner: macos-15
+`;
+            assert.deepEqual(getJobLabels(workflow), [['build', ['ubuntu-latest', 'macos-15']]]);
+        });
+
+        it('checks runner names built from text and expressions as whole names', () => {
+            const workflow = `on: push
+jobs:
+  blacksmithSizes:
+    runs-on: blacksmith-\${{ matrix.size }}-ubuntu-2404
+    strategy:
+      matrix:
+        size: [2vcpu, 4vcpu]
+  hostedVersions:
+    runs-on: ubuntu-\${{ matrix.version }}
+    strategy:
+      matrix:
+        version: [latest, '24.04']
+  unknownSuffix:
+    runs-on: ubuntu-\${{ vars.VERSION }}
+`;
+            assert.deepEqual(getJobLabels(workflow), [['hostedVersions', ['ubuntu-latest', 'ubuntu-24.04']]]);
+        });
+
+        it('treats a label list with a Blacksmith label as a Blacksmith runner', () => {
+            const workflow = `on: push
+jobs:
+  blacksmith:
+    runs-on: [blacksmith-2vcpu-ubuntu-2404, Linux, X64]
+  hosted:
+    runs-on: [ubuntu-latest, Linux]
+`;
+            assert.deepEqual(getJobLabels(workflow), [['hosted', ['ubuntu-latest', 'Linux']]]);
+        });
+
+        it('reports a known fallback even when another value cannot be read', () => {
+            const workflow = `on: push
+jobs:
+  fallback:
+    runs-on: \${{ vars.RUNNER || 'ubuntu-latest' }}
+`;
+            assert.deepEqual(getJobLabels(workflow), [['fallback', ['ubuntu-latest']]]);
+        });
+
         it('marks jobs with an exemption comment on or above the runs-on line', () => {
             const workflow = `on: push
 jobs:
