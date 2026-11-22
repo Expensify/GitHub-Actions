@@ -55,8 +55,9 @@ This workflow requires a GitHub App token with read access for repository metada
 
 Org-level ruleset workflow that checks every pull request's workflows and actions with schema validation, actionlint, and checks that action references are immutable.
 
-Its `validateBlacksmithRunners` job checks that GitHub Actions jobs run on [Blacksmith](https://docs.blacksmith.sh/introduction/quickstart) runners (see https://github.com/Expensify/Expensify/issues/706870). It only looks at workflows in `.github/workflows` that the pull request adds or changes, and reads them from the checkout, so it needs no extra token.
+Its `validateBlacksmithRunners` job checks that GitHub Actions jobs run on [Blacksmith](https://docs.blacksmith.sh/introduction/quickstart) runners (see https://github.com/Expensify/Expensify/issues/706870). It only looks at workflows in `.github/workflows` that the pull request adds or changes, and reads them from the checkout.
 
+- Rulesets ignore `paths` filters, so a small `checkForWorkflowChanges` job first lists the pull request's files through the API with `pull-requests: read`. When no workflow was added or changed, `validateBlacksmithRunners` is skipped without checking out the repository. If the files can't be listed, the check runs anyway.
 - It fails when the pull request adds a job, or changes a job's runner, so that the job can run on a runner other than Blacksmith. Labels starting with `blacksmith-` and `self-hosted` runners are allowed.
 - Jobs that already ran on the same runner before the pull request get a warning annotation instead, so editing an old workflow isn't blocked by jobs the pull request didn't change.
 - It follows `runs-on` expressions into matrix values, workflow input defaults, and the labels a conditional expression can return. It skips values it can't read, like `vars` or `fromJSON()`.

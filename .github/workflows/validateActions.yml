@@ -69,10 +69,44 @@ jobs:
         if: failure()
         run: echo "::error::The validateImmutableActionRefs check failed! To run it locally, go to the root of ${{ steps.repo.outputs.NAME }} and run <path_to_github_actions_repo>/scripts/validateImmutableActionRefs.sh"
 
-  validateBlacksmithRunners:
+  # Rulesets ignore `paths` filters, so this job lists the PR's files through the API. That way, validateBlacksmithRunners
+  # is skipped without checking out the repo or installing anything when no workflow changed.
+  checkForWorkflowChanges:
     runs-on: blacksmith-2vcpu-ubuntu-2404-arm
     # Unlike the jobs above, this one runs for MelvinBot, since MelvinBot writes PRs that change workflows
     if: ${{ !contains(github.actor, '[bot]') && github.actor != 'botify' && github.actor != 'OSBotify' }}
+    permissions:
+      pull-requests: read
+    outputs:
+      HAS_WORKFLOW_CHANGES: ${{ steps.changes.outputs.HAS_WORKFLOW_CHANGES }}
+    steps:
+      - name: Check whether the PR adds or changes a workflow
+        id: changes
+        run: |
+          # Deleted workflows are left out because there is nothing left to check
+          if ! CHANGED_WORKFLOWS="$(gh api --paginate "repos/$REPO/pulls/$PR_NUMBER/files" --jq '.[] | select(.status != "removed") | .filename | select(test("^\\.github/workflows/[^/]+\\.ya?ml$"))')"; then
+            echo "::warning::Could not list the PR's files, so the Blacksmith runner check will run anyway"
+            echo "HAS_WORKFLOW_CHANGES=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [[ -n "$CHANGED_WORKFLOWS" ]]; then
+            echo "Changed workflows:"
+            echo "$CHANGED_WORKFLOWS"
+            echo "HAS_WORKFLOW_CHANGES=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No workflows changed, so the Blacksmith runner check is skipped"
+            echo "HAS_WORKFLOW_CHANGES=false" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+
+  validateBlacksmithRunners:
+    runs-on: blacksmith-2vcpu-ubuntu-2404-arm
+    needs: checkForWorkflowChanges
+    if: ${{ needs.checkForWorkflowChanges.outputs.HAS_WORKFLOW_CHANGES == 'true' }}
     # Failures show on the PR without blocking it while repos move to Blacksmith (https://github.com/Expensify/Expensify/issues/706870).
     # Remove this line to make the check block merging.
     continue-on-error: true
