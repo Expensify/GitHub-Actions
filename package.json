@@ -11,6 +11,7 @@
     "lint": "eslint .",
     "typecheck": "tsgo --noEmit -p tsconfig.json",
     "verify-peer-review": "tsx scripts/verifyPeerReview.ts",
+    "validate-blacksmith-runners": "tsx scripts/validateBlacksmithRunners.ts",
     "test": "tsx --test tests/*.test.ts"
   },
   "dependencies": {
@@ -21,7 +22,8 @@
     "@octokit/request-error": "^7.0.0",
     "@octokit/rest": "^22.0.1",
     "expensify-common": "2.0.232",
-    "tsx": "^4.22.5"
+    "tsx": "^4.22.5",
+    "yaml": "^2.9.1"
   },
   "devDependencies": {
     "@types/node": "^25.9.4",
@@ -29,7 +31,6 @@
     "eslint": "^9.39.4",
     "eslint-config-expensify": "^4.0.6",
     "lefthook": "2.1.9",
-    "oxfmt": "^0.74.0",
-    "yaml": "^2.9.1"
+    "oxfmt": "^0.74.0"
   }
 }

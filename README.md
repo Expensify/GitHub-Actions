@@ -51,6 +51,20 @@ This workflow requires a GitHub App token with read access for repository metada
 - If branch protection cannot be read — missing permissions, an API error, an unknown branch, or a response the script can't interpret — the check fails rather than assuming a review count.
 - Co-authors of bot-authored commits count as authors. Each `Co-authored-by` email is resolved to a login from the `users.noreply.github.com` pattern, or otherwise by asking GitHub which user has verified that email. The check fails if an email can't be resolved either way.
 
+### `validateActions.yml`
+
+Org-level ruleset workflow that checks every pull request's workflows and actions with schema validation, actionlint, and checks that action references are immutable.
+
+Its `validateBlacksmithRunners` job checks that GitHub Actions jobs run on [Blacksmith](https://docs.blacksmith.sh/introduction/quickstart) runners (see https://github.com/Expensify/Expensify/issues/706870). It only looks at workflows in `.github/workflows` that the pull request adds or changes, and reads them from the checkout, so it needs no extra token.
+
+- It fails when the pull request adds a job, or changes a job's runner, so that the job can run on a runner other than Blacksmith. Labels starting with `blacksmith-` and `self-hosted` runners are allowed.
+- Jobs that already ran on the same runner before the pull request get a warning annotation instead, so editing an old workflow isn't blocked by jobs the pull request didn't change.
+- It follows `runs-on` expressions into matrix values, workflow input defaults, and the labels a conditional expression can return. It skips values it can't read, like `vars` or `fromJSON()`.
+- To let a job keep its runner, add a `# blacksmith-exempt: <reason>` comment on its `runs-on` line or the line above it.
+- The job uses `continue-on-error`, so a failure shows on the pull request without blocking it. Remove `continue-on-error` to make it block merging.
+
+To run it locally, run `npm run validate-blacksmith-runners -- --repo-root <path_to_repo> --base-sha <base_commit>` from this repository.
+
 ### `secretScan.yml`
 
 Scans a repository for committed credentials using [TruffleHog](https://github.com/trufflesecurity/trufflehog).
