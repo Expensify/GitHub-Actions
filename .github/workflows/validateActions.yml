@@ -93,16 +93,25 @@ jobs:
         run: npm ci --omit=dev
         working-directory: GitHub-Actions
 
-      # The checkout is shallow, so fetch the base commit to diff the PR's workflow changes against it
+      # The checkout is the PR's merge commit, and its first parent is the base it was merged onto. That can be newer than
+      # github.event.pull_request.base.sha if the base branch moved, so diff against the parent to only see this PR's changes.
+      # The checkout is shallow, so the parent's SHA is read from the merge commit and then fetched.
       - name: Fetch the pull request base commit
-        run: git -C "$REPO_NAME" fetch --no-tags --depth=1 origin "$BASE_SHA"
+        id: base
+        run: |
+          BASE_SHA="$(git -C "$REPO_NAME" cat-file -p HEAD | awk '/^parent /{print $2; exit}')"
+          if [[ -z "$BASE_SHA" ]]; then
+            echo "::error::Could not find the parent of the checked out merge commit"
+            exit 1
+          fi
+          git -C "$REPO_NAME" fetch --no-tags --depth=1 origin "$BASE_SHA"
+          echo "SHA=$BASE_SHA" >> "$GITHUB_OUTPUT"
         env:
           REPO_NAME: ${{ steps.repo.outputs.NAME }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
 
       - name: Validate that workflows use Blacksmith runners
         run: npm run validate-blacksmith-runners -- --repo-root "$GITHUB_WORKSPACE/$REPO_NAME" --base-sha "$BASE_SHA"
         working-directory: GitHub-Actions
         env:
           REPO_NAME: ${{ steps.repo.outputs.NAME }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_SHA: ${{ steps.base.outputs.SHA }}
