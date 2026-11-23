@@ -77,26 +77,42 @@ type ResolvedValues = {
 };
 
 /**
+ * Yields each character of an expression that isn't inside a quoted string, with its parenthesis depth. Both `(` and
+ * its matching `)` get the depth outside them. A quote inside a string is written as two quotes, which ends the string
+ * and starts it again, so it needs no special case.
+ */
+function* getUnquotedCharacters(expression: string): Generator<{index: number; character: string; depth: number}> {
+    let depth = 0;
+    let isInQuote = false;
+    for (let index = 0; index < expression.length; index++) {
+        const character = expression.charAt(index);
+        if (character === "'") {
+            isInQuote = !isInQuote;
+            continue;
+        }
+        if (isInQuote) {
+            continue;
+        }
+        if (character === ')') {
+            depth--;
+        }
+        yield {index, character, depth};
+        if (character === '(') {
+            depth++;
+        }
+    }
+}
+
+/**
  * Splits an expression on an operator, skipping any operators inside quotes or parentheses.
  */
 function splitOnTopLevelOperator(expression: string, operator: '&&' | '||'): string[] {
     const parts: string[] = [];
-    let depth = 0;
-    let isInQuote = false;
     let partStart = 0;
-    for (let i = 0; i < expression.length; i++) {
-        const character = expression[i];
-        if (character === "'") {
-            // A quote inside a string is written as two quotes, which toggles this twice and leaves it unchanged
-            isInQuote = !isInQuote;
-        } else if (!isInQuote && character === '(') {
-            depth++;
-        } else if (!isInQuote && character === ')') {
-            depth--;
-        } else if (!isInQuote && depth === 0 && expression.startsWith(operator, i)) {
-            parts.push(expression.slice(partStart, i));
-            partStart = i + operator.length;
-            i += operator.length - 1;
+    for (const {index, depth} of getUnquotedCharacters(expression)) {
+        if (depth === 0 && index >= partStart && expression.startsWith(operator, index)) {
+            parts.push(expression.slice(partStart, index));
+            partStart = index + operator.length;
         }
     }
     parts.push(expression.slice(partStart));
@@ -107,27 +123,11 @@ function splitOnTopLevelOperator(expression: string, operator: '&&' | '||'): str
  * Returns true if the whole expression is wrapped in one pair of parentheses, like `(a || b)` but not `(a) || (b)`.
  */
 function isWrappedInParentheses(expression: string): boolean {
-    if (!expression.startsWith('(') || !expression.endsWith(')')) {
+    if (!expression.startsWith('(')) {
         return false;
     }
-
-    let depth = 0;
-    let isInQuote = false;
-    for (let i = 0; i < expression.length; i++) {
-        const character = expression[i];
-        if (character === "'") {
-            isInQuote = !isInQuote;
-        } else if (!isInQuote && character === '(') {
-            depth++;
-        } else if (!isInQuote && character === ')') {
-            depth--;
-            // The opening parenthesis closed before the end, so it doesn't wrap the whole expression
-            if (depth === 0 && i < expression.length - 1) {
-                return false;
-            }
-        }
-    }
-    return depth === 0;
+    const outerClosingIndexes = [...getUnquotedCharacters(expression)].filter(({character, depth}) => character === ')' && depth === 0).map(({index}) => index);
+    return outerClosingIndexes.length === 1 && outerClosingIndexes.at(0) === expression.length - 1;
 }
 
 function isSameValue(first: unknown, second: unknown): boolean {
@@ -164,7 +164,7 @@ function toRunnerLabels(value: unknown): string[] | null {
         return null;
     }
 
-    const constrainingLabel = labels.find((label) => label === SELF_HOSTED_RUNNER_LABEL || label.startsWith(BLACKSMITH_RUNNER_PREFIX));
+    const constrainingLabel = labels.find(isAllowedRunnerLabel);
     return constrainingLabel === undefined ? labels : [constrainingLabel];
 }
 
@@ -177,10 +177,16 @@ function toRunnerLabels(value: unknown): string[] | null {
  */
 function getMatrixValues(matrix: Record<string, unknown>, key: string): {values: unknown[]; isComplete: boolean} {
     const axes: Array<[string, unknown[]]> = [];
+    const expressionAxisNames: string[] = [];
     for (const [axis, axisValues] of Object.entries(matrix)) {
-        if (axis !== 'include' && axis !== 'exclude' && Array.isArray(axisValues)) {
+        if (axis === 'include' || axis === 'exclude') {
+            continue;
+        }
+        if (Array.isArray(axisValues)) {
             const values: unknown[] = [];
             axes.push([axis, values.concat(axisValues)]);
+        } else {
+            expressionAxisNames.push(axis);
         }
     }
 
@@ -189,7 +195,7 @@ function getMatrixValues(matrix: Record<string, unknown>, key: string): {values:
     const isIncludeComplete = !('include' in matrix) || Array.isArray(matrix.include);
 
     // An axis set by an expression has values we can't read, so only the `include` entries that set it are known
-    if (key in matrix && !Array.isArray(matrix[key])) {
+    if (expressionAxisNames.includes(key)) {
         return {values: includes.filter((entry) => key in entry).map((entry) => entry[key]), isComplete: false};
     }
 
@@ -212,7 +218,6 @@ function getMatrixValues(matrix: Record<string, unknown>, key: string): {values:
     );
 
     const axisNames = new Set(axes.map(([axis]) => axis));
-    const expressionAxisNames = Object.keys(matrix).filter((axis) => axis !== 'include' && axis !== 'exclude' && !Array.isArray(matrix[axis]));
     let isComplete = isIncludeComplete;
     const includedJobs: Array<Record<string, unknown>> = [];
     for (const entry of includes) {
@@ -278,27 +283,19 @@ function resolveReference(reference: string, {job, workflow}: JobContext): Resol
 }
 
 /**
- * Returns true if an expression always evaluates to a value that isn't false or empty. Only a plain value counts, since
- * a condition like `a && b` is false whenever `a` is. `0` and `false` count as possibly falsy, because numbers and
- * booleans from the matrix have already been turned into text by this point.
+ * The values of an expression, and whether it can never be false or empty, which decides whether `a || b` ever uses `b`
  */
-function isNeverFalsy(expression: string, resolved: ResolvedValues): boolean {
-    let plainExpression = expression.trim();
-    while (isWrappedInParentheses(plainExpression)) {
-        plainExpression = plainExpression.slice(1, -1).trim();
-    }
+type ExpressionValues = ResolvedValues & {isNeverFalsy: boolean};
 
-    const isPlainValue = splitOnTopLevelOperator(plainExpression, '&&').length === 1 && splitOnTopLevelOperator(plainExpression, '||').length === 1;
-    const possiblyFalsyTexts = new Set(['', '0', 'false']);
-    return isPlainValue && resolved.isComplete && resolved.values.length > 0 && resolved.values.every((value) => !possiblyFalsyTexts.has(value));
-}
+// Numbers and booleans from the matrix have already been turned into text, so `0` and `false` might have been falsy
+const POSSIBLY_FALSY_TEXTS = new Set(['', '0', 'false']);
 
 /**
  * Returns the string values an expression (the part inside `${{ }}`) can evaluate to. In `a && b || c`, the result is
  * `b` or `c`, because `a` is only returned when it's false or empty, and neither is a usable runner. So conditions like
  * `matrix.arch == 'arm'` are never read as runner labels.
  */
-function resolveExpression(expression: string, context: JobContext): ResolvedValues {
+function resolveExpression(expression: string, context: JobContext): ExpressionValues {
     const trimmedExpression = expression.trim();
 
     const alternatives = splitOnTopLevelOperator(trimmedExpression, '||');
@@ -311,16 +308,17 @@ function resolveExpression(expression: string, context: JobContext): ResolvedVal
             isComplete &&= resolved.isComplete;
 
             // `a || b` only reaches `b` when `a` is false or empty, so nothing after a value that's never either is used
-            if (isNeverFalsy(alternative, resolved)) {
-                break;
+            if (resolved.isNeverFalsy) {
+                return {values, isComplete, isNeverFalsy: true};
             }
         }
-        return {values, isComplete};
+        return {values, isComplete, isNeverFalsy: false};
     }
 
+    // `a && b` is false whenever `a` is, so it can always be falsy
     const conjuncts = splitOnTopLevelOperator(trimmedExpression, '&&');
     if (conjuncts.length > 1) {
-        return resolveExpression(conjuncts.at(-1) ?? '', context);
+        return {...resolveExpression(conjuncts.at(-1) ?? '', context), isNeverFalsy: false};
     }
 
     if (isWrappedInParentheses(trimmedExpression)) {
@@ -329,14 +327,16 @@ function resolveExpression(expression: string, context: JobContext): ResolvedVal
 
     const literal = /^'((?:[^']|'')*)'$/.exec(trimmedExpression);
     if (literal) {
-        return {values: [literal[1].replaceAll("''", "'")], isComplete: true};
+        const value = literal[1].replaceAll("''", "'");
+        return {values: [value], isComplete: true, isNeverFalsy: value !== ''};
     }
 
     if (/^(?:matrix|inputs)(?:\.[\w-]+)+$/.test(trimmedExpression)) {
-        return resolveReference(trimmedExpression, context);
+        const resolved = resolveReference(trimmedExpression, context);
+        return {...resolved, isNeverFalsy: resolved.isComplete && resolved.values.every((value) => !POSSIBLY_FALSY_TEXTS.has(value))};
     }
 
-    return {values: [], isComplete: false};
+    return {values: [], isComplete: false, isNeverFalsy: false};
 }
 
 /**
@@ -389,14 +389,9 @@ function getRunnerLabels(runsOn: unknown, context: JobContext): ResolvedValues {
     }
 
     if (Array.isArray(runsOn)) {
-        // A runner must have every label in the list, so a list that includes `self-hosted` never runs on a GitHub-hosted runner
-        if (runsOn.includes(SELF_HOSTED_RUNNER_LABEL)) {
-            return {values: [], isComplete: true};
-        }
-
-        // For the same reason, one label that can only be Blacksmith makes the whole runner Blacksmith, like
-        // `[blacksmith-2vcpu-ubuntu-2404, Linux, X64]`. That label must be fully known, since a value we can't read
-        // could be a GitHub-hosted runner.
+        // A runner must have every label in the list, so one label that can only be Blacksmith or `self-hosted` decides the
+        // whole runner, like `[blacksmith-2vcpu-ubuntu-2404, Linux, X64]`. That label must be fully known, since a value we
+        // can't read could be a GitHub-hosted runner.
         const labelsByElement = runsOn.map((label) => getRunnerLabels(label, context));
         if (labelsByElement.some(({values, isComplete}) => isComplete && values.length > 0 && values.every(isAllowedRunnerLabel))) {
             return {values: [], isComplete: true};
@@ -472,27 +467,14 @@ function evaluateChangedWorkflows(changedWorkflows: ChangedWorkflow[]): RunnerRe
     const report: RunnerReport = {violations: [], preExisting: [], unparseablePaths: []};
 
     for (const {path: workflowPath, baseSource, headSource} of changedWorkflows) {
-        let headFindings: RunnerFinding[];
-        let baseFindings: RunnerFinding[] = [];
-        try {
-            headFindings = findNonBlacksmithJobs(headSource);
-        } catch (error) {
-            if (error instanceof UnparseableWorkflowError) {
-                report.unparseablePaths.push(workflowPath);
-                continue;
-            }
-            throw error;
+        const headFindings = findNonBlacksmithJobsIfParseable(headSource);
+        if (headFindings === null) {
+            report.unparseablePaths.push(workflowPath);
+            continue;
         }
 
-        try {
-            baseFindings = baseSource === null ? [] : findNonBlacksmithJobs(baseSource);
-        } catch (error) {
-            // If the old version didn't parse, treat every job as new
-            if (!(error instanceof UnparseableWorkflowError)) {
-                throw error;
-            }
-        }
-
+        // If the old version didn't parse, every job counts as new
+        const baseFindings = baseSource === null ? [] : (findNonBlacksmithJobsIfParseable(baseSource) ?? []);
         const baseLabelsByJob = new Map(baseFindings.map((finding) => [finding.job, new Set(finding.labels)]));
         for (const finding of headFindings) {
             if (finding.isExempt) {
@@ -506,6 +488,20 @@ function evaluateChangedWorkflows(changedWorkflows: ChangedWorkflow[]): RunnerRe
     }
 
     return report;
+}
+
+/**
+ * Returns the same jobs as findNonBlacksmithJobs(), or null if the workflow isn't valid YAML.
+ */
+function findNonBlacksmithJobsIfParseable(source: string): RunnerFinding[] | null {
+    try {
+        return findNonBlacksmithJobs(source);
+    } catch (error) {
+        if (error instanceof UnparseableWorkflowError) {
+            return null;
+        }
+        throw error;
+    }
 }
 
 function git(repoRoot: string, args: string[]): string {
