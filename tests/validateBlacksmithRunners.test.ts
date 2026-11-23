@@ -26,6 +26,12 @@ jobs:
     runs-on: windows-latest
 `;
 
+const UNICODE_PATH_WORKFLOW = `on: schedule
+jobs:
+  audit:
+    runs-on: macos-15
+`;
+
 const BLACKSMITH_WORKFLOW = `on: push
 jobs:
   lint:
@@ -244,6 +250,55 @@ jobs:
             assert.deepEqual(getJobLabels(workflow), [['numeric', ['ubuntu-24.04']]]);
         });
 
+        it('still checks the axes when the include list comes from an expression', () => {
+            const workflow = `on: push
+jobs:
+  dynamicInclude:
+    runs-on: \${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        include: \${{ fromJSON(needs.prepare.outputs.extra) }}
+`;
+            assert.deepEqual(getJobLabels(workflow), [['dynamicInclude', ['ubuntu-latest']]]);
+        });
+
+        it('applies include entries in order, so a later entry overrides a key an earlier one added', () => {
+            const workflow = `on: push
+jobs:
+  overridden:
+    runs-on: \${{ matrix.runner }}
+    strategy:
+      matrix:
+        task: [lint, test]
+        include:
+          - runner: ubuntu-latest
+          - runner: blacksmith-2vcpu-ubuntu-2404
+  newJob:
+    runs-on: \${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [blacksmith-2vcpu-ubuntu-2404]
+        include:
+          - os: windows-latest
+`;
+            assert.deepEqual(getJobLabels(workflow), [['newJob', ['windows-latest']]]);
+        });
+
+        it('does not treat an input default as a guaranteed Blacksmith label, since callers can override it', () => {
+            const workflow = `on:
+  workflow_call:
+    inputs:
+      runner:
+        type: string
+        default: blacksmith-2vcpu-ubuntu-2404
+jobs:
+  build:
+    runs-on: ["\${{ inputs.runner }}", ubuntu-latest]
+`;
+            assert.deepEqual(getJobLabels(workflow), [['build', ['ubuntu-latest']]]);
+        });
+
         it('marks jobs with an exemption comment on or above the runs-on line', () => {
             const workflow = `on: push
 jobs:
@@ -326,6 +381,27 @@ jobs:
             );
         });
 
+        it('reports a job as a violation when the PR removes the include entry that moved it to Blacksmith', () => {
+            const baseSource = `on: push
+jobs:
+  build:
+    runs-on: \${{ matrix.runner }}
+    strategy:
+      matrix:
+        task: [lint, test]
+        include:
+          - runner: ubuntu-latest
+          - runner: blacksmith-2vcpu-ubuntu-2404
+`;
+            const headSource = baseSource.replace('\n          - runner: blacksmith-2vcpu-ubuntu-2404', '');
+            const report = ValidateBlacksmithRunners.evaluateChangedWorkflows([{path: '.github/workflows/build.yml', baseSource, headSource}]);
+
+            assert.deepEqual(
+                report.violations.map(({job, labels}) => [job, labels]),
+                [['build', ['ubuntu-latest']]],
+            );
+        });
+
         it('skips exempt jobs and workflows that do not parse', () => {
             const exemptWorkflow = HOSTED_WORKFLOW.replace('runs-on: ubuntu-latest', 'runs-on: ubuntu-latest # blacksmith-exempt: fork-only');
             const report = ValidateBlacksmithRunners.evaluateChangedWorkflows([
@@ -339,7 +415,7 @@ jobs:
     });
 
     describe('getChangedWorkflows', () => {
-        it('returns added, changed, and renamed workflows with their contents before and after, and skips deleted ones', () => {
+        it('returns added, changed, and renamed workflows with their contents before and after, including unusual file names, and skips deleted ones', () => {
             const repoRoot = mkdtempSync(path.join(tmpdir(), 'validateBlacksmithRunners-'));
             const git = (...args: string[]) =>
                 execFileSync('git', ['-C', repoRoot, '-c', 'user.name=Test', '-c', 'user.email=test@example.com', '-c', 'commit.gpgsign=false', ...args], {encoding: 'utf8'}).trim();
@@ -357,6 +433,7 @@ jobs:
 
                 writeWorkflow('changed.yml', HOSTED_WORKFLOW);
                 writeWorkflow('added.yml', WINDOWS_WORKFLOW);
+                writeWorkflow('检查.yml', UNICODE_PATH_WORKFLOW);
                 git('mv', '.github/workflows/renamed.yml', '.github/workflows/moved.yml');
                 git('rm', '--quiet', '.github/workflows/deleted.yml');
                 writeFileSync(path.join(repoRoot, 'README.md'), 'not a workflow');
@@ -367,6 +444,7 @@ jobs:
                     {path: '.github/workflows/added.yml', baseSource: null, headSource: WINDOWS_WORKFLOW},
                     {path: '.github/workflows/changed.yml', baseSource: BLACKSMITH_WORKFLOW, headSource: HOSTED_WORKFLOW},
                     {path: '.github/workflows/moved.yml', baseSource: HOSTED_WORKFLOW, headSource: HOSTED_WORKFLOW},
+                    {path: '.github/workflows/检查.yml', baseSource: null, headSource: UNICODE_PATH_WORKFLOW},
                 ]);
             } finally {
                 rmSync(repoRoot, {recursive: true, force: true});

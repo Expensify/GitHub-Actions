@@ -149,9 +149,11 @@ function toRunnerText(value: unknown): string | null {
 }
 
 /**
- * Returns the values a matrix key has across the jobs the matrix creates: every combination of the axes, minus the
- * combinations `exclude` removes, plus the entries `include` adds. Exclusions are applied before inclusions, like
- * GitHub does, so an `include` entry can add back a value that was excluded.
+ * Returns the values a matrix key has across the jobs the matrix creates, following GitHub's rules
+ * (https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/run-job-variations):
+ *   1. Every combination of the axes becomes a job, and `exclude` removes the ones it matches.
+ *   2. Each `include` entry, in order, is merged into every job where it doesn't change an axis value. It can overwrite
+ *      keys that an earlier entry added. An entry that fits no job becomes a new job of its own.
  */
 function getMatrixValues(matrix: Record<string, unknown>, key: string): {values: unknown[]; isComplete: boolean} {
     const axes: Array<[string, unknown[]]> = [];
@@ -163,33 +165,47 @@ function getMatrixValues(matrix: Record<string, unknown>, key: string): {values:
     }
 
     const includes = Array.isArray(matrix.include) ? matrix.include.filter(isRecord) : [];
-    const includedValues = includes.filter((combination) => key in combination).map((combination) => combination[key]);
+    // The entries of an `include` set by an expression, like `fromJSON()`, can't be read, but the axes still create their jobs
+    const isIncludeComplete = !('include' in matrix) || Array.isArray(matrix.include);
 
-    // An axis or `include` set by an expression, like `fromJSON()`, has values we can't read
-    const isKeyAnExpression = key in matrix && !Array.isArray(matrix[key]);
-    const isIncludeAnExpression = 'include' in matrix && !Array.isArray(matrix.include);
-    if (isKeyAnExpression || isIncludeAnExpression) {
-        return {values: includedValues, isComplete: false};
+    // An axis set by an expression has values we can't read, so only the `include` entries that set it are known
+    if (key in matrix && !Array.isArray(matrix[key])) {
+        return {values: includes.filter((entry) => key in entry).map((entry) => entry[key]), isComplete: false};
     }
 
     const combinationCount = axes.reduce((count, [, axisValues]) => count * axisValues.length, 1);
     if (combinationCount > MAX_MATRIX_COMBINATIONS) {
-        return {values: [...(axes.find(([axis]) => axis === key)?.[1] ?? []), ...includedValues], isComplete: true};
+        const axisValues = axes.find(([axis]) => axis === key)?.[1] ?? [];
+        return {values: [...axisValues, ...includes.filter((entry) => key in entry).map((entry) => entry[key])], isComplete: isIncludeComplete};
     }
 
-    let combinations: Array<Record<string, unknown>> = [{}];
+    // A matrix with only `include` entries has no axis jobs, so each entry becomes its own job
+    let combinations: Array<Record<string, unknown>> = axes.length > 0 ? [{}] : [];
     for (const [axis, axisValues] of axes) {
         combinations = combinations.flatMap((combination) => axisValues.map((value) => ({...combination, [axis]: value})));
     }
 
     // An exclusion removes every combination it matches, even when it only names some of the axes
     const exclusions = Array.isArray(matrix.exclude) ? matrix.exclude.filter(isRecord).filter((exclusion) => Object.keys(exclusion).length > 0) : [];
-    const remainingCombinations = combinations.filter(
+    const axisJobs = combinations.filter(
         (combination) => !exclusions.some((exclusion) => Object.entries(exclusion).every(([axis, value]) => axis in combination && isSameValue(combination[axis], value))),
     );
 
-    const combinationValues = remainingCombinations.filter((combination) => key in combination).map((combination) => combination[key]);
-    return {values: [...combinationValues, ...includedValues], isComplete: true};
+    const axisNames = new Set(axes.map(([axis]) => axis));
+    const includedJobs: Array<Record<string, unknown>> = [];
+    for (const entry of includes) {
+        const jobsToExtend = axisJobs.filter((job) => Object.entries(entry).every(([entryKey, value]) => !axisNames.has(entryKey) || isSameValue(job[entryKey], value)));
+        if (jobsToExtend.length === 0) {
+            includedJobs.push({...entry});
+            continue;
+        }
+        for (const job of jobsToExtend) {
+            Object.assign(job, entry);
+        }
+    }
+
+    const values = [...axisJobs, ...includedJobs].filter((job) => key in job).map((job) => job[key]);
+    return {values, isComplete: isIncludeComplete};
 }
 
 /**
@@ -210,6 +226,8 @@ function resolveReference(reference: string, {job, workflow}: JobContext): Resol
         candidates = matrixValues.values;
         areCandidatesComplete = matrixValues.isComplete;
     } else if (context === 'inputs' && propertyPath.length === 0) {
+        // Callers can pass any value, so the default is only one of the values the input can have
+        areCandidatesComplete = false;
         const triggers = isRecord(workflow.on) ? workflow.on : {};
         for (const trigger of ['workflow_call', 'workflow_dispatch']) {
             const triggerConfig = isRecord(triggers[trigger]) ? triggers[trigger] : {};
@@ -441,17 +459,23 @@ function git(repoRoot: string, args: string[]): string {
  * Deleted workflows are left out because there is nothing left to check.
  */
 function getChangedWorkflows(repoRoot: string, baseSHA: string): ChangedWorkflow[] {
-    const nameStatus = git(repoRoot, ['diff', '--name-status', '--find-renames', '--diff-filter=AMR', baseSHA, 'HEAD', '--', '.github/workflows']);
+    // -z separates fields with NUL and leaves paths as they are, instead of quoting and escaping unusual ones like `检查.yml`
+    const fields = git(repoRoot, ['diff', '-z', '--name-status', '--find-renames', '--diff-filter=AMR', baseSHA, 'HEAD', '--', '.github/workflows']).split('\0');
 
     const changedWorkflows: ChangedWorkflow[] = [];
-    for (const line of nameStatus.split('\n').filter(Boolean)) {
-        const [status, ...paths] = line.split('\t');
-        const headPath = paths.at(-1) ?? '';
+    let fieldIndex = 0;
+    while (fieldIndex < fields.length - 1) {
+        const status = fields.at(fieldIndex) ?? '';
+        // A rename lists the old path and then the new path, and every other status lists one path
+        const isRename = status.startsWith('R');
+        const basePath = fields.at(fieldIndex + 1) ?? '';
+        const headPath = (isRename ? fields.at(fieldIndex + 2) : basePath) ?? '';
+        fieldIndex += isRename ? 3 : 2;
+
         if (!WORKFLOW_PATH_PATTERN.test(headPath)) {
             continue;
         }
 
-        const basePath = status.startsWith('R') ? (paths.at(0) ?? headPath) : headPath;
         changedWorkflows.push({
             path: headPath,
             baseSource: status.startsWith('A') ? null : git(repoRoot, ['show', `${baseSHA}:${basePath}`]),
