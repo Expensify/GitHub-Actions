@@ -54,8 +54,16 @@ type RunnerReport = {
 
 class UnparseableWorkflowError extends Error {}
 
+/**
+ * Returns true for a Blacksmith or self-hosted label. A runner must have every label in a list, so one of these
+ * decides that a job doesn't run on a GitHub-hosted runner, whatever the other labels are.
+ */
+function isRunnerDecidingLabel(label: string): boolean {
+    return label.startsWith(BLACKSMITH_RUNNER_PREFIX) || label === SELF_HOSTED_RUNNER_LABEL;
+}
+
 function isAllowedRunnerLabel(label: string): boolean {
-    return label === '' || label.startsWith(BLACKSMITH_RUNNER_PREFIX) || label === SELF_HOSTED_RUNNER_LABEL;
+    return label === '' || isRunnerDecidingLabel(label);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -135,10 +143,14 @@ function isSameValue(first: unknown, second: unknown): boolean {
 }
 
 /**
- * Returns a value as the text Actions puts in a runner name, so an unquoted `24.04` in the matrix becomes `"24.04"`.
- * Returns null for values that can't be read, like objects or another expression.
+ * Returns a value as the text Actions puts in a runner name, so an unquoted `24.04` in the matrix becomes `"24.04"`,
+ * and a value that isn't set, like a matrix key that some jobs don't have, becomes an empty string. Returns null for
+ * values that can't be read, like objects or another expression.
  */
 function toRunnerText(value: unknown): string | null {
+    if (value === undefined || value === null) {
+        return '';
+    }
     if (typeof value === 'string') {
         return value.includes('${{') ? null : value;
     }
@@ -149,23 +161,24 @@ function toRunnerText(value: unknown): string | null {
 }
 
 /**
- * Returns the runner labels a value from the matrix or an input stands for, or null if it can't be read. A list of
- * labels, like `[self-hosted, macOS]`, is one runner that must have every label, so it's handled like a `runs-on` list.
+ * Returns the runner labels a value from the matrix or an input stands for. A list of labels, like
+ * `[self-hosted, macOS]`, is one runner that must have every label, so it's handled like a `runs-on` list: labels that
+ * can be read are kept, and one Blacksmith or self-hosted label decides the runner even if others can't be read.
  */
-function toRunnerLabels(value: unknown): string[] | null {
+function toRunnerLabels(value: unknown): ResolvedValues {
     if (!Array.isArray(value)) {
         const text = toRunnerText(value);
-        return text === null ? null : [text];
+        return text === null ? {values: [], isComplete: false} : {values: [text], isComplete: true};
     }
 
     const items: unknown[] = [];
-    const labels = items.concat(value).map(toRunnerText);
-    if (!labels.every((label): label is string => label !== null)) {
-        return null;
+    const texts = items.concat(value).map(toRunnerText);
+    const labels = texts.filter((text): text is string => text !== null);
+    const decidingLabel = labels.find(isRunnerDecidingLabel);
+    if (decidingLabel !== undefined) {
+        return {values: [decidingLabel], isComplete: true};
     }
-
-    const constrainingLabel = labels.find(isAllowedRunnerLabel);
-    return constrainingLabel === undefined ? labels : [constrainingLabel];
+    return {values: labels, isComplete: labels.length === texts.length};
 }
 
 /**
@@ -205,8 +218,9 @@ function getMatrixValues(matrix: Record<string, unknown>, key: string): {values:
         return {values: [...axisValues, ...includes.filter((entry) => key in entry).map((entry) => entry[key])], isComplete: isIncludeComplete};
     }
 
-    // A matrix with only `include` entries has no axis jobs, so each entry becomes its own job
-    let combinations: Array<Record<string, unknown>> = axes.length > 0 ? [{}] : [];
+    // A matrix with only `include` entries has no axis jobs, so each entry becomes its own job. An axis set by an
+    // expression still creates jobs, so one job with no known values stands for them.
+    let combinations: Array<Record<string, unknown>> = axes.length > 0 || expressionAxisNames.length > 0 ? [{}] : [];
     for (const [axis, axisValues] of axes) {
         combinations = combinations.flatMap((combination) => axisValues.map((value) => ({...combination, [axis]: value})));
     }
@@ -239,7 +253,8 @@ function getMatrixValues(matrix: Record<string, unknown>, key: string): {values:
         }
     }
 
-    const values = [...axisJobs, ...includedJobs].filter((job) => key in job).map((job) => job[key]);
+    // A job without the key still runs, with an empty value, so it stays in the list
+    const values = [...axisJobs, ...includedJobs].map((job) => job[key]);
     return {values, isComplete};
 }
 
@@ -278,8 +293,10 @@ function resolveReference(reference: string, {job, workflow}: JobContext): Resol
 
     const resolvedCandidates = candidates.map((candidate) => propertyPath.reduce<unknown>((value, property) => (isRecord(value) ? value[property] : undefined), candidate));
     const labelsByCandidate = resolvedCandidates.map(toRunnerLabels);
-    const values = labelsByCandidate.flatMap((labels) => labels ?? []);
-    return {values, isComplete: areCandidatesComplete && values.length > 0 && labelsByCandidate.every((labels) => labels !== null)};
+    return {
+        values: labelsByCandidate.flatMap(({values}) => values),
+        isComplete: areCandidatesComplete && labelsByCandidate.length > 0 && labelsByCandidate.every(({isComplete}) => isComplete),
+    };
 }
 
 /**
@@ -393,7 +410,7 @@ function getRunnerLabels(runsOn: unknown, context: JobContext): ResolvedValues {
         // whole runner, like `[blacksmith-2vcpu-ubuntu-2404, Linux, X64]`. That label must be fully known, since a value we
         // can't read could be a GitHub-hosted runner.
         const labelsByElement = runsOn.map((label) => getRunnerLabels(label, context));
-        if (labelsByElement.some(({values, isComplete}) => isComplete && values.length > 0 && values.every(isAllowedRunnerLabel))) {
+        if (labelsByElement.some(({values, isComplete}) => isComplete && values.length > 0 && values.every(isRunnerDecidingLabel))) {
             return {values: [], isComplete: true};
         }
         return {values: labelsByElement.flatMap(({values}) => values), isComplete: labelsByElement.every(({isComplete}) => isComplete)};

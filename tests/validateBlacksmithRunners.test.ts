@@ -365,6 +365,55 @@ jobs:
             assert.deepEqual(getJobLabels(workflow), [['afterCondition', ['ubuntu-latest']]]);
         });
 
+        it('uses the fallback for jobs that never get the matrix key', () => {
+            const workflow = `on: push
+jobs:
+  build:
+    runs-on: \${{ matrix.runner || 'ubuntu-latest' }}
+    strategy:
+      matrix:
+        task: [lint, test]
+        include:
+          - task: lint
+            runner: blacksmith-2vcpu-ubuntu-2404
+`;
+            assert.deepEqual(getJobLabels(workflow), [['build', ['ubuntu-latest']]]);
+        });
+
+        it('keeps the readable labels of a matrix label list that is partly an expression', () => {
+            const workflow = `on: push
+jobs:
+  partlyHosted:
+    runs-on: \${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - runner: [ubuntu-latest, "\${{ vars.EXTRA_LABEL || 'ubuntu-latest' }}"]
+  partlyBlacksmith:
+    runs-on: \${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - runner: [blacksmith-2vcpu-ubuntu-2404, "\${{ vars.EXTRA_LABEL }}"]
+`;
+            assert.deepEqual(getJobLabels(workflow), [['partlyHosted', ['ubuntu-latest']]]);
+        });
+
+        it('merges include entries into the jobs an axis set by an expression creates', () => {
+            const workflow = `on: push
+jobs:
+  build:
+    runs-on: \${{ matrix.runner }}
+    strategy:
+      matrix:
+        version: \${{ fromJSON(needs.prepare.outputs.versions) }}
+        include:
+          - runner: ubuntu-latest
+          - runner: blacksmith-2vcpu-ubuntu-2404
+`;
+            assert.deepEqual(getJobLabels(workflow), []);
+        });
+
         it('marks jobs with an exemption comment on or above the runs-on line', () => {
             const workflow = `on: push
 jobs:
