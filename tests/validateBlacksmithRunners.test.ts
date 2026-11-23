@@ -32,6 +32,12 @@ jobs:
     runs-on: macos-15
 `;
 
+const DISABLED_WORKFLOW = `on: release
+jobs:
+  ship:
+    runs-on: ubuntu-22.04
+`;
+
 const BLACKSMITH_WORKFLOW = `on: push
 jobs:
   lint:
@@ -299,6 +305,66 @@ jobs:
             assert.deepEqual(getJobLabels(workflow), [['build', ['ubuntu-latest']]]);
         });
 
+        it('keeps include entries that set an axis from an expression as jobs of their own', () => {
+            const workflow = `on: push
+jobs:
+  build:
+    runs-on: \${{ matrix.runner }}
+    strategy:
+      matrix:
+        task: [test]
+        version: \${{ fromJSON(needs.prepare.outputs.versions) }}
+        include:
+          - version: '20'
+            runner: ubuntu-latest
+          - version: '22'
+            runner: blacksmith-2vcpu-ubuntu-2404
+`;
+            assert.deepEqual(getJobLabels(workflow), [['build', ['ubuntu-latest']]]);
+        });
+
+        it('treats a label list from the matrix like a runs-on list', () => {
+            const workflow = `on: push
+jobs:
+  hostedList:
+    runs-on: \${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - runner: [ubuntu-latest]
+  selfHostedList:
+    runs-on: \${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - runner: [self-hosted, macOS]
+  blacksmithList:
+    runs-on: \${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - runner: [blacksmith-2vcpu-ubuntu-2404, Linux]
+`;
+            assert.deepEqual(getJobLabels(workflow), [['hostedList', ['ubuntu-latest']]]);
+        });
+
+        it('leaves out a fallback that is never used because the value before it is never empty', () => {
+            const workflow = `on: push
+jobs:
+  unreachable:
+    runs-on: \${{ matrix.runner || 'ubuntu-latest' }}
+    strategy:
+      matrix:
+        runner: [blacksmith-2vcpu-ubuntu-2404]
+  afterCondition:
+    runs-on: \${{ (matrix.arch == 'arm' && 'blacksmith-2vcpu-ubuntu-2404-arm') || 'ubuntu-latest' }}
+    strategy:
+      matrix:
+        arch: [arm, x64]
+`;
+            assert.deepEqual(getJobLabels(workflow), [['afterCondition', ['ubuntu-latest']]]);
+        });
+
         it('marks jobs with an exemption comment on or above the runs-on line', () => {
             const workflow = `on: push
 jobs:
@@ -415,7 +481,7 @@ jobs:
     });
 
     describe('getChangedWorkflows', () => {
-        it('returns added, changed, and renamed workflows with their contents before and after, including unusual file names, and skips deleted ones', () => {
+        it('returns added, changed, and renamed workflows with their contents before and after, including unusual file names, skips deleted ones, and treats a workflow renamed from a non-workflow path as new', () => {
             const repoRoot = mkdtempSync(path.join(tmpdir(), 'validateBlacksmithRunners-'));
             const git = (...args: string[]) =>
                 execFileSync('git', ['-C', repoRoot, '-c', 'user.name=Test', '-c', 'user.email=test@example.com', '-c', 'commit.gpgsign=false', ...args], {encoding: 'utf8'}).trim();
@@ -427,6 +493,7 @@ jobs:
                 writeWorkflow('changed.yml', BLACKSMITH_WORKFLOW);
                 writeWorkflow('renamed.yml', HOSTED_WORKFLOW);
                 writeWorkflow('deleted.yml', HOSTED_WORKFLOW);
+                writeWorkflow('enabled.yml.disabled', DISABLED_WORKFLOW);
                 git('add', '.');
                 git('commit', '--quiet', '-m', 'base');
                 const baseSHA = git('rev-parse', 'HEAD');
@@ -436,6 +503,7 @@ jobs:
                 writeWorkflow('检查.yml', UNICODE_PATH_WORKFLOW);
                 git('mv', '.github/workflows/renamed.yml', '.github/workflows/moved.yml');
                 git('rm', '--quiet', '.github/workflows/deleted.yml');
+                git('mv', '.github/workflows/enabled.yml.disabled', '.github/workflows/enabled.yml');
                 writeFileSync(path.join(repoRoot, 'README.md'), 'not a workflow');
                 git('add', '.');
                 git('commit', '--quiet', '-m', 'head');
@@ -443,6 +511,7 @@ jobs:
                 assert.deepEqual(ValidateBlacksmithRunners.getChangedWorkflows(repoRoot, baseSHA), [
                     {path: '.github/workflows/added.yml', baseSource: null, headSource: WINDOWS_WORKFLOW},
                     {path: '.github/workflows/changed.yml', baseSource: BLACKSMITH_WORKFLOW, headSource: HOSTED_WORKFLOW},
+                    {path: '.github/workflows/enabled.yml', baseSource: null, headSource: DISABLED_WORKFLOW},
                     {path: '.github/workflows/moved.yml', baseSource: HOSTED_WORKFLOW, headSource: HOSTED_WORKFLOW},
                     {path: '.github/workflows/检查.yml', baseSource: null, headSource: UNICODE_PATH_WORKFLOW},
                 ]);

@@ -149,6 +149,26 @@ function toRunnerText(value: unknown): string | null {
 }
 
 /**
+ * Returns the runner labels a value from the matrix or an input stands for, or null if it can't be read. A list of
+ * labels, like `[self-hosted, macOS]`, is one runner that must have every label, so it's handled like a `runs-on` list.
+ */
+function toRunnerLabels(value: unknown): string[] | null {
+    if (!Array.isArray(value)) {
+        const text = toRunnerText(value);
+        return text === null ? null : [text];
+    }
+
+    const items: unknown[] = [];
+    const labels = items.concat(value).map(toRunnerText);
+    if (!labels.every((label): label is string => label !== null)) {
+        return null;
+    }
+
+    const constrainingLabel = labels.find((label) => label === SELF_HOSTED_RUNNER_LABEL || label.startsWith(BLACKSMITH_RUNNER_PREFIX));
+    return constrainingLabel === undefined ? labels : [constrainingLabel];
+}
+
+/**
  * Returns the values a matrix key has across the jobs the matrix creates, following GitHub's rules
  * (https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/run-job-variations):
  *   1. Every combination of the axes becomes a job, and `exclude` removes the ones it matches.
@@ -192,8 +212,18 @@ function getMatrixValues(matrix: Record<string, unknown>, key: string): {values:
     );
 
     const axisNames = new Set(axes.map(([axis]) => axis));
+    const expressionAxisNames = Object.keys(matrix).filter((axis) => axis !== 'include' && axis !== 'exclude' && !Array.isArray(matrix[axis]));
+    let isComplete = isIncludeComplete;
     const includedJobs: Array<Record<string, unknown>> = [];
     for (const entry of includes) {
+        // An entry that sets an axis whose values come from an expression could extend any job or none, so it's kept as
+        // a job of its own. That way a later entry can't hide its values by overwriting them in a job it may not reach.
+        if (expressionAxisNames.some((axis) => axis in entry)) {
+            includedJobs.push({...entry});
+            isComplete = false;
+            continue;
+        }
+
         const jobsToExtend = axisJobs.filter((job) => Object.entries(entry).every(([entryKey, value]) => !axisNames.has(entryKey) || isSameValue(job[entryKey], value)));
         if (jobsToExtend.length === 0) {
             includedJobs.push({...entry});
@@ -205,7 +235,7 @@ function getMatrixValues(matrix: Record<string, unknown>, key: string): {values:
     }
 
     const values = [...axisJobs, ...includedJobs].filter((job) => key in job).map((job) => job[key]);
-    return {values, isComplete: isIncludeComplete};
+    return {values, isComplete};
 }
 
 /**
@@ -242,8 +272,25 @@ function resolveReference(reference: string, {job, workflow}: JobContext): Resol
     }
 
     const resolvedCandidates = candidates.map((candidate) => propertyPath.reduce<unknown>((value, property) => (isRecord(value) ? value[property] : undefined), candidate));
-    const values = resolvedCandidates.map(toRunnerText).filter((value): value is string => value !== null);
-    return {values, isComplete: areCandidatesComplete && values.length > 0 && values.length === resolvedCandidates.length};
+    const labelsByCandidate = resolvedCandidates.map(toRunnerLabels);
+    const values = labelsByCandidate.flatMap((labels) => labels ?? []);
+    return {values, isComplete: areCandidatesComplete && values.length > 0 && labelsByCandidate.every((labels) => labels !== null)};
+}
+
+/**
+ * Returns true if an expression always evaluates to a value that isn't false or empty. Only a plain value counts, since
+ * a condition like `a && b` is false whenever `a` is. `0` and `false` count as possibly falsy, because numbers and
+ * booleans from the matrix have already been turned into text by this point.
+ */
+function isNeverFalsy(expression: string, resolved: ResolvedValues): boolean {
+    let plainExpression = expression.trim();
+    while (isWrappedInParentheses(plainExpression)) {
+        plainExpression = plainExpression.slice(1, -1).trim();
+    }
+
+    const isPlainValue = splitOnTopLevelOperator(plainExpression, '&&').length === 1 && splitOnTopLevelOperator(plainExpression, '||').length === 1;
+    const possiblyFalsyTexts = new Set(['', '0', 'false']);
+    return isPlainValue && resolved.isComplete && resolved.values.length > 0 && resolved.values.every((value) => !possiblyFalsyTexts.has(value));
 }
 
 /**
@@ -256,8 +303,19 @@ function resolveExpression(expression: string, context: JobContext): ResolvedVal
 
     const alternatives = splitOnTopLevelOperator(trimmedExpression, '||');
     if (alternatives.length > 1) {
-        const resolvedAlternatives = alternatives.map((alternative) => resolveExpression(alternative, context));
-        return {values: resolvedAlternatives.flatMap(({values}) => values), isComplete: resolvedAlternatives.every(({isComplete}) => isComplete)};
+        const values: string[] = [];
+        let isComplete = true;
+        for (const alternative of alternatives) {
+            const resolved = resolveExpression(alternative, context);
+            values.push(...resolved.values);
+            isComplete &&= resolved.isComplete;
+
+            // `a || b` only reaches `b` when `a` is false or empty, so nothing after a value that's never either is used
+            if (isNeverFalsy(alternative, resolved)) {
+                break;
+            }
+        }
+        return {values, isComplete};
     }
 
     const conjuncts = splitOnTopLevelOperator(trimmedExpression, '&&');
@@ -478,7 +536,8 @@ function getChangedWorkflows(repoRoot: string, baseSHA: string): ChangedWorkflow
 
         changedWorkflows.push({
             path: headPath,
-            baseSource: status.startsWith('A') ? null : git(repoRoot, ['show', `${baseSHA}:${basePath}`]),
+            // A rename from a path that isn't a workflow, like `build.yml.disabled`, turns the workflow on for the first time
+            baseSource: status.startsWith('A') || !WORKFLOW_PATH_PATTERN.test(basePath) ? null : git(repoRoot, ['show', `${baseSHA}:${basePath}`]),
             headSource: readFileSync(path.join(repoRoot, headPath), 'utf8'),
         });
     }
