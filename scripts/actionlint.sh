@@ -14,27 +14,20 @@ readonly REPO_ROOT="${REPO_ROOT:-.}"
 
 source "$SCRIPT_DIR/shellUtils.sh"
 
-if [[ "$#" -ne 0 && ( "$#" -ne 1 || "$1" != "--install" ) ]]; then
-    error "Usage: $0 [--install]"
-    exit 1
-fi
-
 # Verify that shellcheck is installed (preinstalled on GitHub Actions runners)
-if [[ "${1:-}" != "--install" ]] && ! command -v shellcheck &>/dev/null; then
+if ! command -v shellcheck &>/dev/null; then
     error "This script requires shellcheck. Please install it and try again"
     exit 1
 fi
 
 title "Lint Github Actions via actionlint (https://github.com/kjanat/actionlint)"
 
-if [[ "${1:-}" != "--install" ]]; then
-    # Make sure there are workflows or actions to check before downloading and running actionlint
-    WORKFLOWS="$(find "$REPO_ROOT/.github/workflows" -type f \( -name "*.yml" -o -name "*.yaml" \))"
-    ACTIONS="$(find "$REPO_ROOT" -type f \( -name "action.yml" -o -name "action.yaml" \))"
-    if [[ -z "$WORKFLOWS" && -z "$ACTIONS" ]]; then
-        success "No workflows or actions to check!"
-        exit 0
-    fi
+# Make sure there are workflows or actions to check before downloading and running actionlint
+WORKFLOWS="$(find "$REPO_ROOT/.github/workflows" -type f \( -name "*.yml" -o -name "*.yaml" \))"
+ACTIONS="$(find "$REPO_ROOT" -type f \( -name "action.yml" -o -name "action.yaml" \))"
+if [[ -z "$WORKFLOWS" && -z "$ACTIONS" ]]; then
+    success "No workflows or actions to check!"
+    exit 0
 fi
 
 OS="$(uname)"
@@ -69,16 +62,6 @@ checksum() {
 if [[ -x "$ACTIONLINT_PATH" && "$(checksum "$ACTIONLINT_PATH")" == "$EXPECTED_BINARY_CHECKSUM" ]]; then
     info "Found actionlint version $EXPECTED_VERSION already installed" >&2
 else
-    if [[ "${1:-}" != "--install" && "${GITHUB_ACTIONS:-}" != "true" ]]; then
-        if [[ ! -t 0 || ! -t 2 ]]; then
-            error "The pinned actionlint binary is required. Run $0 --install before linting"
-            exit 1
-        fi
-        if ! read -r -p "Download and install the pinned actionlint binary? [y/n] " ANSWER || [[ "$ANSWER" != [yY] ]]; then
-            error "The pinned actionlint binary is not installed"
-            exit 1
-        fi
-    fi
     info "Downloading and verifying actionlint verion $EXPECTED_VERSION..." >&2
 
     INSTALL_DIR="$(mktemp -d "$SCRIPT_DIR/actionlint-install.XXXXXX")" || exit 1
@@ -152,10 +135,6 @@ else
     INSTALLED_VERSION="$("$ACTIONLINT_PATH" -version | head -n 1)"
     readonly INSTALLED_VERSION
     info "Successfully installed actionlint version $INSTALLED_VERSION" >&2
-fi
-
-if [[ "${1:-}" == "--install" ]]; then
-    exit 0
 fi
 
 info "Linting workflows..."
