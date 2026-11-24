@@ -22,3 +22,4 @@ __pycache__/
 # Ignore the local actionlint binary
 actionlint*
 !scripts/actionlint.sh
+!scripts/actionlint_checksums.txt

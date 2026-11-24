@@ -9,72 +9,64 @@ readonly ACTIONLINT_PATH="$SCRIPT_DIR/actionlint"
 readonly REPO_ROOT="${REPO_ROOT:-.}"
 readonly POLICY_DIR="$SCRIPT_DIR/../.github"
 # Runner snapshots require a v2 preview.
-readonly ACTIONLINT_VERSION="v2.0.0-20261123125733-d517adb1a17d"
-readonly GO_VERSION="1.27.4"
+readonly ACTIONLINT_REF="d517adb1a17d8448608ff00dfd968a15180ef569"
 
 source "$SCRIPT_DIR/shellUtils.sh"
 
-actionlint_is_installed() {
-    [[ -x "$ACTIONLINT_PATH" ]] &&
-        [[ "$("$ACTIONLINT_PATH" --version | head -n 1)" == "actionlint.kjanat.dev/v2 $ACTIONLINT_VERSION" ]]
-}
-
-confirm_install() {
-    local answer
-    read -r -p "$1 [y/n] " answer && [[ "$answer" == [yY] ]]
+checksum_matches() {
+    local actual
+    actual="$(sha256sum < "$2")" && [[ "${actual%% *}" == "$1" ]]
 }
 
 install_actionlint() (
-    local mode="$1" go_bin target checksum go_dir
-    if actionlint_is_installed; then
-        return 0
-    fi
-    if [[ "$mode" == "prompt" ]] && ! confirm_install "Install actionlint $ACTIONLINT_VERSION?"; then
-        error "The required actionlint version is not installed"
+    local platform archive_sha binary_sha tmp_dir url entry token answer
+    local -a curl_args=(--fail --silent --show-error --location --retry 3)
+    platform="$(uname -s)/$(uname -m)"
+    read -r archive_sha binary_sha < <(awk -v platform="$platform" '$1 == platform {print $2, $3}' "$SCRIPT_DIR/actionlint_checksums.txt")
+    if [[ -z "$archive_sha" || -z "$binary_sha" ]]; then
+        error "No pinned actionlint binary for $platform"
         return 1
     fi
-
-    if ! go_bin="$(command -v go)"; then
-        if [[ "$mode" != "prompt" ]] || ! confirm_install "Download Go $GO_VERSION to build actionlint?"; then
-            error "Go is required to install actionlint. Install Go $GO_VERSION and retry with $0 --install"
-            return 1
-        fi
-        case "$(uname -s)/$(uname -m)" in
-            Darwin/arm64)
-                target="darwin-arm64"
-                checksum="91a44a2b8a716600ad94a4f143e156116620db8828086a6e3602291be9bd0bb4"
-                ;;
-            Linux/aarch64)
-                target="linux-arm64"
-                checksum="3392582988a273a87ab5043ee1b2c9c17a2c3c00580bf9326c47a2e0aaaeac92"
-                ;;
-            Linux/x86_64)
-                target="linux-amd64"
-                checksum="7226736c2339719cda28fbf3a54d71aa63bcefe376e98cef00034268dab24840"
-                ;;
-            *)
-                error "Install Go $GO_VERSION manually on this platform and retry with $0 --install"
-                return 1
-                ;;
-        esac
-        go_dir="$(mktemp -d "${TMPDIR:-/tmp}/actionlint-go.XXXXXX")" || return 1
-        trap 'rm -rf -- "$go_dir"' EXIT
-        if ! (cd "$go_dir" &&
-            curl -fsSL --retry 3 "https://go.dev/dl/go$GO_VERSION.$target.tar.gz" -o go.tar.gz &&
-            printf '%s  go.tar.gz\n' "$checksum" | shasum -a 256 -c - &&
-            tar -xzf go.tar.gz); then
-            error "Could not download or verify Go $GO_VERSION"
-            return 1
-        fi
-        go_bin="$go_dir/go/bin/go"
+    if [[ -x "$ACTIONLINT_PATH" ]] && checksum_matches "$binary_sha" "$ACTIONLINT_PATH"; then
+        return 0
     fi
 
-    info "Installing actionlint $ACTIONLINT_VERSION..."
-    # Verify public modules and use only the Go toolchain already provisioned.
-    if ! (cd "$SCRIPT_DIR" && GOWORK=off GOTOOLCHAIN=local GOBIN="$SCRIPT_DIR" \
-        GOSUMDB=sum.golang.org GONOSUMDB=none \
-        "$go_bin" install "actionlint.kjanat.dev/v2/cmd/actionlint@$ACTIONLINT_VERSION"); then
-        error "Could not install actionlint. Use Go $GO_VERSION and retry with $0 --install"
+    # The org ruleset calls the script directly, so GitHub Actions bootstraps the pinned binary.
+    if [[ "$1" != "explicit" && "${GITHUB_ACTIONS:-}" != "true" ]]; then
+        if [[ ! -t 0 || ! -t 2 ]]; then
+            error "The pinned actionlint binary is required. Run $0 --install before linting"
+            return 1
+        fi
+        if ! read -r -p "Download and install the pinned actionlint binary? [y/n] " answer || [[ "$answer" != [yY] ]]; then
+            error "The pinned actionlint binary is not installed"
+            return 1
+        fi
+    fi
+
+    if [[ "$platform" == Linux/* ]]; then
+        # Fetch only the layer that contains the binary from the upstream nightly image.
+        if ! token="$(curl "${curl_args[@]}" 'https://ghcr.io/token?service=ghcr.io&scope=repository:kjanat/actionlint:pull' | jq -er '.token')"; then
+            error "Could not get a public GHCR download token (requires jq)"
+            return 1
+        fi
+        curl_args+=(--header "Authorization: Bearer $token")
+        url="https://ghcr.io/v2/kjanat/actionlint/blobs/sha256:$archive_sha"
+        entry="usr/local/bin/actionlint"
+    else
+        url="https://pkg.pr.new/kjanat/actionlint/@kjanat-actionlint/actionlint-darwin-arm64@$ACTIONLINT_REF"
+        entry="package/bin/actionlint"
+    fi
+
+    info "Downloading and verifying the pinned actionlint binary..."
+    tmp_dir="$(mktemp -d "$SCRIPT_DIR/actionlint-install.XXXXXX")" || return 1
+    trap 'rm -rf -- "$tmp_dir"' EXIT
+    if ! curl "${curl_args[@]}" "$url" -o "$tmp_dir/actionlint.tar.gz" ||
+        ! checksum_matches "$archive_sha" "$tmp_dir/actionlint.tar.gz" ||
+        ! tar -xOzf "$tmp_dir/actionlint.tar.gz" "$entry" > "$tmp_dir/actionlint" ||
+        ! checksum_matches "$binary_sha" "$tmp_dir/actionlint" ||
+        ! chmod +x "$tmp_dir/actionlint" ||
+        ! mv -f "$tmp_dir/actionlint" "$ACTIONLINT_PATH"; then
+        error "Could not download, verify, or install the pinned actionlint binary for $platform"
         return 1
     fi
 )
@@ -106,13 +98,7 @@ if ! command -v shellcheck &>/dev/null; then
     exit 1
 fi
 
-if ! actionlint_is_installed; then
-    if [[ ! -t 0 || ! -t 2 || "${CI:-}" == "true" ]]; then
-        error "actionlint $ACTIONLINT_VERSION is required. Install Go $GO_VERSION and run $0 --install before linting"
-        exit 1
-    fi
-    install_actionlint prompt || exit 1
-fi
+install_actionlint auto || exit 1
 
 if [[ -n "$WORKFLOWS" ]]; then
     info "Checking Blacksmith runner labels..."

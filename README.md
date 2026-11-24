@@ -10,7 +10,9 @@ Expensify has multiple repositories that use the same GitHub Actions workflows. 
 
 The org-wide `actionlint` job warns when any workflow selects a runner outside the [Blacksmith allowlist](.github/blacksmith-runners.json), including runner choices actionlint can resolve from static matrices. It does not warn on runner expressions that actionlint cannot resolve, such as a runner supplied by an upstream job's output.
 
-To run the check locally, install ShellCheck and run `<path-to-GitHub-Actions>/scripts/actionlint.sh` from the target repo. In a terminal, the script asks before installing actionlint or temporarily downloading Go to build it. For non-interactive use, provision Go 1.27.4, run the script with `--install`, then run it without arguments to lint.
+To run the check locally, install ShellCheck and run `<path-to-GitHub-Actions>/scripts/actionlint.sh` from the target repo. The script verifies a pinned prebuilt actionlint binary; Go is not required. GitHub Actions downloads it automatically. Locally, the script prompts before downloading in a terminal; for unattended use, run it with `--install` before linting. Linux downloads require `jq`.
+
+The Linux binaries come from the upstream nightly image. The macOS ARM64 binary comes from an upstream package preview that can expire; update the pins to tagged release assets once actionlint v2 is released.
 
 Use an explicit Blacksmith label from the allowlist. Generic labels such as `self-hosted` and runner groups are not in the snapshot. Keep the snapshot and the shared [actionlint config](.github/actionlint.yml) in sync when adding approved labels. Once the migration is complete, set `runner-label: error` in [the policy config](.github/blacksmith-actionlint.yml) and make a failed Blacksmith check exit the script nonzero. Unresolved expressions will still need separate handling.
 
