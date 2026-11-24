@@ -6,6 +6,12 @@ Expensify has multiple repositories that use the same GitHub Actions workflows. 
 
 ## Usage
 
+### `validateActions.yml`
+
+The org-wide `actionlint` job warns when any workflow selects a runner outside the [Blacksmith allowlist](.github/blacksmith-runners.json), including runner choices actionlint can resolve from static matrices. It does not warn on runner expressions that actionlint cannot resolve, such as a runner supplied by an upstream job's output. To run the check locally, install ShellCheck and Go 1.21 or newer, then run `<path-to-GitHub-Actions>/scripts/actionlint.sh` from the target repo.
+
+Use an explicit Blacksmith label from the allowlist. Generic labels such as `self-hosted` and runner groups are not in the snapshot. Keep the snapshot and the shared [actionlint config](.github/actionlint.yml) in sync when adding approved labels. Once the migration is complete, set `runner-label: error` in [the policy config](.github/blacksmith-actionlint.yml) and make a failed Blacksmith check exit the script nonzero. Unresolved expressions will still need separate handling.
+
 ### `npmPublish.yml`
 
 Used to publish a package to [npmjs](https://www.npmjs.com/), should be triggered when code is merged into the `main` branch. **Note**: Please follow [these instructions](https://stackoverflowteams.com/c/expensify/questions/17043/17044#17044) to grant our bots the correct access to publish.

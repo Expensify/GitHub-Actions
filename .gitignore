@@ -19,7 +19,6 @@ dist/
 __pycache__/
 *.py[cod]
 
-# Ignore actionlint binary and any leftover directories related to installing it
+# Ignore the local actionlint binary
 actionlint*
 !scripts/actionlint.sh
-!scripts/actionlint_checksums.txt
