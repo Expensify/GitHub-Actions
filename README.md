@@ -8,11 +8,7 @@ Expensify has multiple repositories that use the same GitHub Actions workflows. 
 
 ### `validateActions.yml`
 
-The org-wide `actionlint` job warns on runner selections outside the [Blacksmith allowlist](.github/blacksmith-runners.json), including statically resolved matrix choices. It does not verify runtime-dependent expressions.
-
-Run `<path-to-GitHub-Actions>/scripts/actionlint.sh` from the target repo with ShellCheck installed. CI downloads the checksum-pinned binary automatically; local runs prompt, or accept `--install` for unattended setup. Linux downloads require `jq`. The macOS preview can expire; switch to tagged assets when v2 ships.
-
-When adding approved labels, update both the snapshot and the [shared lint config](.github/actionlint.yml). To make the check blocking after migration, set `runner-label: error` in the [policy config](.github/blacksmith-actionlint.yml) and propagate its exit status.
+Enabled org-wide through GitHub rulesets. On pull requests, it validates action and workflow schemas, runs actionlint, and checks that action references are pinned to immutable refs.
 
 ### `npmPublish.yml`
 
