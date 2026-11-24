@@ -7,6 +7,8 @@
             {"name": "blacksmith-6vcpu-macos-latest", "labels": ["blacksmith-6vcpu-macos-latest"]},
             {"name": "blacksmith-12vcpu-macos-latest", "labels": ["blacksmith-12vcpu-macos-latest"]},
             {"name": "blacksmith-12vcpu-macos-27", "labels": ["blacksmith-12vcpu-macos-27"]},
+            {"name": "blacksmith-6vcpu-macos-15", "labels": ["blacksmith-6vcpu-macos-15"]},
+            {"name": "blacksmith-6vcpu-macos-27", "labels": ["blacksmith-6vcpu-macos-27"]},
             {"name": "blacksmith-2vcpu-ubuntu-2404", "labels": ["blacksmith-2vcpu-ubuntu-2404"]},
             {"name": "blacksmith-4vcpu-ubuntu-2404", "labels": ["blacksmith-4vcpu-ubuntu-2404"]},
             {"name": "blacksmith-8vcpu-ubuntu-2404", "labels": ["blacksmith-8vcpu-ubuntu-2404"]},
