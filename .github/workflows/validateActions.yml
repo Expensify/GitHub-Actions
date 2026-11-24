@@ -11,22 +11,57 @@ jobs:
   validateSchemas:
     runs-on: blacksmith-2vcpu-ubuntu-2404-arm
     if: ${{ !contains(github.actor, '[bot]') && github.actor != 'MelvinBot' && github.actor != 'botify' && github.actor != 'OSBotify' }}
+    permissions:
+      contents: read
+      pull-requests: read
+    env:
+      CHANGED_FILES_PATTERN: '^\.github/workflows/.+\.ya?ml$|(^|/)action\.ya?ml$'
     steps:
+      # Rulesets ignore `paths` filters, so this step lists the PR's files through the API and the steps after it are
+      # skipped when none of them match the job's CHANGED_FILES_PATTERN. The other jobs reuse it through the anchor.
+      - &checkForChangedFiles
+        name: Check whether the PR changes files this job checks
+        id: changes
+        run: |
+          # Deleted files are left out because there is nothing left to check
+          if ! CHANGED_FILES="$(gh api --paginate "repos/$REPO/pulls/$PR_NUMBER/files" --jq '.[] | select(.status != "removed") | .filename | select(test(env.CHANGED_FILES_PATTERN))')"; then
+            echo "::warning::Could not list the PR's files, so this check will run anyway"
+            echo "HAS_CHANGES=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [[ -n "$CHANGED_FILES" ]]; then
+            echo "Changed files:"
+            echo "$CHANGED_FILES"
+            echo "HAS_CHANGES=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No files this job checks were changed, so the check is skipped"
+            echo "HAS_CHANGES=false" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+
       - name: Checkout repos
         id: repo
+        if: ${{ steps.changes.outputs.HAS_CHANGES == 'true' }}
         uses: Expensify/GitHub-Actions/checkoutRepoAndGitHubActions@main
 
       # v6.4.0
       - name: Setup Node
+        if: ${{ steps.changes.outputs.HAS_CHANGES == 'true' }}
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
           node-version-file: GitHub-Actions/.nvmrc
 
       # Install node to get the ajv-cli
       - name: Install node modules
+        if: ${{ steps.changes.outputs.HAS_CHANGES == 'true' }}
         run: npm i -g ajv-cli@5.0.0
 
       - name: Validate action and workflow schemas
+        if: ${{ steps.changes.outputs.HAS_CHANGES == 'true' }}
         run: GitHub-Actions/scripts/validateWorkflowSchemas.sh
         env:
           REPO_ROOT: ${{ steps.repo.outputs.NAME }}
@@ -38,12 +73,22 @@ jobs:
   actionlint:
     runs-on: blacksmith-2vcpu-ubuntu-2404-arm
     if: ${{ !contains(github.actor, '[bot]') && github.actor != 'MelvinBot' && github.actor != 'botify' && github.actor != 'OSBotify' }}
+    permissions:
+      contents: read
+      pull-requests: read
+    env:
+      # actionlint also reads the repo's own config file when there is one
+      CHANGED_FILES_PATTERN: '^\.github/workflows/.+\.ya?ml$|(^|/)action\.ya?ml$|^\.github/actionlint\.ya?ml$'
     steps:
+      - *checkForChangedFiles
+
       - name: Checkout repos
         id: repo
+        if: ${{ steps.changes.outputs.HAS_CHANGES == 'true' }}
         uses: Expensify/GitHub-Actions/checkoutRepoAndGitHubActions@main
 
       - name: Lint workflows with actionlint
+        if: ${{ steps.changes.outputs.HAS_CHANGES == 'true' }}
         run: GitHub-Actions/scripts/actionlint.sh
         env:
           REPO_ROOT: ${{ steps.repo.outputs.NAME }}
@@ -55,12 +100,21 @@ jobs:
   validateImmutableActionRefs:
     runs-on: blacksmith-2vcpu-ubuntu-2404-arm
     if: ${{ !contains(github.actor, '[bot]') && github.actor != 'MelvinBot' && github.actor != 'botify' && github.actor != 'OSBotify' }}
+    permissions:
+      contents: read
+      pull-requests: read
+    env:
+      CHANGED_FILES_PATTERN: '^\.github/workflows/.+\.ya?ml$|(^|/)action\.ya?ml$'
     steps:
+      - *checkForChangedFiles
+
       - name: Checkout repos
         id: repo
+        if: ${{ steps.changes.outputs.HAS_CHANGES == 'true' }}
         uses: Expensify/GitHub-Actions/checkoutRepoAndGitHubActions@main
 
       - name: Validate actions refs are immutable
+        if: ${{ steps.changes.outputs.HAS_CHANGES == 'true' }}
         run: GitHub-Actions/scripts/validateImmutableActionRefs.sh
         env:
           REPO_ROOT: ${{ steps.repo.outputs.NAME }}
@@ -79,40 +133,20 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
+    env:
+      # GitHub only runs workflows at the top level of .github/workflows
+      CHANGED_FILES_PATTERN: '^\.github/workflows/[^/]+\.ya?ml$'
     steps:
-      # Rulesets ignore `paths` filters, so this step lists the PR's files through the API. When no workflow changed,
-      # the steps below are skipped without checking out the repo or installing anything.
-      - name: Check whether the PR adds or changes a workflow
-        id: changes
-        run: |
-          # Deleted workflows are left out because there is nothing left to check
-          if ! CHANGED_WORKFLOWS="$(gh api --paginate "repos/$REPO/pulls/$PR_NUMBER/files" --jq '.[] | select(.status != "removed") | .filename | select(test("^\\.github/workflows/[^/]+\\.ya?ml$"))')"; then
-            echo "::warning::Could not list the PR's files, so the Blacksmith runner check will run anyway"
-            echo "HAS_WORKFLOW_CHANGES=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          if [[ -n "$CHANGED_WORKFLOWS" ]]; then
-            echo "Changed workflows:"
-            echo "$CHANGED_WORKFLOWS"
-            echo "HAS_WORKFLOW_CHANGES=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "No workflows changed, so the Blacksmith runner check is skipped"
-            echo "HAS_WORKFLOW_CHANGES=false" >> "$GITHUB_OUTPUT"
-          fi
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
+      - *checkForChangedFiles
 
       - name: Checkout repos
         id: repo
-        if: ${{ steps.changes.outputs.HAS_WORKFLOW_CHANGES == 'true' }}
+        if: ${{ steps.changes.outputs.HAS_CHANGES == 'true' }}
         uses: Expensify/GitHub-Actions/checkoutRepoAndGitHubActions@main
 
       # v6.4.0
       - name: Setup Node
-        if: ${{ steps.changes.outputs.HAS_WORKFLOW_CHANGES == 'true' }}
+        if: ${{ steps.changes.outputs.HAS_CHANGES == 'true' }}
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
           node-version-file: GitHub-Actions/.nvmrc
@@ -120,7 +154,7 @@ jobs:
           cache-dependency-path: GitHub-Actions/package-lock.json
 
       - name: Install npm packages
-        if: ${{ steps.changes.outputs.HAS_WORKFLOW_CHANGES == 'true' }}
+        if: ${{ steps.changes.outputs.HAS_CHANGES == 'true' }}
         run: npm ci --omit=dev
         working-directory: GitHub-Actions
 
@@ -129,7 +163,7 @@ jobs:
       # The checkout is shallow, so the parent's SHA is read from the merge commit and then fetched.
       - name: Fetch the pull request base commit
         id: base
-        if: ${{ steps.changes.outputs.HAS_WORKFLOW_CHANGES == 'true' }}
+        if: ${{ steps.changes.outputs.HAS_CHANGES == 'true' }}
         run: |
           BASE_SHA="$(git -C "$REPO_NAME" cat-file -p HEAD | awk '/^parent /{print $2; exit}')"
           if [[ -z "$BASE_SHA" ]]; then
@@ -142,7 +176,7 @@ jobs:
           REPO_NAME: ${{ steps.repo.outputs.NAME }}
 
       - name: Validate that workflows use Blacksmith runners
-        if: ${{ steps.changes.outputs.HAS_WORKFLOW_CHANGES == 'true' }}
+        if: ${{ steps.changes.outputs.HAS_CHANGES == 'true' }}
         run: npm run validate-blacksmith-runners -- --repo-root "$GITHUB_WORKSPACE/$REPO_NAME" --base-sha "$BASE_SHA"
         working-directory: GitHub-Actions
         env:
