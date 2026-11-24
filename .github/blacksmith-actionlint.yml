@@ -3,4 +3,4 @@ lint:
   rules:
     preset: none
     correctness:
-      runner-label: warn
+      runner-label: error

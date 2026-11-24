@@ -159,11 +159,35 @@ else
     info "Using actionlint file from this repo" >&2
 fi
 
-if [[ -n "$WORKFLOWS" ]]; then
+check_blacksmith_runners() (
+    REPOSITORY="${GITHUB_REPOSITORY:-}"
+    if [[ -z "$REPOSITORY" ]]; then
+        REPOSITORY="$(git remote get-url origin 2>/dev/null)"
+        REPOSITORY="${REPOSITORY#https://github.com/}"
+        REPOSITORY="${REPOSITORY#git@github.com:}"
+        REPOSITORY="${REPOSITORY%.git}"
+    fi
+
+    POLICY_DIR="$SCRIPT_DIR/../.github"
+    CONFIG_DIR="$(mktemp -d)" || exit 1
+    trap 'rm -rf -- "$CONFIG_DIR"' EXIT
+    jq --arg config "$POLICY_DIR/blacksmith-actionlint.yml" --arg repository "$REPOSITORY" '
+        {
+            extends: [$config],
+            ignores: (.[$repository] // {} | to_entries |
+                map(.key as $file | .value[] | {rule: "runner-label", file: $file, job: .}))
+        }
+    ' "$POLICY_DIR/blacksmith-runner-baseline.json" > "$CONFIG_DIR/blacksmith-actionlint.json" || exit 1
+
     "$ACTIONLINT_PATH" check --offline --no-tools --output-format github \
-        --config "$SCRIPT_DIR/../.github/blacksmith-actionlint.yml" --runner-provider snapshot \
-        --runner-scope expensify-blacksmith --runner-snapshot "$SCRIPT_DIR/../.github/blacksmith-runners.json" \
-        -- .github/workflows || warning "The advisory Blacksmith runner check failed"
+        --config "$CONFIG_DIR/blacksmith-actionlint.json" --runner-provider snapshot \
+        --runner-scope expensify-blacksmith --runner-snapshot "$POLICY_DIR/blacksmith-runners.json" \
+        -- .github/workflows
+)
+
+BLACKSMITH_STATUS=0
+if [[ -n "$WORKFLOWS" ]]; then
+    check_blacksmith_runners || BLACKSMITH_STATUS=$?
 fi
 
 # We can't quote CONFIG here because we need the splitting on spaces for it to be recognized
@@ -176,6 +200,11 @@ if ! "$ACTIONLINT_PATH" ${CONFIG} -color --offline --tool shellcheck=shellcheck 
     --ignore script-injection/secret-interpolation; then
     error "Workflows did not pass actionlint :("
     exit 1
+fi
+
+if [[ "$BLACKSMITH_STATUS" -ne 0 ]]; then
+    error "Workflows did not pass the Blacksmith runner check"
+    exit "$BLACKSMITH_STATUS"
 fi
 
 success "Workflows passed actionlint!"
