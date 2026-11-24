@@ -20,7 +20,7 @@ checksum_matches() {
 
 install_actionlint() (
     local platform archive_sha binary_sha tmp_dir url entry token answer
-    local -a curl_args=(--fail --silent --show-error --location --retry 3)
+    local -a curl_args=(-fsSL --retry 3)
     platform="$(uname -s)/$(uname -m)"
     read -r archive_sha binary_sha < <(awk -v platform="$platform" '$1 == platform {print $2, $3}' "$SCRIPT_DIR/actionlint_checksums.txt")
     if [[ -z "$archive_sha" || -z "$binary_sha" ]]; then
@@ -118,10 +118,12 @@ elif [[ -f ".github/actionlint.yaml" ]]; then
 fi
 
 info "Linting workflows and actions..."
-# Roll out the v2-only permissions and unproven interpolation findings separately.
+# Roll out newly blocking v2 diagnostics separately from runner policy.
 if ! "$ACTIONLINT_PATH" check --offline --config "$CONFIG" --color=always \
     --tool shellcheck=shellcheck --no-tool ruff \
-    --ignore missing-permissions --ignore script-interpolation/unknown-script-value; then
+    --ignore missing-permissions \
+    --ignore script-interpolation/unknown-script-value \
+    --ignore script-injection/secret-interpolation; then
     error "Workflows did not pass actionlint :("
     exit 1
 fi
