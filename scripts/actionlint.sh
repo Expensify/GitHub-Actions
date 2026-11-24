@@ -62,7 +62,7 @@ checksum() {
 if [[ -x "$ACTIONLINT_PATH" && "$(checksum "$ACTIONLINT_PATH")" == "$EXPECTED_BINARY_CHECKSUM" ]]; then
     info "Found actionlint version $EXPECTED_VERSION already installed" >&2
 else
-    info "Downloading and verifying actionlint verion $EXPECTED_VERSION..." >&2
+    info "Downloading and verifying actionlint version $EXPECTED_VERSION..." >&2
 
     INSTALL_DIR="$(mktemp -d "$SCRIPT_DIR/actionlint-install.XXXXXX")" || exit 1
     readonly INSTALL_DIR
@@ -102,7 +102,7 @@ else
                 error "Download failed: partial file transfer (network interrupted)" >&2
                 ;;
             22)
-                error "Download failed: HTTP error from GitHub" >&2
+                error "Download failed: HTTP error from download server" >&2
                 ;;
             28)
                 error "Download failed: operation timeout" >&2
@@ -190,9 +190,10 @@ if [[ -n "$WORKFLOWS" ]]; then
     check_blacksmith_runners || BLACKSMITH_STATUS=$?
 fi
 
+# Roll out newly blocking v2 diagnostics separately from runner policy.
+
 # We can't quote CONFIG here because we need the splitting on spaces for it to be recognized
 # by actionlint as a flag
-# Roll out newly blocking v2 diagnostics separately from runner policy.
 #shellcheck disable=SC2086
 if ! "$ACTIONLINT_PATH" ${CONFIG} -color --offline --tool shellcheck=shellcheck --no-tool ruff \
     --ignore missing-permissions \
