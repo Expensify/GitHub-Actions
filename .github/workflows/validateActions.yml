@@ -69,17 +69,19 @@ jobs:
         if: failure()
         run: echo "::error::The validateImmutableActionRefs check failed! To run it locally, go to the root of ${{ steps.repo.outputs.NAME }} and run <path_to_github_actions_repo>/scripts/validateImmutableActionRefs.sh"
 
-  # Rulesets ignore `paths` filters, so this job lists the PR's files through the API. That way, validateBlacksmithRunners
-  # is skipped without checking out the repo or installing anything when no workflow changed.
-  checkForWorkflowChanges:
+  validateBlacksmithRunners:
     runs-on: blacksmith-2vcpu-ubuntu-2404-arm
     # Unlike the jobs above, this one runs for MelvinBot, since MelvinBot writes PRs that change workflows
     if: ${{ !contains(github.actor, '[bot]') && github.actor != 'botify' && github.actor != 'OSBotify' }}
+    # Failures show on the PR without blocking it while repos move to Blacksmith (https://github.com/Expensify/Expensify/issues/706870).
+    # Remove this line to make the check block merging.
+    continue-on-error: true
     permissions:
+      contents: read
       pull-requests: read
-    outputs:
-      HAS_WORKFLOW_CHANGES: ${{ steps.changes.outputs.HAS_WORKFLOW_CHANGES }}
     steps:
+      # Rulesets ignore `paths` filters, so this step lists the PR's files through the API. When no workflow changed,
+      # the steps below are skipped without checking out the repo or installing anything.
       - name: Check whether the PR adds or changes a workflow
         id: changes
         run: |
@@ -103,20 +105,14 @@ jobs:
           REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
 
-  validateBlacksmithRunners:
-    runs-on: blacksmith-2vcpu-ubuntu-2404-arm
-    needs: checkForWorkflowChanges
-    if: ${{ needs.checkForWorkflowChanges.outputs.HAS_WORKFLOW_CHANGES == 'true' }}
-    # Failures show on the PR without blocking it while repos move to Blacksmith (https://github.com/Expensify/Expensify/issues/706870).
-    # Remove this line to make the check block merging.
-    continue-on-error: true
-    steps:
       - name: Checkout repos
         id: repo
+        if: ${{ steps.changes.outputs.HAS_WORKFLOW_CHANGES == 'true' }}
         uses: Expensify/GitHub-Actions/checkoutRepoAndGitHubActions@main
 
       # v6.4.0
       - name: Setup Node
+        if: ${{ steps.changes.outputs.HAS_WORKFLOW_CHANGES == 'true' }}
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
           node-version-file: GitHub-Actions/.nvmrc
@@ -124,6 +120,7 @@ jobs:
           cache-dependency-path: GitHub-Actions/package-lock.json
 
       - name: Install npm packages
+        if: ${{ steps.changes.outputs.HAS_WORKFLOW_CHANGES == 'true' }}
         run: npm ci --omit=dev
         working-directory: GitHub-Actions
 
@@ -132,6 +129,7 @@ jobs:
       # The checkout is shallow, so the parent's SHA is read from the merge commit and then fetched.
       - name: Fetch the pull request base commit
         id: base
+        if: ${{ steps.changes.outputs.HAS_WORKFLOW_CHANGES == 'true' }}
         run: |
           BASE_SHA="$(git -C "$REPO_NAME" cat-file -p HEAD | awk '/^parent /{print $2; exit}')"
           if [[ -z "$BASE_SHA" ]]; then
@@ -144,6 +142,7 @@ jobs:
           REPO_NAME: ${{ steps.repo.outputs.NAME }}
 
       - name: Validate that workflows use Blacksmith runners
+        if: ${{ steps.changes.outputs.HAS_WORKFLOW_CHANGES == 'true' }}
         run: npm run validate-blacksmith-runners -- --repo-root "$GITHUB_WORKSPACE/$REPO_NAME" --base-sha "$BASE_SHA"
         working-directory: GitHub-Actions
         env:
