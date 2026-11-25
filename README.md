@@ -10,6 +10,8 @@ Expensify has multiple repositories that use the same GitHub Actions workflows. 
 
 Enabled org-wide through GitHub rulesets. On pull requests, it validates action and workflow schemas, runs actionlint, and checks that action references are pinned to immutable refs.
 
+Rulesets ignore `paths` filters, so each job's first step lists the pull request's files through the API with `pull-requests: read`. When none of the files that job checks were added or changed, the job's remaining steps are skipped without checking out the repository. If the files can't be listed, the job runs anyway.
+
 ### `npmPublish.yml`
 
 Used to publish a package to [npmjs](https://www.npmjs.com/), should be triggered when code is merged into the `main` branch. **Note**: Please follow [these instructions](https://stackoverflowteams.com/c/expensify/questions/17043/17044#17044) to grant our bots the correct access to publish.
