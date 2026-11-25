@@ -47,7 +47,7 @@ fi
 readonly OS_ARCH
 
 # Get the expected version and checksums of actionlint
-EXPECTED_VERSION="2.0.0-SNAPSHOT-${ACTIONLINT_REF:0:8}"
+EXPECTED_VERSION="2.0.0-SNAPSHOT-${ACTIONLINT_COMMIT_SHA:0:8}"
 if ! read -r EXPECTED_CHECKSUM EXPECTED_BINARY_CHECKSUM < <(awk -v arch="$OS_ARCH" '$1 == arch {print $2, $3}' "$CHECKSUMS_FILE"); then
     error "No actionlint checksums for $OS_ARCH" >&2
     exit 1
@@ -80,7 +80,7 @@ else
         DOWNLOAD_URL="https://ghcr.io/v2/kjanat/actionlint/blobs/sha256:$EXPECTED_CHECKSUM"
         BINARY_PATH="usr/local/bin/actionlint"
     else
-        DOWNLOAD_URL="https://pkg.pr.new/kjanat/actionlint/@kjanat-actionlint/actionlint-darwin-arm64@$ACTIONLINT_REF"
+        DOWNLOAD_URL="https://pkg.pr.new/kjanat/actionlint/@kjanat-actionlint/actionlint-darwin-arm64@$ACTIONLINT_COMMIT_SHA"
         BINARY_PATH="package/bin/actionlint"
     fi
 
