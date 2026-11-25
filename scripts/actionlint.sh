@@ -3,6 +3,12 @@
 #    Lint workflows with https://github.com/kjanat/actionlint    #
 #################################################################
 
+# Verify that shellcheck is installed (preinstalled on GitHub Actions runners)
+if ! command -v shellcheck &>/dev/null; then
+    error "This script requires shellcheck. Please install it and try again"
+    exit 1
+fi
+
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
 readonly SCRIPT_DIR
 
@@ -13,12 +19,6 @@ readonly ACTIONLINT_PATH="$SCRIPT_DIR/actionlint"
 readonly REPO_ROOT="${REPO_ROOT:-.}"
 
 source "$SCRIPT_DIR/shellUtils.sh"
-
-# Verify that shellcheck is installed (preinstalled on GitHub Actions runners)
-if ! command -v shellcheck &>/dev/null; then
-    error "This script requires shellcheck. Please install it and try again"
-    exit 1
-fi
 
 title "Lint Github Actions via actionlint (https://github.com/kjanat/actionlint)"
 
