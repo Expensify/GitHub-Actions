@@ -12,8 +12,8 @@ fi
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
 readonly SCRIPT_DIR
 
-# To update the actionlint preview, update the ref and the checksums for each platform.
-readonly ACTIONLINT_REF="d517adb1a17d8448608ff00dfd968a15180ef569"
+# When updating actionlint, update this commit SHA and each platform's SHA-256 checksums in scripts/actionlint_checksums.txt.
+readonly ACTIONLINT_COMMIT_SHA="d517adb1a17d8448608ff00dfd968a15180ef569"
 readonly CHECKSUMS_FILE="$SCRIPT_DIR/actionlint_checksums.txt"
 readonly ACTIONLINT_PATH="$SCRIPT_DIR/actionlint"
 readonly REPO_ROOT="${REPO_ROOT:-.}"
