@@ -183,9 +183,14 @@ check_blacksmith_runners() (
         }
     ' "$POLICY_DIR/blacksmith-runner-baseline.json" > "$CONFIG_DIR/blacksmith-actionlint.json" || exit 1
 
-    "$ACTIONLINT_PATH" check --offline --no-tools --output-format github \
-        --config "$CONFIG_DIR/blacksmith-actionlint.json" --runner-provider snapshot \
-        --runner-scope expensify-blacksmith --runner-snapshot "$POLICY_DIR/blacksmith-runners.json" \
+    "$ACTIONLINT_PATH" check \
+        --offline \
+        --no-tools \
+        --output-format github \
+        --config "$CONFIG_DIR/blacksmith-actionlint.json" \
+        --runner-provider snapshot \
+        --runner-scope expensify-blacksmith \
+        --runner-snapshot "$POLICY_DIR/blacksmith-runners.json" \
         -- .github/workflows
 )
 
@@ -199,7 +204,12 @@ fi
 # We can't quote CONFIG here because we need the splitting on spaces for it to be recognized
 # by actionlint as a flag
 #shellcheck disable=SC2086
-if ! "$ACTIONLINT_PATH" ${CONFIG} -color --offline --tool shellcheck=shellcheck --no-tool ruff \
+if ! "$ACTIONLINT_PATH" \
+    ${CONFIG} \
+    -color \
+    --offline \
+    --tool shellcheck=shellcheck \
+    --no-tool ruff \
     --ignore missing-permissions \
     --ignore script-interpolation/unknown-script-value \
     --ignore script-injection/secret-interpolation; then
