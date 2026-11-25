@@ -175,11 +175,15 @@ check_blacksmith_runners() (
     POLICY_DIR="$SCRIPT_DIR/../.github"
     CONFIG_DIR="$(mktemp -d)" || exit 1
     trap 'rm -rf -- "$CONFIG_DIR"' EXIT
+    # Merge the repository's baseline into the shared Blacksmith actionlint config.
     jq --arg config "$POLICY_DIR/blacksmith-actionlint.yml" --arg repository "$REPOSITORY" '
         {
             extends: [$config],
-            ignores: (.[$repository] // {} | to_entries |
-                map(.key as $file | .value[] | {rule: "runner-label", file: $file, job: .}))
+            ignores: [
+                (.[$repository] // {} | to_entries[]) as $workflow
+                | $workflow.value[] as $job
+                | {rule: "runner-label", file: $workflow.key, job: $job}
+            ]
         }
     ' "$POLICY_DIR/blacksmith-runner-baseline.json" > "$CONFIG_DIR/blacksmith-actionlint.json" || exit 1
 
