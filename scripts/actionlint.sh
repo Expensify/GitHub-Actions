@@ -12,7 +12,8 @@ fi
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
 readonly SCRIPT_DIR
 
-# To update the actionlint version, replace this file with the updated checksums file from the GitHub release
+# When updating actionlint, update this commit SHA and each platform's SHA-256 checksums in scripts/actionlint_checksums.txt.
+readonly ACTIONLINT_COMMIT_SHA="d517adb1a17d8448608ff00dfd968a15180ef569"
 readonly CHECKSUMS_FILE="$SCRIPT_DIR/actionlint_checksums.txt"
 readonly ACTIONLINT_PATH="$SCRIPT_DIR/actionlint"
 readonly REPO_ROOT="${REPO_ROOT:-.}"
@@ -29,7 +30,6 @@ if [[ -z "$WORKFLOWS" && -z "$ACTIONS" ]]; then
     exit 0
 fi
 
-# Get the actionlint tarball name from the checksums file, used both for downloading and verifying checksums
 OS="$(uname)"
 ARCH="$(uname -m)"
 readonly OS ARCH
@@ -45,27 +45,44 @@ else
     exit 1
 fi
 readonly OS_ARCH
-TARBALL_NAME="$(grep "$OS_ARCH" "$CHECKSUMS_FILE" | awk '{print $2}')"
-readonly TARBALL_NAME
 
-# Get the expected version and checksum of actionlint binary
-EXPECTED_VERSION="$(echo "$TARBALL_NAME" | grep -oE "actionlint_[0-9\.]+_" | awk -F_ '{print $2}')"
-EXPECTED_CHECKSUM="$(grep "$TARBALL_NAME" "$CHECKSUMS_FILE" | awk '{print $1}')"
-readonly EXPECTED_VERSION EXPECTED_CHECKSUM
+# Get the expected version and checksums of actionlint
+EXPECTED_VERSION="2.0.0-SNAPSHOT-${ACTIONLINT_COMMIT_SHA:0:8}"
+if ! read -r EXPECTED_CHECKSUM EXPECTED_BINARY_CHECKSUM < <(awk -v arch="$OS_ARCH" '$1 == arch {print $2, $3}' "$CHECKSUMS_FILE"); then
+    error "No actionlint checksums for $OS_ARCH" >&2
+    exit 1
+fi
+readonly EXPECTED_VERSION EXPECTED_CHECKSUM EXPECTED_BINARY_CHECKSUM
 
-# The fork reports its version as "actionlint.kjanat.dev 1.17.0" rather than the bare version the
-# upstream binary prints, so match on the version number instead of the whole first line.
-installed_version_matches() {
-    [[ "$("$ACTIONLINT_PATH" -version | head -n 1)" == *" $EXPECTED_VERSION"* ]]
+checksum() {
+    sha256sum < "$1" | awk '{print $1}'
 }
 
 # Get actionlint binary
-if [[ -x "$ACTIONLINT_PATH" ]] && installed_version_matches; then
+if [[ -x "$ACTIONLINT_PATH" && "$(checksum "$ACTIONLINT_PATH")" == "$EXPECTED_BINARY_CHECKSUM" ]]; then
     info "Found actionlint version $EXPECTED_VERSION already installed" >&2
 else
-    info "Downloading and verifying actionlint verion $EXPECTED_VERSION..." >&2
+    info "Downloading and verifying actionlint version $EXPECTED_VERSION..." >&2
 
-    readonly TARBALL="$SCRIPT_DIR/actionlint.tar.gz"
+    INSTALL_DIR="$(mktemp -d "$SCRIPT_DIR/actionlint-install.XXXXXX")" || exit 1
+    readonly INSTALL_DIR
+    readonly TARBALL="$INSTALL_DIR/actionlint.tar.gz"
+    trap 'rm -rf -- "$INSTALL_DIR"' EXIT
+
+    CURL_HEADERS=()
+    if [[ "$OS" == "Linux" ]]; then
+        # Fetch only the layer that contains the binary from the upstream nightly image.
+        if ! TOKEN="$(curl -fsSL --retry 3 'https://ghcr.io/token?service=ghcr.io&scope=repository:kjanat/actionlint:pull' | jq -er '.token')"; then
+            error "Could not get a public GHCR download token (requires jq)"
+            exit 1
+        fi
+        CURL_HEADERS+=(--header "Authorization: Bearer $TOKEN")
+        DOWNLOAD_URL="https://ghcr.io/v2/kjanat/actionlint/blobs/sha256:$EXPECTED_CHECKSUM"
+        BINARY_PATH="usr/local/bin/actionlint"
+    else
+        DOWNLOAD_URL="https://pkg.pr.new/kjanat/actionlint/@kjanat-actionlint/actionlint-darwin-arm64@$ACTIONLINT_COMMIT_SHA"
+        BINARY_PATH="package/bin/actionlint"
+    fi
 
     # --fail: Makes curl return error on HTTP errors (4xx, 5xx)
     # --location: Follow redirects
@@ -74,7 +91,8 @@ else
     curl --fail --location \
         --retry 3 \
         --retry-delay 3 \
-        "https://github.com/kjanat/actionlint/releases/download/v${EXPECTED_VERSION}/${TARBALL_NAME}" \
+        "${CURL_HEADERS[@]}" \
+        "$DOWNLOAD_URL" \
         --output "$TARBALL"
     CURL_EXIT=$?
 
@@ -84,7 +102,7 @@ else
                 error "Download failed: partial file transfer (network interrupted)" >&2
                 ;;
             22)
-                error "Download failed: HTTP error from GitHub" >&2
+                error "Download failed: HTTP error from download server" >&2
                 ;;
             28)
                 error "Download failed: operation timeout" >&2
@@ -99,9 +117,7 @@ else
         exit "$CURL_EXIT"
     fi
 
-    # Ensure tarball is cleaned up
-    trap 'rm -f "$TARBALL"' EXIT
-    ACTUAL_CHECKSUM="$(sha256sum "$TARBALL" | awk '{print $1}')"
+    ACTUAL_CHECKSUM="$(checksum "$TARBALL")"
     readonly ACTUAL_CHECKSUM
 
     if [[ "$ACTUAL_CHECKSUM" != "$EXPECTED_CHECKSUM" ]] ; then
@@ -109,13 +125,12 @@ else
         exit 1
     fi
 
-    readonly TMPDIR="${SCRIPT_DIR}/actionlint-${EXPECTED_VERSION}"
-    mkdir -p "$TMPDIR"
-
-    # It's only possible to have one exit trap, so we have to update to include both items we wish to remove
-    trap 'rm -rf "$TMPDIR" "$TARBALL"' EXIT
-    tar -C "$TMPDIR" -xzf "$TARBALL"
-    mv "$TMPDIR/actionlint" "$ACTIONLINT_PATH"
+    tar -xOzf "$TARBALL" "$BINARY_PATH" > "$INSTALL_DIR/actionlint" || exit 1
+    if [[ "$(checksum "$INSTALL_DIR/actionlint")" != "$EXPECTED_BINARY_CHECKSUM" ]]; then
+        error "Extracted actionlint binary checksum did not match" >&2
+        exit 1
+    fi
+    chmod +x "$INSTALL_DIR/actionlint" && mv "$INSTALL_DIR/actionlint" "$ACTIONLINT_PATH" || exit 1
 
     INSTALLED_VERSION="$("$ACTIONLINT_PATH" -version | head -n 1)"
     readonly INSTALLED_VERSION
@@ -144,12 +159,71 @@ else
     info "Using actionlint file from this repo" >&2
 fi
 
+getRepo() {
+    local REPOSITORY="${GITHUB_REPOSITORY:-}"
+    if [[ -z "$REPOSITORY" ]]; then
+        REPOSITORY="$(git remote get-url origin 2>/dev/null)"
+        REPOSITORY="${REPOSITORY#https://github.com/}"
+        REPOSITORY="${REPOSITORY#git@github.com:}"
+        REPOSITORY="${REPOSITORY%.git}"
+    fi
+    printf '%s\n' "$REPOSITORY"
+}
+
+check_blacksmith_runners() (
+    REPOSITORY="$(getRepo)"
+    POLICY_DIR="$SCRIPT_DIR/../.github"
+    CONFIG_DIR="$(mktemp -d)" || exit 1
+    trap 'rm -rf -- "$CONFIG_DIR"' EXIT
+    # Merge the repository's baseline into the shared Blacksmith actionlint config.
+    jq --arg config "$POLICY_DIR/blacksmith-actionlint.yml" --arg repository "$REPOSITORY" '
+        {
+            extends: [$config],
+            ignores: [
+                (.[$repository] // {} | to_entries[]) as $workflow
+                | $workflow.value[] as $job
+                | {rule: "runner-label", file: $workflow.key, job: $job}
+            ]
+        }
+    ' "$POLICY_DIR/blacksmith-runner-baseline.json" > "$CONFIG_DIR/blacksmith-actionlint.json" || exit 1
+
+    "$ACTIONLINT_PATH" check \
+        --offline \
+        --no-tools \
+        --output-format github \
+        --config "$CONFIG_DIR/blacksmith-actionlint.json" \
+        --runner-provider snapshot \
+        --runner-scope expensify-blacksmith \
+        --runner-snapshot "$POLICY_DIR/blacksmith-runners.json" \
+        -- .github/workflows
+)
+
+BLACKSMITH_STATUS=0
+if [[ -n "$WORKFLOWS" ]]; then
+    check_blacksmith_runners || BLACKSMITH_STATUS=$?
+fi
+
+# Roll out newly blocking v2 diagnostics separately from runner policy.
+
 # We can't quote CONFIG here because we need the splitting on spaces for it to be recognized
 # by actionlint as a flag
 #shellcheck disable=SC2086
-if ! "$ACTIONLINT_PATH" ${CONFIG} -color; then
+if ! "$ACTIONLINT_PATH" \
+    ${CONFIG} \
+    -color \
+    --offline \
+    --tool shellcheck=shellcheck \
+    --no-tool ruff \
+    --ignore missing-permissions \
+    --ignore script-interpolation/unknown-script-value \
+    --ignore script-injection/secret-interpolation; then
     error "Workflows did not pass actionlint :("
     exit 1
+fi
+
+if [[ "$BLACKSMITH_STATUS" -ne 0 ]]; then
+    error "Workflows did not pass the Blacksmith runner check"
+    exit "$BLACKSMITH_STATUS"
 fi
 
 success "Workflows passed actionlint!"

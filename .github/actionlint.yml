@@ -13,6 +13,8 @@ self-hosted-runner:
     - blacksmith-6vcpu-macos-latest
     - blacksmith-12vcpu-macos-latest
     - blacksmith-12vcpu-macos-27
+    - blacksmith-6vcpu-macos-15
+    - blacksmith-6vcpu-macos-27
     - blacksmith-2vcpu-ubuntu-2404
     - blacksmith-4vcpu-ubuntu-2404
     - blacksmith-8vcpu-ubuntu-2404

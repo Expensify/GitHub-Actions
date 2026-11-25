@@ -1,0 +1,6 @@
+plugins: []
+lint:
+  rules:
+    preset: none
+    correctness:
+      runner-label: error

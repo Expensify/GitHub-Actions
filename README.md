@@ -6,6 +6,10 @@ Expensify has multiple repositories that use the same GitHub Actions workflows. 
 
 ## Usage
 
+### `validateActions.yml`
+
+Enabled org-wide through GitHub rulesets. On pull requests, it validates action and workflow schemas, runs actionlint, and checks that action references are pinned to immutable refs.
+
 ### `npmPublish.yml`
 
 Used to publish a package to [npmjs](https://www.npmjs.com/), should be triggered when code is merged into the `main` branch. **Note**: Please follow [these instructions](https://stackoverflowteams.com/c/expensify/questions/17043/17044#17044) to grant our bots the correct access to publish.

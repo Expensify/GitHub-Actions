@@ -1,0 +1,29 @@
+{
+    "scope": "expensify-blacksmith",
+    "freshness": "fresh",
+    "complete": true,
+    "content": {
+        "runners": [
+            {"name": "blacksmith-6vcpu-macos-latest", "labels": ["blacksmith-6vcpu-macos-latest"]},
+            {"name": "blacksmith-12vcpu-macos-latest", "labels": ["blacksmith-12vcpu-macos-latest"]},
+            {"name": "blacksmith-12vcpu-macos-27", "labels": ["blacksmith-12vcpu-macos-27"]},
+            {"name": "blacksmith-6vcpu-macos-15", "labels": ["blacksmith-6vcpu-macos-15"]},
+            {"name": "blacksmith-6vcpu-macos-27", "labels": ["blacksmith-6vcpu-macos-27"]},
+            {"name": "blacksmith-2vcpu-ubuntu-2404", "labels": ["blacksmith-2vcpu-ubuntu-2404"]},
+            {"name": "blacksmith-4vcpu-ubuntu-2404", "labels": ["blacksmith-4vcpu-ubuntu-2404"]},
+            {"name": "blacksmith-8vcpu-ubuntu-2404", "labels": ["blacksmith-8vcpu-ubuntu-2404"]},
+            {"name": "blacksmith-16vcpu-ubuntu-2404", "labels": ["blacksmith-16vcpu-ubuntu-2404"]},
+            {"name": "blacksmith-32vcpu-ubuntu-2404", "labels": ["blacksmith-32vcpu-ubuntu-2404"]},
+            {"name": "blacksmith-2vcpu-windows-2025", "labels": ["blacksmith-2vcpu-windows-2025"]},
+            {"name": "blacksmith-4vcpu-windows-2025", "labels": ["blacksmith-4vcpu-windows-2025"]},
+            {"name": "blacksmith-8vcpu-windows-2025", "labels": ["blacksmith-8vcpu-windows-2025"]},
+            {"name": "blacksmith-16vcpu-windows-2025", "labels": ["blacksmith-16vcpu-windows-2025"]},
+            {"name": "blacksmith-32vcpu-windows-2025", "labels": ["blacksmith-32vcpu-windows-2025"]},
+            {"name": "blacksmith-2vcpu-ubuntu-2404-arm", "labels": ["blacksmith-2vcpu-ubuntu-2404-arm"]},
+            {"name": "blacksmith-4vcpu-ubuntu-2404-arm", "labels": ["blacksmith-4vcpu-ubuntu-2404-arm"]},
+            {"name": "blacksmith-8vcpu-ubuntu-2404-arm", "labels": ["blacksmith-8vcpu-ubuntu-2404-arm"]},
+            {"name": "blacksmith-16vcpu-ubuntu-2404-arm", "labels": ["blacksmith-16vcpu-ubuntu-2404-arm"]},
+            {"name": "blacksmith-32vcpu-ubuntu-2404-arm", "labels": ["blacksmith-32vcpu-ubuntu-2404-arm"]}
+        ]
+    }
+}

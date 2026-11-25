@@ -1,0 +1,210 @@
+{
+    "Expensify/App": {
+        ".github/workflows/onyxConnectWithoutViewReviewers.yml": ["requestReviewers"],
+        ".github/workflows/onyxGetReviewers.yml": ["requestReviewers"],
+        ".github/workflows/publishReactNativeArtifacts.yml": ["assertHasTargets"],
+        ".github/workflows/searchFilterColumnChecklist.yml": ["remind"]
+    },
+    "Expensify/App-Test-Fork": {
+        ".github/workflows/androidBump.yml": ["android_bump"],
+        ".github/workflows/authorChecklist.yml": ["checklist"],
+        ".github/workflows/buildAndroid.yml": ["build"],
+        ".github/workflows/checkE2ETestCode.yml": ["lint"],
+        ".github/workflows/checkSVGCompression.yml": ["compress-svg"],
+        ".github/workflows/cherryPick.yml": ["cherryPick"],
+        ".github/workflows/claude-review.yml": ["review"],
+        ".github/workflows/createDeployChecklist.yml": ["createChecklist"],
+        ".github/workflows/createNewVersion.yml": ["createNewVersion"],
+        ".github/workflows/cspell.yml": ["spellcheck"],
+        ".github/workflows/deploy.yml": ["android", "checkDeploymentSuccess", "createRelease", "ios", "postSlackMessageOnFailure", "postSlackMessageOnSuccess", "prep", "web"],
+        ".github/workflows/deployBlocker.yml": ["deployBlocker"],
+        ".github/workflows/deployExpensifyHelp.yml": ["build"],
+        ".github/workflows/deployNewHelp.yml": ["build"],
+        ".github/workflows/e2ePerformanceTests.yml": ["cleanupDeltaRef", "prep", "runTestsInAWS"],
+        ".github/workflows/failureNotifier.yml": ["notifyFailure"],
+        ".github/workflows/finishReleaseCycle.yml": ["cleanupDeployBlockers", "validate"],
+        ".github/workflows/formatCodeCovComment.yml": ["format-codecov-comment"],
+        ".github/workflows/generateTranslations.yml": ["generateTranslations"],
+        ".github/workflows/imgbot.yml": ["approveAndMerge"],
+        ".github/workflows/lint-changed.yml": ["lint-changed"],
+        ".github/workflows/lint.yml": ["lint"],
+        ".github/workflows/lockDeploys.yml": ["lockStagingDeploys"],
+        ".github/workflows/postDeployComments.yml": ["postDeployComments"],
+        ".github/workflows/preDeploy.yml": ["chooseDeployActions", "confirmPassingBuild", "skipDeploy"],
+        ".github/workflows/prettier.yml": ["prettier"],
+        ".github/workflows/proposalPolice.yml": ["proposal-police-workflow"],
+        ".github/workflows/publishReactNativeAndroidArtifacts.yml": ["verifyPatches"],
+        ".github/workflows/react-compiler-compliance.yml": ["react-compiler-compliance"],
+        ".github/workflows/reassurePerformanceTests.yml": ["perf-tests"],
+        ".github/workflows/reviewerChecklist.yml": ["checklist"],
+        ".github/workflows/sendReassurePerfData.yml": ["perf-tests"],
+        ".github/workflows/shellCheck.yml": ["lint"],
+        ".github/workflows/test.yml": ["jest", "storybookTests"],
+        ".github/workflows/testBuild.yml": [
+            "androidHybrid",
+            "getMobileExpensifyPR",
+            "getMobileExpensifyRef",
+            "iosHybrid",
+            "postGitHubCommentBuildStarted",
+            "postGithubComment",
+            "prep",
+            "web"
+        ],
+        ".github/workflows/translationDryRun.yml": ["dryRun"],
+        ".github/workflows/typecheck.yml": ["typecheck"],
+        ".github/workflows/unused-styles.yml": ["check-unused-styles"],
+        ".github/workflows/updateHelpDotRedirects.yml": ["build"],
+        ".github/workflows/updateProtectedBranch.yml": ["updateProtectedBranch"],
+        ".github/workflows/validateDocsRoutes.yml": ["verify"],
+        ".github/workflows/validateGithubActions.yml": ["verify"],
+        ".github/workflows/validatePatches.yml": ["validate-patches"],
+        ".github/workflows/verifyHybridApp.yml": ["comment_on_fork", "verify_android", "verify_ios"],
+        ".github/workflows/verifyParserFiles.yml": ["verify"],
+        ".github/workflows/verifyPodfile.yml": ["verify"],
+        ".github/workflows/verifySignedCommits.yml": ["verifySignedCommits"],
+        ".github/workflows/welcome.yml": ["newContributorWelcomeMessage"]
+    },
+    "Expensify/Auth": {
+        ".github/workflows/credentials-file-check.yml": ["notify"]
+    },
+    "Expensify/Chronos-Macos-Menu-Bar": {
+        ".github/workflows/ci.yml": ["build", "lint", "test"]
+    },
+    "Expensify/clipboard": {
+        ".github/workflows/ci.yml": ["android", "ios", "lint", "tsc"]
+    },
+    "Expensify/Cloudflare-Workers": {
+        ".github/workflows/marqetaGatewayTests.yml": ["test"]
+    },
+    "Expensify/Expensify-Org": {
+        ".github/workflows/main.yml": ["build"]
+    },
+    "Expensify/Expensify-ToolKit": {
+        ".github/workflows/ansible-lint.yml": ["build"]
+    },
+    "Expensify/expensifyts.auto": {
+        ".github/workflows/cron-release-checker.yml": ["check_staging_expensify_releases"],
+        ".github/workflows/pr-static-checks.yml": ["static-code-checks"],
+        ".github/workflows/runByFeature.yml": ["matrix_setup", "test"],
+        ".github/workflows/runNativeSmokeSuite.yml": ["deploy", "matrix_setup", "test"],
+        ".github/workflows/runSmokeSuite.yml": ["deploy", "matrix_setup", "test"],
+        ".github/workflows/runspecifictest-native.yml": ["matrix_setup", "test"],
+        ".github/workflows/runspecifictest.yml": ["matrix_setup", "test"]
+    },
+    "Expensify/fab-classic": {
+        ".github/workflows/linux.yml": ["docs", "test"],
+        ".github/workflows/version.yml": ["version"]
+    },
+    "Expensify/GitHub-Actions": {
+        ".github/workflows/npmPublish.yml": ["publish"]
+    },
+    "Expensify/lego": {
+        ".github/workflows/go-cross.yml": ["cross"],
+        ".github/workflows/main.yml": ["main"]
+    },
+    "Expensify/Mobile-Expensify": {
+        ".github/workflows/lint-swift.yml": ["lint"]
+    },
+    "Expensify/Mobile-Expensify-Test-Fork": {
+        ".github/workflows/automerge-bump.yml": ["automerge"],
+        ".github/workflows/lint-swift.yml": ["lint"],
+        ".github/workflows/lint-test.yml": ["Lint_And_Test_Kotlin", "Lint_JavaScript"],
+        ".github/workflows/updateAppSubmodule.yml": ["updateAppSubmodule"]
+    },
+    "Expensify/PdfiumAndroidKt": {
+        ".github/workflows/ci.yml": ["build_and_test"]
+    },
+    "Expensify/php-build": {
+        ".github/workflows/ci.yml": ["test-linux"]
+    },
+    "Expensify/react-fast-pdf": {
+        ".github/workflows/style_and_syntax_checks.yml": ["checks"]
+    },
+    "Expensify/react-native-biometrics": {
+        ".github/workflows/ci.yml": ["build-android", "build-ios", "build-library", "lint", "test"]
+    },
+    "Expensify/react-native-encryptify": {
+        ".github/workflows/ci.yml": ["build-android", "build-ios", "build-library", "lint", "test"]
+    },
+    "Expensify/react-native-fast-image": {
+        ".github/workflows/ci.yml": ["build"]
+    },
+    "Expensify/react-native-live-markdown": {
+        ".github/workflows/build-android.yml": ["build"],
+        ".github/workflows/build-ios.yml": ["build"],
+        ".github/workflows/build-web.yml": ["build"],
+        ".github/workflows/check.yml": ["check"],
+        ".github/workflows/lint.yml": ["lint"],
+        ".github/workflows/web-e2e-test.yml": ["test"]
+    },
+    "Expensify/react-native-onyx": {
+        ".github/workflows/lint.yml": ["lint"],
+        ".github/workflows/pr-checklist.yml": ["validate-checklist"],
+        ".github/workflows/reassurePerfTests.yml": ["perf-tests"],
+        ".github/workflows/require-tests.yml": ["require-tests"],
+        ".github/workflows/test.yml": ["test"],
+        ".github/workflows/typecheck.yml": ["typecheck"],
+        ".github/workflows/validateDocs.yml": ["verify"],
+        ".github/workflows/validateGithubActions.yml": ["verify"]
+    },
+    "Expensify/react-native-picker-select": {
+        ".github/workflows/build.yml": ["build"],
+        ".github/workflows/commitlint.yml": ["commitlint"],
+        ".github/workflows/dependabot.yml": ["dependabot"],
+        ".github/workflows/main.yml": ["autoclose"],
+        ".github/workflows/release-please.yml": ["publish", "release-please"]
+    },
+    "Expensify/react-native-qrcode-svg-old": {
+        ".github/workflows/npmpublish.yml": ["build", "publish-npm"]
+    },
+    "Expensify/react-native-template-repository": {
+        ".github/workflows/lint.yml": ["lint"],
+        ".github/workflows/prettier.yml": ["prettier"]
+    },
+    "Expensify/react-native-wallet": {
+        ".github/workflows/lint.yml": ["lint"],
+        ".github/workflows/typescript.yml": ["check"]
+    },
+    "Expensify/react-native-web": {
+        ".github/workflows/labels.yml": ["label-actions"],
+        ".github/workflows/performance.yml": ["compressed-size"],
+        ".github/workflows/react-integration.yml": ["react-next"],
+        ".github/workflows/tests.yml": ["format", "lint", "type-check", "unit-test"]
+    },
+    "Expensify/react-navigation": {
+        ".github/workflows/check-labels.yml": ["check-labels"],
+        ".github/workflows/check-repro.yml": ["check-repro"],
+        ".github/workflows/closed-issue.yml": ["closed-issue"],
+        ".github/workflows/expo-preview.yml": ["publish"],
+        ".github/workflows/expo.yml": ["publish"],
+        ".github/workflows/first-pull-request.yml": ["welcome"],
+        ".github/workflows/rebase.yml": ["always_job", "rebase"],
+        ".github/workflows/stale.yml": ["stale"],
+        ".github/workflows/triage.yml": [
+            "feature-request",
+            "needs-more-info",
+            "needs-repro",
+            "question",
+            "react-native-gesture-handler",
+            "react-native-pager-view",
+            "react-native-paper",
+            "react-native-reanimated",
+            "react-native-safe-area-context",
+            "react-native-screens"
+        ],
+        ".github/workflows/versions.yml": ["check-versions"]
+    },
+    "Expensify/Salt": {
+        ".github/workflows/pr-title-check.yml": ["check-title"]
+    },
+    "Expensify/Server-Scraper": {
+        ".github/workflows/server-scraper.yml": ["Phan_Tests", "Scraper_Tests", "Styling_Tests"]
+    },
+    "Expensify/test": {
+        ".github/workflows/test.yml": ["test"]
+    },
+    "Expensify/Use-Expensify": {
+        ".github/workflows/integrations.yml": ["check"],
+        ".github/workflows/main.yml": ["build"]
+    }
+}
