@@ -159,15 +159,19 @@ else
     info "Using actionlint file from this repo" >&2
 fi
 
-check_blacksmith_runners() (
-    REPOSITORY="${GITHUB_REPOSITORY:-}"
+getRepo() {
+    local REPOSITORY="${GITHUB_REPOSITORY:-}"
     if [[ -z "$REPOSITORY" ]]; then
         REPOSITORY="$(git remote get-url origin 2>/dev/null)"
         REPOSITORY="${REPOSITORY#https://github.com/}"
         REPOSITORY="${REPOSITORY#git@github.com:}"
         REPOSITORY="${REPOSITORY%.git}"
     fi
+    printf '%s\n' "$REPOSITORY"
+}
 
+check_blacksmith_runners() (
+    REPOSITORY="$(getRepo)"
     POLICY_DIR="$SCRIPT_DIR/../.github"
     CONFIG_DIR="$(mktemp -d)" || exit 1
     trap 'rm -rf -- "$CONFIG_DIR"' EXIT
